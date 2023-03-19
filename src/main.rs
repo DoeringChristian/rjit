@@ -12,7 +12,7 @@ mod iterators;
 fn main() {
     let mut ir = Ir::default();
     let x = ir.push_var(Var {
-        op: Op::ConstF32(1.),
+        op: Op::Load(0),
         ty: VarType::F32,
         // id: VarId(0),
     });
@@ -20,6 +20,10 @@ fn main() {
         op: Op::Add(x, x),
         ty: VarType::F32,
         // id: VarId(0),
+    });
+    let z = ir.push_var(Var {
+        op: Op::Store(0),
+        ty: VarType::F32,
     });
 
     let mut compiler = Compiler::default();

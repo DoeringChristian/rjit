@@ -2,6 +2,8 @@
 pub enum Op {
     Add(VarId, VarId),
     ConstF32(f32),
+    Load(u64),
+    Store(u64),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -16,7 +18,12 @@ impl VarType {
     }
     pub fn name_cuda(&self) -> &'static str {
         match self {
-            VarType::F32 => "f32",
+            Self::F32 => "f32",
+        }
+    }
+    pub fn size(&self) -> u64 {
+        match self {
+            Self::F32 => 4,
         }
     }
 }

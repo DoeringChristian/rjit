@@ -12,14 +12,26 @@ impl Compiler {
         let n_params = 10;
         let n_regs = 10;
 
-        writeln!(self.asm, ".version {}.{}", 3, 0);
-        writeln!(self.asm, ".target {}", "sm_21");
+        /* Special registers:
+             %r0   :  Index
+             %r1   :  Step
+             %r2   :  Size
+             %p0   :  Stopping predicate
+             %rd0  :  Temporary for parameter pointers
+             %rd1  :  Pointer to parameter table in global memory if too big
+             %b3, %w3, %r3, %rd3, %f3, %d3, %p3: reserved for use in compound
+             statements that must write a temporary result to a register.
+        */
+
+        writeln!(self.asm, ".version {}.{}", 8, 0);
+        writeln!(self.asm, ".target {}", "sm_86");
         writeln!(self.asm, ".address_size 64");
 
         writeln!(self.asm, "");
 
         writeln!(self.asm, ".entry cujit(");
-        writeln!(self.asm, ".param .align 8 .b8 params[{}]) {{", n_params);
+        writeln!(self.asm, "\t.param .align 8 .b8 params[{}]) {{", n_params);
+        writeln!(self.asm, "");
 
         writeln!(
             self.asm,
@@ -78,11 +90,16 @@ impl Compiler {
         );
 
         println!("{}", self.asm);
+
+        std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
     }
 
     #[allow(unused_must_use)]
     fn compile_var(&mut self, ir: &Ir, id: VarId) {
         let var = ir.var(id);
+        writeln!(self.asm, "");
+        writeln!(self.asm, "\t// {:?} =>", var);
+
         match var.op {
             Op::Add(lhs, rhs) => {
                 writeln!(
@@ -101,6 +118,50 @@ impl Compiler {
                     var.ty.name_cuda(),
                     PVar(id, var),
                     unsafe { *(&val as *const f32 as *const u32) }
+                );
+            }
+            Op::Load(param_idx) => {
+                let offset = param_idx * 8;
+                // Load from params
+                writeln!(
+                    self.asm,
+                    "\tld.{}.u64 %rd0, [{}+{}];",
+                    "param", "params", offset
+                ); // rd0 = params[offset] // with typeof(rd0) = (void *)
+                writeln!(
+                    self.asm,
+                    "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
+                    var.ty.size()
+                ); // rd0 = r0 * ty.size() + rd0 <=> rd0 = index * ty.size() + params[offset]
+                   // TODO: boolean loading
+                writeln!(
+                    self.asm,
+                    "\tld.global.cs.{} {}, [%rd0];",
+                    var.ty.name_cuda(),
+                    PVar(id, var)
+                );
+            }
+            Op::Store(param_idx) => {
+                let offset = param_idx * 8;
+                write!(
+                    self.asm,
+                    "\tld.{}.u64 %rd0, [{}+{}];\n\
+                    \tmad.wide.u32 %rd0, %r0, {}, %rd0;\n",
+                    "param",
+                    "params",
+                    offset,
+                    var.ty.size(),
+                ); // rd0 = params[offset]; rd0 = r0 * ty.size() + rd0 <=>
+                   // rd0 = index * ty.size() + params[offset];
+                   // with typeof(rd0) = (void *);
+
+                // TODO: boolean storage
+
+                writeln!(
+                    self.asm,
+                    "\tst.global.cs.{} [%rd0], {};",
+                    var.ty.name_cuda(),
+                    PVar(id, var)
                 );
             }
         }
