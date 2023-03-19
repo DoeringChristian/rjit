@@ -1,3 +1,5 @@
+use std::ffi::c_void;
+
 use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 use cust::util::{DeviceCopyExt, SliceExt};
@@ -10,9 +12,15 @@ mod ir;
 mod iterators;
 
 fn main() {
+    let ctx = cust::quick_init().unwrap();
+    let device = cust::device::Device::get_device(0).unwrap();
+
     let mut ir = Ir::default();
+
+    let buf_id = ir.push_buf(vec![0; 100].as_slice().as_dbuf().unwrap().cast::<u8>());
+
     let x = ir.push_var(Var {
-        op: Op::Load(0),
+        op: Op::Load(buf_id),
         ty: VarType::F32,
         // id: VarId(0),
     });
@@ -22,15 +30,25 @@ fn main() {
         // id: VarId(0),
     });
     let z = ir.push_var(Var {
-        op: Op::Store(0),
+        op: Op::Store(buf_id),
         ty: VarType::F32,
     });
 
     let mut compiler = Compiler::default();
     compiler.compile(&ir);
 
-    let ctx = cust::quick_init().unwrap();
-    let device = cust::device::Device::get_device(0).unwrap();
+    let x = vec![0; 100].as_slice().as_dbuf().unwrap();
+    let x = x.cast::<u8>();
+    x.as_device_ptr().as_raw();
+
+    let params = ir
+        .buffers()
+        .iter()
+        .map(|buf| buf.as_device_ptr().as_raw())
+        .collect::<Vec<_>>()
+        .as_slice()
+        .as_dbuf()
+        .unwrap();
 
     let module = Module::from_ptx(
         &compiler.asm,
@@ -41,6 +59,26 @@ fn main() {
         ],
     )
     .unwrap();
+
+    let func = module.get_function("cujit").unwrap();
+
+    let (_, block_size) = func.suggested_launch_configuration(0, 0.into()).unwrap();
+
+    let grid_size = (100 + block_size - 1) / block_size;
+
+    let stream = cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
+
+    unsafe {
+        cust::launch!(func <<< grid_size, block_size, 0, stream >>> (params.as_device_ptr()))
+            .unwrap();
+    };
+
+    stream.synchronize().unwrap();
+
+    dbg!(ir.buffers());
+    let y = ir.buffers()[0].as_host_vec().unwrap();
+
+    dbg!(y);
 
     // let x = {
     //     let x = vec![0; 100];

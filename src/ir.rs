@@ -1,3 +1,5 @@
+use cust::prelude::DeviceBuffer;
+
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
     Add(VarId, VarId),
@@ -47,6 +49,7 @@ impl std::fmt::Display for VarId {
 #[derive(Debug, Default)]
 pub struct Ir {
     vars: Vec<Var>,
+    buffers: Vec<DeviceBuffer<u8>>,
 }
 
 pub struct PVar<'a>(pub VarId, pub &'a Var);
@@ -73,5 +76,13 @@ impl Ir {
     }
     pub fn ids(&self) -> impl Iterator<Item = VarId> {
         (0..self.vars.len()).map(|i| VarId(i))
+    }
+    pub fn push_buf(&mut self, buf: DeviceBuffer<u8>) -> u64 {
+        let id = self.buffers.len();
+        self.buffers.push(buf);
+        id as u64
+    }
+    pub fn buffers(&self) -> &[DeviceBuffer<u8>] {
+        &self.buffers
     }
 }
