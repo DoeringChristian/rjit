@@ -3,7 +3,7 @@ use cust::prelude::Module;
 use cust::util::{DeviceCopyExt, SliceExt};
 
 use self::compiler::Compiler;
-use self::ir::{Ir, Op, Var};
+use self::ir::{Ir, Op, Var, VarId, VarType};
 
 mod compiler;
 mod ir;
@@ -13,8 +13,14 @@ fn main() {
     let mut ir = Ir::default();
     let x = ir.push_var(Var {
         op: Op::ConstF32(1.),
+        ty: VarType::F32,
+        // id: VarId(0),
     });
-    let y = ir.push_var(Var { op: Op::Add(x, x) });
+    let y = ir.push_var(Var {
+        op: Op::Add(x, x),
+        ty: VarType::F32,
+        // id: VarId(0),
+    });
 
     let mut compiler = Compiler::default();
     compiler.compile(&ir);

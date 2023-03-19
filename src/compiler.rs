@@ -12,41 +12,40 @@ impl Compiler {
         let n_params = 10;
         let n_regs = 10;
 
-        let mut asm = String::new();
-        writeln!(asm, ".version {}.{}", 3, 0);
-        writeln!(asm, ".target {}", "sm_21");
-        writeln!(asm, ".address_size 64");
+        writeln!(self.asm, ".version {}.{}", 3, 0);
+        writeln!(self.asm, ".target {}", "sm_21");
+        writeln!(self.asm, ".address_size 64");
 
-        writeln!(asm, "");
+        writeln!(self.asm, "");
 
-        writeln!(asm, ".entry cujit(");
-        writeln!(asm, ".param .align 8 .b8 params[{}]) {{", n_params);
+        writeln!(self.asm, ".entry cujit(");
+        writeln!(self.asm, ".param .align 8 .b8 params[{}]) {{", n_params);
 
         writeln!(
-            asm,
+            self.asm,
             "\t.reg.b8   %b <{n_regs}>; .reg.b16 %w<{n_regs}>; .reg.b32 %r<{n_regs}>;"
         );
         writeln!(
-            asm,
+            self.asm,
             "\t.reg.b64  %rd<{n_regs}>; .reg.f32 %f<{n_regs}>; .reg.f64 %d<{n_regs}>;"
         );
-        writeln!(asm, "\t.reg.pred %p <{n_regs}>;");
-        writeln!(asm, "");
+        writeln!(self.asm, "\t.reg.pred %p <{n_regs}>;");
+        writeln!(self.asm, "");
 
         write!(
-            asm,
+            self.asm,
             "\tmov.u32 %r0, %ctaid.x;\n\
              \tmov.u32 %r1, %ntid.x;\n\
              \tmov.u32 %r2, %tid.x;\n\
              \tmad.lo.u32 %r0, %r0, %r1, %r2;\n"
         );
 
-        writeln!(asm, "");
+        writeln!(self.asm, "");
 
-        writeln!(asm, "\tld.param.u32 %r2, [params];");
+        writeln!(self.asm, "\tld.param.u32 %r2, [params];");
 
         write!(
-            asm,
+            self.asm,
             "\tsetp.ge.u32 %p0, %r0, %r2;\n\
             \t@%p0 bra done;\n\
             \t\n\
@@ -55,12 +54,16 @@ impl Compiler {
             \t\n"
         );
 
-        write!(asm, "body: // sm_{}\n", 86); // TODO: compute capability from device
+        write!(self.asm, "body: // sm_{}\n", 86); // TODO: compute capability from device
+
+        for id in ir.ids() {
+            self.compile_var(ir, id);
+        }
 
         // End of kernel:
 
         writeln!(
-            asm,
+            self.asm,
             "\n\
             \tadd.u32 %r0, %r0, %r1;\n\
             \tsetp.ge.u32 %p0, %r0, %r2;\n\
@@ -69,12 +72,37 @@ impl Compiler {
             done:\n"
         );
         write!(
-            asm,
+            self.asm,
             "\tret;\n\
         }}\n"
         );
 
-        println!("{}", asm);
-        self.asm = asm;
+        println!("{}", self.asm);
+    }
+
+    #[allow(unused_must_use)]
+    fn compile_var(&mut self, ir: &Ir, id: VarId) {
+        let var = ir.var(id);
+        match var.op {
+            Op::Add(lhs, rhs) => {
+                writeln!(
+                    self.asm,
+                    "\tadd.{} {}, {}, {};",
+                    var.ty.name_cuda(),
+                    PVar(id, var),
+                    ir.pvar(lhs),
+                    ir.pvar(rhs),
+                );
+            }
+            Op::ConstF32(val) => {
+                writeln!(
+                    self.asm,
+                    "\tmov.{} {}, 0F{:08x};",
+                    var.ty.name_cuda(),
+                    PVar(id, var),
+                    unsafe { *(&val as *const f32 as *const u32) }
+                );
+            }
+        }
     }
 }
