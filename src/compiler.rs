@@ -2,13 +2,13 @@ use crate::ir::*;
 use std::fmt::Write;
 
 #[derive(Default)]
-pub struct Compiler {
+pub struct CUDACompiler {
     pub asm: String,
 }
 
 const PARAMS_OFFSET: u64 = 1;
 
-impl Compiler {
+impl CUDACompiler {
     #[allow(unused_must_use)]
     pub fn compile(&mut self, ir: &Ir) {
         let n_params = ir.buffers().len() as u64 + PARAMS_OFFSET;
