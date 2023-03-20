@@ -54,6 +54,15 @@ pub struct Ir {
     pub params: Vec<u64>,
 }
 
+///
+/// Intermediate Representation:
+///
+/// The structure sould be something like this...
+///
+/// Trace -> Ir -> CUDA Ptx
+///
+///
+///
 impl Default for Ir {
     fn default() -> Self {
         Self {

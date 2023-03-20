@@ -27,7 +27,6 @@ fn main() {
     let x = ir.push_var(Var {
         op: Op::Load(buf_id),
         ty: VarType::F32,
-        // id: VarId(0),
     });
     let c = ir.push_var(Var {
         op: Op::ConstF32(2.),
@@ -36,7 +35,6 @@ fn main() {
     let y = ir.push_var(Var {
         op: Op::Add(x, x),
         ty: VarType::F32,
-        // id: VarId(0),
     });
     let z = ir.push_var(Var {
         op: Op::Store(y, buf_id),
@@ -49,7 +47,7 @@ fn main() {
     let module = Module::from_ptx(
         &compiler.asm,
         &[
-            ModuleJitOption::OptLevel(OptLevel::O0),
+            ModuleJitOption::OptLevel(OptLevel::O4),
             ModuleJitOption::GenenerateDebugInfo(true),
             ModuleJitOption::GenerateLineInfo(true),
         ],
