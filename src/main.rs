@@ -18,29 +18,29 @@ fn main() {
     let mut ir = Ir::default();
 
     let size = 10;
-    let x = vec![0f32; size].as_slice().as_dbuf().unwrap();
+    let x = vec![1f32; size].as_slice().as_dbuf().unwrap();
     dbg!(&x);
     let x = x.cast::<u8>();
     dbg!(&x);
 
     let buf_id = ir.push_buf(x);
 
-    // let x = ir.push_var(Var {
-    //     op: Op::Load(buf_id),
-    //     ty: VarType::F32,
-    //     // id: VarId(0),
-    // });
+    let x = ir.push_var(Var {
+        op: Op::Load(buf_id),
+        ty: VarType::F32,
+        // id: VarId(0),
+    });
     let c = ir.push_var(Var {
         op: Op::ConstF32(2.),
         ty: VarType::F32,
     });
-    // let y = ir.push_var(Var {
-    //     op: Op::Add(x, c),
-    //     ty: VarType::F32,
-    //     // id: VarId(0),
-    // });
+    let y = ir.push_var(Var {
+        op: Op::Add(x, x),
+        ty: VarType::F32,
+        // id: VarId(0),
+    });
     let z = ir.push_var(Var {
-        op: Op::Store(c, buf_id),
+        op: Op::Store(y, buf_id),
         ty: VarType::F32,
     });
 
