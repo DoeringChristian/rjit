@@ -1,11 +1,13 @@
 use cust::prelude::DeviceBuffer;
 
+pub const VAR_OFFSET: usize = 4; // register offset of variables
+
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
     Add(VarId, VarId),
     ConstF32(f32),
     Load(u64),
-    Store(u64),
+    Store(VarId, u64),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -42,7 +44,7 @@ pub struct VarId(pub usize);
 
 impl std::fmt::Display for VarId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.0 + VAR_OFFSET)
     }
 }
 
@@ -84,5 +86,8 @@ impl Ir {
     }
     pub fn buffers(&self) -> &[DeviceBuffer<u8>] {
         &self.buffers
+    }
+    pub fn vars(&self) -> &[Var] {
+        &self.vars
     }
 }

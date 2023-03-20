@@ -6,4 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cust = "0.3.2"
+bytemuck = "1.13.1"
+cust = { git = "https://github.com/DoeringChristian/Rust-CUDA.git", branch = "cast-double-free" }

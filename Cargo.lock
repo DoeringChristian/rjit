@@ -33,14 +33,14 @@ checksum = "17febce684fd15d89027105661fec94afb475cb995fbc59d2865198446ba2eea"
 name = "cuda-test"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "cust",
 ]
 
 [[package]]
 name = "cust"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d6cc71911e179f12483b9734120b45bd00bf64fab085cc4818428523eedd469"
+source = "git+https://github.com/DoeringChristian/Rust-CUDA.git?branch=cast-double-free#94e2235efc713b149175135da49c6272eb901136"
 dependencies = [
  "bitflags",
  "bytemuck",
@@ -53,8 +53,7 @@ dependencies = [
 [[package]]
 name = "cust_core"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "039f79662cb8f890cbf335e818cd522d6e3a53fe63f61d1aaaf859cd3d975f06"
+source = "git+https://github.com/DoeringChristian/Rust-CUDA.git?branch=cast-double-free#94e2235efc713b149175135da49c6272eb901136"
 dependencies = [
  "cust_derive",
  "glam",
@@ -65,8 +64,7 @@ dependencies = [
 [[package]]
 name = "cust_derive"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a3bc95fe629aed92b2423de6ccff9e40174b21d19cb6ee6281a4d04ac72f66"
+source = "git+https://github.com/DoeringChristian/Rust-CUDA.git?branch=cast-double-free#94e2235efc713b149175135da49c6272eb901136"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -76,8 +74,7 @@ dependencies = [
 [[package]]
 name = "cust_raw"
 version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbf40d6ade12cb9828bbc844b9875c7b93d25e67a3c9bf61c7aa3ae09e402bf8"
+source = "git+https://github.com/DoeringChristian/Rust-CUDA.git?branch=cast-double-free#94e2235efc713b149175135da49c6272eb901136"
 dependencies = [
  "find_cuda_helper",
 ]
@@ -85,8 +82,7 @@ dependencies = [
 [[package]]
 name = "find_cuda_helper"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f9e65c593dd01ac77daad909ea4ad17f0d6d1776193fc8ea766356177abdad"
+source = "git+https://github.com/DoeringChristian/Rust-CUDA.git?branch=cast-double-free#94e2235efc713b149175135da49c6272eb901136"
 dependencies = [
  "glob",
 ]
