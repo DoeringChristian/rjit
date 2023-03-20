@@ -66,7 +66,7 @@ impl Compiler {
         );
         writeln!(
             self.asm,
-            "\tld.param.u32 %r2, [params+4]; // r2 <- params[0] (Size)"
+            "\tld.param.u32 %r2, [params]; // r2 <- params[0] (Size)"
         );
 
         write!(
@@ -159,10 +159,10 @@ impl Compiler {
                 dbg!(offset);
                 write!(
                     self.asm,
-                    "\tld.param.u64 %rd0, [params]; // rd0 <- params[offset]\n\
+                    "\tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
                     \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
                     params[offset]\n",
-                    // offset,
+                    offset,
                     var.ty.size(),
                 ); // rd0 = params[offset]; rd0 = r0 * ty.size() + rd0 <=>
                    // rd0 = index * ty.size() + params[offset];

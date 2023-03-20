@@ -17,8 +17,8 @@ fn main() {
 
     let mut ir = Ir::default();
 
-    let size = 1;
-    let x = vec![1f32; size].as_slice().as_dbuf().unwrap();
+    let size = 10;
+    let x = vec![0f32; size].as_slice().as_dbuf().unwrap();
     dbg!(&x);
     let x = x.cast::<u8>();
     dbg!(&x);
@@ -88,6 +88,8 @@ fn main() {
             )
             .unwrap();
     }
+
+    dbg!(params);
 
     stream.synchronize().unwrap();
 
