@@ -6,8 +6,8 @@ pub const VAR_OFFSET: usize = 4; // register offset of variables
 pub enum Op {
     Add(VarId, VarId),
     ConstF32(f32),
-    Load(u64),
-    Store(VarId, u64),
+    Load(usize),
+    Store(VarId, usize),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -48,10 +48,19 @@ impl std::fmt::Display for VarId {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Ir {
     vars: Vec<Var>,
-    pub buffers: Vec<DeviceBuffer<u8>>,
+    pub params: Vec<u64>,
+}
+
+impl Default for Ir {
+    fn default() -> Self {
+        Self {
+            vars: Default::default(),
+            params: vec![0],
+        }
+    }
 }
 
 pub struct PVar<'a>(pub VarId, pub &'a Var);
@@ -79,15 +88,15 @@ impl Ir {
     pub fn ids(&self) -> impl Iterator<Item = VarId> {
         (0..self.vars.len()).map(|i| VarId(i))
     }
-    pub fn push_buf(&mut self, buf: DeviceBuffer<u8>) -> u64 {
-        let id = self.buffers.len();
-        self.buffers.push(buf);
-        id as u64
-    }
-    pub fn buffers(&self) -> &[DeviceBuffer<u8>] {
-        &self.buffers
+    pub fn push_param(&mut self, param: u64) -> usize {
+        let id = self.params.len();
+        self.params.push(param);
+        id
     }
     pub fn vars(&self) -> &[Var] {
         &self.vars
+    }
+    pub fn set_size(&mut self, size: u64) {
+        self.params[0] = size;
     }
 }

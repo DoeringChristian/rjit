@@ -6,12 +6,10 @@ pub struct CUDACompiler {
     pub asm: String,
 }
 
-const PARAMS_OFFSET: u64 = 1; // parameter offset (size variable)
-
 impl CUDACompiler {
     #[allow(unused_must_use)]
     pub fn compile(&mut self, ir: &Ir) {
-        let n_params = ir.buffers().len() as u64 + PARAMS_OFFSET;
+        let n_params = ir.params.len() as u64;
         let n_regs = VAR_OFFSET + ir.vars().len();
 
         /* Special registers:
@@ -88,13 +86,13 @@ impl CUDACompiler {
         // End of kernel:
 
         writeln!(self.asm, "\n\t//End of Kernel:");
-        // writeln!(
-        //     self.asm,
-        //     "\tadd.u32 %r0, %r0, %r1; // r0 <- r0 + r1\n\
-        //     \tsetp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2\n\
-        //     \t@!%p0 bra body; // if p0 => body\n\
-        //     \n"
-        // );
+        writeln!(
+            self.asm,
+            "\tadd.u32 %r0, %r0, %r1; // r0 <- r0 + r1\n\
+            \tsetp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2\n\
+            \t@!%p0 bra body; // if p0 => body\n\
+            \n"
+        );
         writeln!(self.asm, "done:");
         write!(
             self.asm,
@@ -134,7 +132,7 @@ impl CUDACompiler {
                 );
             }
             Op::Load(param_idx) => {
-                let offset = (param_idx + PARAMS_OFFSET) * 8;
+                let offset = param_idx * 8;
                 // Load from params
                 writeln!(
                     self.asm,
@@ -155,7 +153,7 @@ impl CUDACompiler {
                 );
             }
             Op::Store(src, param_idx) => {
-                let offset = (param_idx + PARAMS_OFFSET) * 8;
+                let offset = param_idx * 8;
                 dbg!(offset);
                 write!(
                     self.asm,

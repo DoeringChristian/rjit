@@ -4,7 +4,7 @@ use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 use cust::util::{DeviceCopyExt, SliceExt};
 
-use self::compiler::Compiler;
+use self::compiler::CUDACompiler;
 use self::ir::{Ir, Op, Var, VarId, VarType};
 
 mod compiler;
@@ -18,12 +18,11 @@ fn main() {
     let mut ir = Ir::default();
 
     let size = 10;
-    let x = vec![1f32; size].as_slice().as_dbuf().unwrap();
-    dbg!(&x);
-    let x = x.cast::<u8>();
-    dbg!(&x);
+    ir.set_size(size as u64);
+    let x_buf = vec![1f32; size].as_slice().as_dbuf().unwrap();
+    dbg!(&x_buf);
 
-    let buf_id = ir.push_buf(x);
+    let buf_id = ir.push_param(x_buf.as_device_ptr().as_raw());
 
     let x = ir.push_var(Var {
         op: Op::Load(buf_id),
@@ -44,20 +43,8 @@ fn main() {
         ty: VarType::F32,
     });
 
-    let mut compiler = Compiler::default();
+    let mut compiler = CUDACompiler::default();
     compiler.compile(&ir);
-
-    // dbg!(ir.buffers()[0].as_device_ptr().as_raw());
-
-    let mut params = vec![(size as u64).to_le()];
-    params.extend(
-        ir.buffers()
-            .iter()
-            .map(|buf| buf.as_device_ptr().as_raw().to_le()),
-    );
-    println!("{:#018x?}", ir.buffers()[0].as_device_ptr().as_raw());
-
-    // println!("{:#x?}", params.as_host_vec().unwrap()[0]);
 
     let module = Module::from_ptx(
         &compiler.asm,
@@ -84,16 +71,13 @@ fn main() {
                 grid_size,
                 block_size,
                 0,
-                &[params.as_mut_ptr() as *mut std::ffi::c_void],
+                &[ir.params.as_mut_ptr() as *mut std::ffi::c_void],
             )
             .unwrap();
     }
 
-    dbg!(params);
-
     stream.synchronize().unwrap();
 
-    let y = ir.buffers.pop().unwrap().cast::<f32>();
-    dbg!(&y);
-    dbg!(y.as_host_vec());
+    dbg!(&x_buf);
+    dbg!(x_buf.as_host_vec());
 }
