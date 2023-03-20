@@ -6,7 +6,7 @@ pub struct CUDACompiler {
     pub asm: String,
 }
 
-const PARAMS_OFFSET: u64 = 1;
+const PARAMS_OFFSET: u64 = 1; // parameter offset (size variable)
 
 impl CUDACompiler {
     #[allow(unused_must_use)]
@@ -140,13 +140,13 @@ impl CUDACompiler {
                     self.asm,
                     "\tld.{}.u64 %rd0, [{}+{}];",
                     "param", "params", offset
-                ); // rd0 = params[offset] // with typeof(rd0) = (void *)
+                );
                 writeln!(
                     self.asm,
                     "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
                     var.ty.size()
-                ); // rd0 = r0 * ty.size() + rd0 <=> rd0 = index * ty.size() + params[offset]
-                   // TODO: boolean loading
+                );
+                // TODO: boolean loading
                 writeln!(
                     self.asm,
                     "\tld.global.cs.{} {}, [%rd0];",
@@ -164,10 +164,7 @@ impl CUDACompiler {
                     params[offset]\n",
                     offset,
                     var.ty.size(),
-                ); // rd0 = params[offset]; rd0 = r0 * ty.size() + rd0 <=>
-                   // rd0 = index * ty.size() + params[offset];
-                   // with typeof(rd0) = (void *);
-
+                );
                 // TODO: boolean storage
 
                 writeln!(
