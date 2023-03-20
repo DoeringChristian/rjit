@@ -49,7 +49,7 @@ impl std::fmt::Display for VarId {
 #[derive(Debug, Default)]
 pub struct Ir {
     vars: Vec<Var>,
-    buffers: Vec<DeviceBuffer<u8>>,
+    pub buffers: Vec<DeviceBuffer<u8>>,
 }
 
 pub struct PVar<'a>(pub VarId, pub &'a Var);

@@ -17,7 +17,12 @@ fn main() {
 
     let mut ir = Ir::default();
 
-    let buf_id = ir.push_buf(vec![0; 100].as_slice().as_dbuf().unwrap().cast::<u8>());
+    let x = vec![0.; 100].as_slice().as_dbuf().unwrap();
+    dbg!(&x);
+    let x = x.cast::<u8>();
+    dbg!(&x);
+
+    let buf_id = ir.push_buf(x);
 
     let x = ir.push_var(Var {
         op: Op::Load(buf_id),
@@ -36,10 +41,6 @@ fn main() {
 
     let mut compiler = Compiler::default();
     compiler.compile(&ir);
-
-    let x = vec![0; 100].as_slice().as_dbuf().unwrap();
-    let x = x.cast::<u8>();
-    x.as_device_ptr().as_raw();
 
     let params = ir
         .buffers()
@@ -75,10 +76,27 @@ fn main() {
 
     stream.synchronize().unwrap();
 
-    dbg!(ir.buffers());
-    let y = ir.buffers()[0].as_host_vec().unwrap();
+    // dbg!(ir.buffers());
+    // let y = ir.buffers()[0].as_host_vec().unwrap();
+    // let y = ir
+    //     .buffers
+    //     .pop()
+    //     .unwrap()
+    //     .cast::<f32>()
+    //     .as_host_vec()
+    //     .unwrap();
 
-    dbg!(y);
+    let y = ir.buffers.pop().unwrap().cast::<f32>();
+    dbg!(&y);
+
+    let x = vec![0.; 100].as_slice().as_dbuf().unwrap();
+    dbg!(&x);
+    let x = x.cast::<u8>();
+    dbg!(&x);
+    let x = x.cast::<f32>();
+    dbg!(&x);
+
+    // dbg!(x.cast::<f32>().as_host_vec());
 
     // let x = {
     //     let x = vec![0; 100];

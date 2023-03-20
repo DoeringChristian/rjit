@@ -54,17 +54,17 @@ impl Compiler {
 
         writeln!(self.asm, "");
 
-        writeln!(self.asm, "\tld.param.u32 %r2, [params];");
+        // writeln!(self.asm, "\tld.param.u32 %r2, [params];");
 
-        write!(
-            self.asm,
-            "\tsetp.ge.u32 %p0, %r0, %r2;\n\
-            \t@%p0 bra done;\n\
-            \t\n\
-            \tmov.u32 %r3, %nctaid.x;\n\
-            \tmul.lo.u32 %r1, %r3, %r1;\n\
-            \t\n"
-        );
+        // write!(
+        //     self.asm,
+        //     "\tsetp.ge.u32 %p0, %r0, %r2;\n\
+        //     \t@%p0 bra done;\n\
+        //     \t\n\
+        //     \tmov.u32 %r3, %nctaid.x;\n\
+        //     \tmul.lo.u32 %r1, %r3, %r1;\n\
+        //     \t\n"
+        // );
 
         write!(self.asm, "body: // sm_{}\n", 86); // TODO: compute capability from device
 
@@ -74,18 +74,18 @@ impl Compiler {
 
         // End of kernel:
 
-        writeln!(
-            self.asm,
-            "\n\
-            \tadd.u32 %r0, %r0, %r1;\n\
-            \tsetp.ge.u32 %p0, %r0, %r2;\n\
-            \t@!%p0 bra body;\n\
-            \n\
-            done:\n"
-        );
+        // writeln!(
+        //     self.asm,
+        //     "\n\
+        //     \tadd.u32 %r0, %r0, %r1;\n\
+        //     \tsetp.ge.u32 %p0, %r0, %r2;\n\
+        //     \t@!%p0 bra body;\n\
+        //     \n\
+        //     done:\n"
+        // );
         write!(
             self.asm,
-            "\tret;\n\
+            "\n\tret;\n\
         }}\n"
         );
 
