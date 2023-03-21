@@ -10,6 +10,7 @@ use self::ir::{Ir, Op, Var, VarId, VarType};
 mod compiler;
 mod ir;
 mod iterators;
+mod trace;
 
 fn main() {
     let ctx = cust::quick_init().unwrap();

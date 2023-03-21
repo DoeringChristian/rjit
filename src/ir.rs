@@ -2,9 +2,60 @@ use cust::prelude::DeviceBuffer;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
+    Neg(VarId),
     Not(VarId),
-    Add(VarId, VarId),     // Add two variables
+    Sqrt(VarId),
+    Abs(VarId),
+    Add(VarId, VarId), // Add two variables
+    Sub(VarId, VarId),
+    Mul(VarId, VarId),
+    Div(VarId, VarId),
+    Mod(VarId, VarId),
+    Mulhi(VarId, VarId),
+    Fma(VarId, VarId, VarId),
+    Min(VarId, VarId),
+    Max(VarId, VarId),
+    Cail(VarId),
+    Floor(VarId),
+    Round(VarId),
+    Trunc(VarId),
+    Eq(VarId, VarId),
+    Neq(VarId, VarId),
+    Lt(VarId, VarId),
+    Le(VarId, VarId),
+    Gt(VarId, VarId),
+    Ge(VarId, VarId),
+    Select(VarId, VarId, VarId),
+    Popc(VarId),
+    Clz(VarId),
+    Ctz(VarId),
+    And(VarId, VarId),
+    Or(VarId, VarId),
+    Xor(VarId, VarId),
+    Shl(VarId, VarId),
+    Shr(VarId, VarId),
+    Rcp(VarId, VarId),
+    Rsqrt(VarId, VarId),
+    Sin(VarId, VarId),
+    Cos(VarId, VarId),
+    Exp2(VarId, VarId),
+    Log2(VarId, VarId),
+    Cast(VarId),
+    Bitcast(VarId),
+    Gather {
+        from: VarId,
+        idx: VarId,
+        mask: VarId,
+    },
+    Scatter {
+        from: VarId,
+        to: VarId,
+        idx: VarId,
+        mask: VarId,
+    },
+    Idx,
     ConstF32(f32),         // Set a constant value
+    ConstU32(u32),         // Set a constant value
     Load(ParamId),         // Load from buffer with pointer in params at offset
     LoadLiteral(ParamId),  // Load from params at offset
     Store(VarId, ParamId), // Store at buffer with pointer in params at offset
@@ -82,7 +133,7 @@ impl VarType {
         }
     }
     // Returns the size/stride of this variable
-    pub fn size(&self) -> u64 {
+    pub fn size(self) -> u64 {
         match self {
             Self::Bool => 1,
             Self::I8 => 1,
@@ -97,6 +148,24 @@ impl VarType {
             Self::F16 => 2,
             Self::F32 => 4,
             Self::F64 => 8,
+        }
+    }
+    pub fn is_uint(self) -> bool {
+        match self {
+            Self::U8 | Self::U16 | Self::U32 | Self::U64 => true,
+            _ => false,
+        }
+    }
+    pub fn is_single(self) -> bool {
+        match self {
+            Self::F32 => true,
+            _ => false,
+        }
+    }
+    pub fn is_double(self) -> bool {
+        match self {
+            Self::F64 => true,
+            _ => false,
         }
     }
 }
