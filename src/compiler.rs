@@ -136,11 +136,7 @@ impl CUDACompiler {
             Op::Load(param_idx) => {
                 let offset = param_idx * 8;
                 // Load from params
-                writeln!(
-                    self.asm,
-                    "\tld.{}.u64 %rd0, [{}+{}];",
-                    "param", "params", offset
-                );
+                writeln!(self.asm, "\tld.param.u64 %rd0, [params+{}];", offset);
                 writeln!(
                     self.asm,
                     "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
@@ -152,6 +148,16 @@ impl CUDACompiler {
                     "\tld.global.cs.{} {}, [%rd0];",
                     var.ty.name_cuda(),
                     var.reg(),
+                );
+            }
+            Op::LoadLiteral(param_idx) => {
+                let offset = param_idx * 8;
+                writeln!(
+                    self.asm,
+                    "\tld.param.{} {}, [params+{}];",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    offset
                 );
             }
             Op::Store(src, param_idx) => {

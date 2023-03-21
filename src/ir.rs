@@ -2,10 +2,11 @@ use cust::prelude::DeviceBuffer;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
-    Add(VarId, VarId),
-    ConstF32(f32),
-    Load(usize),
-    Store(VarId, usize),
+    Add(VarId, VarId),   // Add two variables
+    ConstF32(f32),       // Set a constant value
+    Load(usize),         // Load from buffer with pointer in params at offset
+    LoadLiteral(usize),  // Load from params at offset
+    Store(VarId, usize), // Store at buffer with pointer in params at offset
 }
 
 #[derive(Clone, Copy, Debug)]
