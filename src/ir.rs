@@ -65,8 +65,8 @@ impl std::fmt::Display for VarId {
 #[derive(Debug)]
 pub struct Ir {
     vars: Vec<Var>,
-    pub params: Vec<u64>,
-    pub n_regs: usize,
+    pub params: Vec<u64>, // Params vec![size, &buffer0, &buffer1]
+    pub n_regs: usize,    // Next register index to use
 }
 
 ///
