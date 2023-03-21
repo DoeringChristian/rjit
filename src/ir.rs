@@ -2,6 +2,7 @@ use cust::prelude::DeviceBuffer;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
+    Not(VarId),
     Add(VarId, VarId),     // Add two variables
     ConstF32(f32),         // Set a constant value
     Load(ParamId),         // Load from buffer with pointer in params at offset
@@ -9,7 +10,7 @@ pub enum Op {
     Store(VarId, ParamId), // Store at buffer with pointer in params at offset
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VarType {
     // Void,
     Bool,
@@ -61,6 +62,23 @@ impl VarType {
             Self::F16 => "f16",
             Self::F32 => "f32",
             Self::F64 => "f64",
+        }
+    }
+    pub fn name_cuda_bin(&self) -> &'static str {
+        match self {
+            Self::Bool => "pred",
+            Self::I8 => "b8",
+            Self::U8 => "b8",
+            Self::I16 => "b16",
+            Self::U16 => "b16",
+            Self::I32 => "b32",
+            Self::U32 => "b32",
+            Self::I64 => "b64",
+            Self::U64 => "b64",
+            Self::Ptr => "b64",
+            Self::F16 => "b16",
+            Self::F32 => "b32",
+            Self::F64 => "b64",
         }
     }
     // Returns the size/stride of this variable

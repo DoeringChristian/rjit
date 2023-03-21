@@ -154,15 +154,22 @@ impl CUDACompiler {
 
         match var.op {
             Op::Add(lhs, rhs) => {
-                let lhs = ir.var(lhs);
-                let rhs = ir.var(rhs);
                 writeln!(
                     self.asm,
                     "\tadd.{} {}, {}, {};",
                     var.ty.name_cuda(),
                     var.reg(),
-                    lhs.reg(),
-                    rhs.reg(),
+                    ir.reg(lhs),
+                    ir.reg(rhs),
+                );
+            }
+            Op::Not(lhs) => {
+                writeln!(
+                    self.asm,
+                    "\tnot.{} {}, {};",
+                    var.ty.name_cuda_bin(),
+                    var.reg(),
+                    ir.reg(lhs)
                 );
             }
             Op::ConstF32(val) => {
@@ -186,13 +193,17 @@ impl CUDACompiler {
                     "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
                     var.ty.size()
                 );
-                // TODO: boolean loading
-                writeln!(
-                    self.asm,
-                    "\tld.global.cs.{} {}, [%rd0];",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                );
+                if var.ty == VarType::Bool {
+                    writeln!(self.asm, "\tld.global.cs.u8 %w0, [%rd0];");
+                    writeln!(self.asm, "\tsetp.ne.u16 {}, %w0, 0;", var.reg());
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tld.global.cs.{} {}, [%rd0];",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                    );
+                }
             }
             Op::LoadLiteral(param_idx) => {
                 // let offset = param_idx * 8;
@@ -215,14 +226,18 @@ impl CUDACompiler {
                     param_idx.offset(),
                     var.ty.size(),
                 );
-                // TODO: boolean storage
 
-                writeln!(
-                    self.asm,
-                    "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
-                    var.ty.name_cuda(),
-                    ir.var(src).reg(),
-                );
+                if var.ty == VarType::Bool {
+                    writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", var.reg());
+                    writeln!(self.asm, "\tst.global.cs.u8 [%rd0], %w0;");
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
+                        var.ty.name_cuda(),
+                        ir.var(src).reg(),
+                    );
+                }
             }
         }
     }
@@ -237,7 +252,7 @@ mod test {
     use super::CUDACompiler;
 
     #[test]
-    fn load_add_store() {
+    fn load_add_store_f32() {
         let ctx = cust::quick_init().unwrap();
         let device = cust::device::Device::get_device(0).unwrap();
         let mut ir = Ir::default();
@@ -271,5 +286,41 @@ mod test {
         insta::assert_snapshot!(compiler.asm);
 
         assert_eq!(&x_buf.as_host_vec().unwrap(), &[2.; 10]);
+    }
+    #[test]
+    fn load_not_store_bool() {
+        let ctx = cust::quick_init().unwrap();
+        let device = cust::device::Device::get_device(0).unwrap();
+        let mut ir = Ir::default();
+
+        let size = 10;
+        ir.set_size(size as _);
+
+        let x_buf = vec![0u8; size].as_slice().as_dbuf().unwrap();
+        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
+
+        let x = ir.push_var(Var {
+            op: Op::Load(param_id),
+            ty: VarType::F32,
+            reg: 0,
+        });
+        let y = ir.push_var(Var {
+            op: Op::Not(x),
+            ty: VarType::F32,
+            reg: 0,
+        });
+        let z = ir.push_var(Var {
+            op: Op::Store(y, param_id),
+            ty: VarType::F32,
+            reg: 0,
+        });
+
+        let mut compiler = CUDACompiler::default();
+        compiler.compile(&ir);
+        compiler.execute(&mut ir);
+
+        insta::assert_snapshot!(compiler.asm);
+
+        assert_eq!(&x_buf.as_host_vec().unwrap(), &[0xffu8; 10]);
     }
 }
