@@ -33,6 +33,9 @@ impl VarType {
     }
 }
 
+///
+///
+///
 #[derive(Debug, Clone, Copy)]
 pub struct Var {
     pub op: Op,      // Operation used to construct the variable
@@ -46,6 +49,10 @@ impl Var {
     }
 }
 
+///
+/// Helper struct for printing register names.
+/// <prefix><register_index>
+///
 pub struct Reg<'a>(pub &'a Var);
 impl<'a> std::fmt::Display for Reg<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
