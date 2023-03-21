@@ -1,3 +1,6 @@
+use cust::module::{ModuleJitOption, OptLevel};
+use cust::prelude::Module;
+
 use crate::ir::*;
 use std::fmt::Write;
 
@@ -7,6 +10,44 @@ pub struct CUDACompiler {
 }
 
 impl CUDACompiler {
+    const ENTRY_POINT: &str = "cujit";
+    pub fn module(&self) -> Module {
+        let module = Module::from_ptx(
+            &self.asm,
+            &[
+                ModuleJitOption::OptLevel(OptLevel::O0),
+                ModuleJitOption::GenenerateDebugInfo(true),
+                ModuleJitOption::GenerateLineInfo(true),
+            ],
+        )
+        .unwrap();
+        module
+    }
+    pub fn execute(&self, ir: &mut Ir) {
+        let module = self.module();
+        let func = module.get_function(Self::ENTRY_POINT).unwrap();
+
+        let (_, block_size) = func.suggested_launch_configuration(0, 0.into()).unwrap();
+
+        let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
+
+        let stream =
+            cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
+
+        unsafe {
+            stream
+                .launch(
+                    &func,
+                    grid_size,
+                    block_size,
+                    0,
+                    &[ir.params.as_mut_ptr() as *mut std::ffi::c_void],
+                )
+                .unwrap();
+        }
+
+        stream.synchronize().unwrap();
+    }
     #[allow(unused_must_use)]
     pub fn compile(&mut self, ir: &Ir) {
         let n_params = ir.params.len() as u64;
@@ -29,7 +70,7 @@ impl CUDACompiler {
 
         writeln!(self.asm, "");
 
-        writeln!(self.asm, ".entry cujit(");
+        writeln!(self.asm, ".entry {}(", Self::ENTRY_POINT);
         writeln!(
             self.asm,
             "\t.param .align 8 .b8 params[{}]) {{",
@@ -134,9 +175,12 @@ impl CUDACompiler {
                 );
             }
             Op::Load(param_idx) => {
-                let offset = param_idx * 8;
                 // Load from params
-                writeln!(self.asm, "\tld.param.u64 %rd0, [params+{}];", offset);
+                writeln!(
+                    self.asm,
+                    "\tld.param.u64 %rd0, [params+{}];",
+                    param_idx.offset()
+                );
                 writeln!(
                     self.asm,
                     "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
@@ -151,24 +195,24 @@ impl CUDACompiler {
                 );
             }
             Op::LoadLiteral(param_idx) => {
-                let offset = param_idx * 8;
+                // let offset = param_idx * 8;
                 writeln!(
                     self.asm,
                     "\tld.param.{} {}, [params+{}];",
                     var.ty.name_cuda(),
                     var.reg(),
-                    offset
+                    param_idx.offset()
                 );
             }
             Op::Store(src, param_idx) => {
-                let offset = param_idx * 8;
-                dbg!(offset);
+                // let offset = param_idx * 8;
+                // dbg!(offset);
                 write!(
                     self.asm,
                     "\tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
                     \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
                     params[offset]\n",
-                    offset,
+                    param_idx.offset(),
                     var.ty.size(),
                 );
                 // TODO: boolean storage
@@ -181,5 +225,54 @@ impl CUDACompiler {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use cust::util::SliceExt;
+
+    use crate::ir::*;
+
+    use super::CUDACompiler;
+
+    #[test]
+    fn load_add_store() {
+        let ctx = cust::quick_init().unwrap();
+        let device = cust::device::Device::get_device(0).unwrap();
+        let mut ir = Ir::default();
+
+        let size = 10;
+        ir.set_size(size as _);
+
+        let x_buf = vec![1f32; size].as_slice().as_dbuf().unwrap();
+        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
+
+        let x = ir.push_var(Var {
+            op: Op::Load(param_id),
+            ty: VarType::F32,
+            reg: 0,
+        });
+        let c = ir.push_var(Var {
+            op: Op::ConstF32(2.),
+            ty: VarType::F32,
+            reg: 0,
+        });
+        let y = ir.push_var(Var {
+            op: Op::Add(x, x),
+            ty: VarType::F32,
+            reg: 0,
+        });
+        let z = ir.push_var(Var {
+            op: Op::Store(y, param_id),
+            ty: VarType::F32,
+            reg: 0,
+        });
+
+        let mut compiler = CUDACompiler::default();
+        compiler.compile(&ir);
+        compiler.execute(&mut ir);
+
+        assert_eq!(&x_buf.as_host_vec().unwrap(), &[2.; 10]);
     }
 }

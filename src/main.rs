@@ -47,38 +47,7 @@ fn main() {
 
     let mut compiler = CUDACompiler::default();
     compiler.compile(&ir);
-
-    let module = Module::from_ptx(
-        &compiler.asm,
-        &[
-            ModuleJitOption::OptLevel(OptLevel::O0),
-            ModuleJitOption::GenenerateDebugInfo(true),
-            ModuleJitOption::GenerateLineInfo(true),
-        ],
-    )
-    .unwrap();
-
-    let func = module.get_function("cujit").unwrap();
-
-    let (_, block_size) = func.suggested_launch_configuration(0, 0.into()).unwrap();
-
-    let grid_size = (size as u32 + block_size - 1) / block_size;
-
-    let stream = cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
-
-    unsafe {
-        stream
-            .launch(
-                &func,
-                grid_size,
-                block_size,
-                0,
-                &[ir.params.as_mut_ptr() as *mut std::ffi::c_void],
-            )
-            .unwrap();
-    }
-
-    stream.synchronize().unwrap();
+    compiler.execute(&mut ir);
 
     dbg!(&x_buf);
     dbg!(x_buf.as_host_vec());

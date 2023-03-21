@@ -2,11 +2,11 @@ use cust::prelude::DeviceBuffer;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
-    Add(VarId, VarId),   // Add two variables
-    ConstF32(f32),       // Set a constant value
-    Load(usize),         // Load from buffer with pointer in params at offset
-    LoadLiteral(usize),  // Load from params at offset
-    Store(VarId, usize), // Store at buffer with pointer in params at offset
+    Add(VarId, VarId),     // Add two variables
+    ConstF32(f32),         // Set a constant value
+    Load(ParamId),         // Load from buffer with pointer in params at offset
+    LoadLiteral(ParamId),  // Load from params at offset
+    Store(VarId, ParamId), // Store at buffer with pointer in params at offset
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -74,6 +74,23 @@ impl std::fmt::Display for VarId {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ParamId(usize);
+
+impl ParamId {
+    pub fn offset(self) -> usize {
+        self.0 * 8
+    }
+}
+
+impl std::ops::Deref for ParamId {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug)]
 pub struct Ir {
     vars: Vec<Var>,
@@ -121,8 +138,8 @@ impl Ir {
     pub fn ids(&self) -> impl Iterator<Item = VarId> {
         (0..self.vars.len()).map(|i| VarId(i))
     }
-    pub fn push_param(&mut self, param: u64) -> usize {
-        let id = self.params.len();
+    pub fn push_param(&mut self, param: u64) -> ParamId {
+        let id = ParamId(self.params.len());
         self.params.push(param);
         id
     }
@@ -131,5 +148,8 @@ impl Ir {
     }
     pub fn set_size(&mut self, size: u64) {
         self.params[0] = size;
+    }
+    pub fn size(&self) -> usize {
+        self.params[0] as _
     }
 }
