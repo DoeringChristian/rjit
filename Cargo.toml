@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 bytemuck = "1.13.1"
 cust = { git = "https://github.com/DoeringChristian/Rust-CUDA.git", branch = "cast-double-free" }
+insta = "1.28.0"

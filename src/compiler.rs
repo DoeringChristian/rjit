@@ -253,11 +253,6 @@ mod test {
             ty: VarType::F32,
             reg: 0,
         });
-        let c = ir.push_var(Var {
-            op: Op::ConstF32(2.),
-            ty: VarType::F32,
-            reg: 0,
-        });
         let y = ir.push_var(Var {
             op: Op::Add(x, x),
             ty: VarType::F32,
@@ -272,6 +267,8 @@ mod test {
         let mut compiler = CUDACompiler::default();
         compiler.compile(&ir);
         compiler.execute(&mut ir);
+
+        insta::assert_snapshot!(compiler.asm);
 
         assert_eq!(&x_buf.as_host_vec().unwrap(), &[2.; 10]);
     }
