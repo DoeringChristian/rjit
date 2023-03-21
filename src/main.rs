@@ -25,8 +25,10 @@ fn main() {
     dbg!(&x_buf);
 
     let x = ir.push_var(Var {
-        op: Op::Load(buf_id),
+        op: Op::Load,
         ty: VarType::F32,
+        buffer: Some(x_buf),
+        param: 0,
         reg: 0,
     });
     let c = ir.push_var(Var {

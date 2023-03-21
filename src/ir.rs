@@ -60,11 +60,11 @@ pub enum Op {
         mask: VarId,
     },
     Idx,
-    ConstF32(f32),         // Set a constant value
-    ConstU32(u32),         // Set a constant value
-    Load(ParamId),         // Load from buffer with pointer in params at offset
-    LoadLiteral(ParamId),  // Load from params at offset
-    Store(VarId, ParamId), // Store at buffer with pointer in params at offset
+    ConstF32(f32), // Set a constant value
+    ConstU32(u32), // Set a constant value
+    Load,          // Load from buffer with pointer in params at offset
+    LoadLiteral,   // Load from params at offset
+    Store(VarId),  // Store at buffer with pointer in params at offset
 }
 
 impl Op {
@@ -191,6 +191,8 @@ pub struct Var {
     pub ty: VarType, // Type of the variable
     pub reg: usize,  // Register Index of that variable
     pub buffer: Option<Arc<cust::memory::DeviceBuffer<u8>>>,
+    pub param: u64,
+    pub size: u64,
 }
 
 impl Var {
