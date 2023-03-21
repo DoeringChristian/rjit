@@ -7,7 +7,17 @@ use cust::prelude::DeviceBuffer;
 use crate::iterators::{DepIter, DepIterOp};
 
 #[derive(Debug, Clone, Copy)]
+pub enum ParamType {
+    None,
+    Input,
+    Output,
+    Literal,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum Op {
+    // Data,
+    Nop,
     Neg(VarId),
     Not(VarId),
     Sqrt(VarId),
@@ -62,9 +72,6 @@ pub enum Op {
     Idx,
     ConstF32(f32), // Set a constant value
     ConstU32(u32), // Set a constant value
-    Load,          // Load from buffer with pointer in params at offset
-    LoadLiteral,   // Load from params at offset
-    Store(VarId),  // Store at buffer with pointer in params at offset
 }
 
 impl Op {
@@ -187,12 +194,13 @@ impl VarType {
 ///
 #[derive(Debug, Clone)]
 pub struct Var {
-    pub op: Op,      // Operation used to construct the variable
-    pub ty: VarType, // Type of the variable
-    pub reg: usize,  // Register Index of that variable
-    pub buffer: Option<Arc<cust::memory::DeviceBuffer<u8>>>,
-    pub param: u64,
-    pub size: u64,
+    pub op: Op,              // Operation used to construct the variable
+    pub ty: VarType,         // Type of the variable
+    pub param_ty: ParamType, // Parameter type
+    pub buffer: Option<Arc<cust::memory::DeviceBuffer<u8>>>, // Optional buffer
+
+    pub reg: usize,        // Register Index of that variable
+    pub param_offset: u64, // offset in function parameters
 }
 
 impl Var {

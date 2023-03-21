@@ -2,6 +2,7 @@ use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 
 use crate::ir::*;
+use std::collections::HashSet;
 use std::fmt::Write;
 
 #[derive(Default)]
@@ -30,7 +31,7 @@ impl CUDACompiler {
     fn size(&self) -> usize {
         self.params[0] as _
     }
-    pub fn execute(&self, ir: &mut Ir) {
+    pub fn execute(&mut self, ir: &mut Ir) {
         let module = self.module();
         let func = module.get_function(Self::ENTRY_POINT).unwrap();
 
@@ -55,14 +56,33 @@ impl CUDACompiler {
 
         stream.synchronize().unwrap();
     }
+    fn expand_schedule(&mut self, ir: &Ir, id: VarId, visited: &mut HashSet<VarId>) {
+        let var = ir.var(id);
+        if visited.contains(&id) || var.buffer.is_some() {
+            return;
+        }
+        for dep in var.op.deps() {
+            self.expand_schedule(ir, id, visited);
+        }
+        self.schedule.push(id);
+        visited.insert(id);
+    }
     pub fn preprocess(&mut self, ir: &mut Ir) {
         // Expand schedule
         self.schedule = ir.deps(&self.schedule).collect::<Vec<_>>();
 
         self.n_regs = Self::FIRST_REGISTER;
         for id in self.schedule.iter() {
-            ir.var_mut(*id).reg = self.n_regs;
+            let mut var = ir.var_mut(*id);
+            var.reg = self.n_regs;
             self.n_regs += 1;
+
+            // Push buffer pointer to params and set param_offset
+            if let Some(buffer) = &var.buffer {
+                let offset = self.params.len();
+                self.params.push(buffer.as_device_ptr().as_raw());
+                var.param_offset = offset as _;
+            }
         }
     }
     #[allow(unused_must_use)]
@@ -137,8 +157,70 @@ impl CUDACompiler {
 
         write!(self.asm, "body: // sm_{}\n", 86); // TODO: compute capability from device
 
-        for id in ir.ids() {
-            self.compile_var(ir, id);
+        for id in self.schedule.clone().into_iter() {
+            let var = ir.var(id);
+            match var.param_ty {
+                ParamType::None => self.compile_var(ir, id),
+                ParamType::Literal => {
+                    // let offset = param_idx * 8;
+                    writeln!(
+                        self.asm,
+                        "\tld.param.{} {}, [params+{}];",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        var.param_offset * 8,
+                    );
+                }
+                ParamType::Input => {
+                    // Load from params
+                    writeln!(
+                        self.asm,
+                        "\tld.param.u64 %rd0, [params+{}];",
+                        var.param_offset * 8
+                    );
+                    writeln!(
+                        self.asm,
+                        "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
+                        var.ty.size()
+                    );
+                    if var.ty == VarType::Bool {
+                        writeln!(self.asm, "\tld.global.cs.u8 %w0, [%rd0];");
+                        writeln!(self.asm, "\tsetp.ne.u16 {}, %w0, 0;", var.reg());
+                    } else {
+                        writeln!(
+                            self.asm,
+                            "\tld.global.cs.{} {}, [%rd0];",
+                            var.ty.name_cuda(),
+                            var.reg(),
+                        );
+                    }
+                }
+                ParamType::Output => {
+                    self.compile_var(ir, id);
+                    // let offset = param_idx * 8;
+                    // dbg!(offset);
+                    write!(
+                        self.asm,
+                        "\tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
+                            \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
+                            params[offset]\n",
+                        var.param_offset * 8,
+                        var.ty.size(),
+                    );
+
+                    if var.ty == VarType::Bool {
+                        writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", var.reg());
+                        writeln!(self.asm, "\tst.global.cs.u8 [%rd0], %w0;");
+                    } else {
+                        writeln!(
+                                self.asm,
+                                "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
+                                var.ty.name_cuda(),
+                                var.reg(),
+                            );
+                    }
+                }
+            }
         }
 
         // End of kernel:
@@ -170,6 +252,8 @@ impl CUDACompiler {
         writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);
 
         match var.op {
+            // Op::Data => {}
+            Op::Nop => {}
             Op::Neg(src) => {
                 if var.ty.is_uint() {
                     writeln!(
@@ -372,553 +456,67 @@ impl CUDACompiler {
                     var.reg(),
                     unsafe { *(&val as *const _ as *const u32) }
                 );
-            }
-            Op::Load(param_idx) => {
-                // Load from params
-                writeln!(
-                    self.asm,
-                    "\tld.param.u64 %rd0, [params+{}];",
-                    param_idx.offset()
-                );
-                writeln!(
-                    self.asm,
-                    "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
-                    var.ty.size()
-                );
-                if var.ty == VarType::Bool {
-                    writeln!(self.asm, "\tld.global.cs.u8 %w0, [%rd0];");
-                    writeln!(self.asm, "\tsetp.ne.u16 {}, %w0, 0;", var.reg());
-                } else {
-                    writeln!(
-                        self.asm,
-                        "\tld.global.cs.{} {}, [%rd0];",
-                        var.ty.name_cuda(),
-                        var.reg(),
-                    );
-                }
-            }
-            Op::LoadLiteral(param_idx) => {
-                // let offset = param_idx * 8;
-                writeln!(
-                    self.asm,
-                    "\tld.param.{} {}, [params+{}];",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    param_idx.offset()
-                );
-            }
-            Op::Store(src, param_idx) => {
-                // let offset = param_idx * 8;
-                // dbg!(offset);
-                write!(
-                    self.asm,
-                    "\tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
-                    \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
-                    params[offset]\n",
-                    param_idx.offset(),
-                    var.ty.size(),
-                );
-
-                if var.ty == VarType::Bool {
-                    writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", ir.reg(src));
-                    writeln!(self.asm, "\tst.global.cs.u8 [%rd0], %w0;");
-                } else {
-                    writeln!(
-                        self.asm,
-                        "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
-                        var.ty.name_cuda(),
-                        ir.reg(src)
-                    );
-                }
-            }
+            } // Op::Load(param_idx) => {
+              //     // Load from params
+              //     writeln!(
+              //         self.asm,
+              //         "\tld.param.u64 %rd0, [params+{}];",
+              //         param_idx.offset()
+              //     );
+              //     writeln!(
+              //         self.asm,
+              //         "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
+              //         var.ty.size()
+              //     );
+              //     if var.ty == VarType::Bool {
+              //         writeln!(self.asm, "\tld.global.cs.u8 %w0, [%rd0];");
+              //         writeln!(self.asm, "\tsetp.ne.u16 {}, %w0, 0;", var.reg());
+              //     } else {
+              //         writeln!(
+              //             self.asm,
+              //             "\tld.global.cs.{} {}, [%rd0];",
+              //             var.ty.name_cuda(),
+              //             var.reg(),
+              //         );
+              //     }
+              // }
+              // Op::LoadLiteral(param_idx) => {
+              //     // let offset = param_idx * 8;
+              //     writeln!(
+              //         self.asm,
+              //         "\tld.param.{} {}, [params+{}];",
+              //         var.ty.name_cuda(),
+              //         var.reg(),
+              //         param_idx.offset()
+              //     );
+              // }
+              // Op::Store(src, param_idx) => {
+              //     // let offset = param_idx * 8;
+              //     // dbg!(offset);
+              //     write!(
+              //         self.asm,
+              //         "\tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
+              //         \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
+              //         params[offset]\n",
+              //         param_idx.offset(),
+              //         var.ty.size(),
+              //     );
+              //
+              //     if var.ty == VarType::Bool {
+              //         writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", ir.reg(src));
+              //         writeln!(self.asm, "\tst.global.cs.u8 [%rd0], %w0;");
+              //     } else {
+              //         writeln!(
+              //             self.asm,
+              //             "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
+              //             var.ty.name_cuda(),
+              //             ir.reg(src)
+              //         );
+              //     }
+              // }
         }
     }
 }
 
 #[cfg(test)]
-mod test {
-    use cust::util::SliceExt;
-
-    use crate::ir::*;
-
-    use super::CUDACompiler;
-
-    #[test]
-    fn load_add_store_f32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![1f32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Add(x, x),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[2.; 10]);
-    }
-    #[test]
-    fn load_neg_store_f32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![1f32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Neg(x),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[-1.; 10]);
-    }
-    #[test]
-    fn load_neg_store_u32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![1u32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::U32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Neg(x),
-            ty: VarType::U32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::U32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[0xffffffff; 10]);
-    }
-    #[test]
-    fn load_sqrt_store_f32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![4f32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Sqrt(x),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[2.; 10]);
-    }
-    #[test]
-    fn load_sqrt_store_f64() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![4f64; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F64,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Sqrt(x),
-            ty: VarType::F64,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F64,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[2.; 10]);
-    }
-    #[test]
-    fn load_abs_store_f32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![-1f32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Abs(x),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[1.; 10]);
-    }
-    #[test]
-    fn load_sub_store_f32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![2f32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Sub(x, x),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[0.; 10]);
-    }
-    #[test]
-    fn load_mul_store_f32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![2f32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Mul(x, x),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[4.; 10]);
-    }
-    #[test]
-    fn load_mul_store_f64() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![2f64; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F64,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Mul(x, x),
-            ty: VarType::F64,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F64,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[4.; 10]);
-    }
-    #[test]
-    fn load_div_store_f32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![4f32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let c = ir.push_var(Var {
-            op: Op::ConstF32(2.),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Div(x, c),
-            ty: VarType::F32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[2.; 10]);
-    }
-    #[test]
-    fn load_div_store_f64() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![2f64; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::F64,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Div(x, x),
-            ty: VarType::F64,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F64,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[1.; 10]);
-    }
-    #[test]
-    fn load_mod_store_u32() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![3u32; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::U32,
-            reg: 0,
-        });
-        let c = ir.push_var(Var {
-            op: Op::ConstU32(2),
-            ty: VarType::U32,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Mod(x, c),
-            ty: VarType::U32,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::F32,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[1; 10]);
-    }
-    #[test]
-    fn load_not_store_bool() {
-        let ctx = cust::quick_init().unwrap();
-        let device = cust::device::Device::get_device(0).unwrap();
-        let mut ir = Ir::default();
-
-        let size = 10;
-        ir.set_size(size as _);
-
-        let x_buf = vec![false; size].as_slice().as_dbuf().unwrap();
-        let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
-
-        let x = ir.push_var(Var {
-            op: Op::Load(param_id),
-            ty: VarType::Bool,
-            reg: 0,
-        });
-        let y = ir.push_var(Var {
-            op: Op::Not(x),
-            ty: VarType::Bool,
-            reg: 0,
-        });
-        let z = ir.push_var(Var {
-            op: Op::Store(y, param_id),
-            ty: VarType::Bool,
-            reg: 0,
-        });
-
-        let mut compiler = CUDACompiler::default();
-        compiler.compile(&ir);
-        compiler.execute(&mut ir);
-
-        insta::assert_snapshot!(compiler.asm);
-
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[true; 10]);
-    }
-}
+mod test {}

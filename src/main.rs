@@ -6,6 +6,8 @@ use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 use cust::util::{DeviceCopyExt, SliceExt};
 
+use crate::ir::ParamType;
+
 use self::compiler::CUDACompiler;
 use self::ir::{Ir, Op, Var, VarId, VarType};
 
@@ -25,29 +27,35 @@ fn main() {
     dbg!(&x_buf);
 
     let x = ir.push_var(Var {
-        op: Op::Load,
+        op: Op::Nop,
         ty: VarType::F32,
-        buffer: Some(x_buf),
-        param: 0,
+        buffer: Some(x_buf.clone()),
+        param_ty: ParamType::Input,
+
         reg: 0,
+        param_offset: 0,
     });
     let c = ir.push_var(Var {
         op: Op::ConstF32(2.),
         ty: VarType::F32,
+        buffer: None,
+        param_ty: ParamType::None,
+
         reg: 0,
+        param_offset: 0,
     });
     let y = ir.push_var(Var {
         op: Op::Add(x, x),
         ty: VarType::F32,
+        buffer: Some(x_buf.clone()),
+        param_ty: ParamType::None,
+
         reg: 0,
-    });
-    let z = ir.push_var(Var {
-        op: Op::Store(y, buf_id),
-        ty: VarType::F32,
-        reg: 0,
+        param_offset: 0,
     });
 
     let mut compiler = CUDACompiler::default();
+    compiler.schedule = vec![y];
     compiler.preprocess(&mut ir);
     compiler.compile(&ir);
     compiler.execute(&mut ir);
