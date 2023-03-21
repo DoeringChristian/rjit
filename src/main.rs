@@ -1,4 +1,6 @@
 use std::ffi::c_void;
+use std::num::NonZeroU64;
+use std::sync::Arc;
 
 use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
@@ -19,11 +21,8 @@ fn main() {
     let mut ir = Ir::default();
 
     let size = 10;
-    ir.set_size(size as u64);
-    let x_buf = vec![1f32; size].as_slice().as_dbuf().unwrap();
+    let x_buf = Arc::new(vec![1f32; size].as_slice().as_dbuf().unwrap().cast::<u8>());
     dbg!(&x_buf);
-
-    let buf_id = ir.push_param(x_buf.as_device_ptr().as_raw());
 
     let x = ir.push_var(Var {
         op: Op::Load(buf_id),
@@ -47,6 +46,7 @@ fn main() {
     });
 
     let mut compiler = CUDACompiler::default();
+    compiler.preprocess(&mut ir);
     compiler.compile(&ir);
     compiler.execute(&mut ir);
 

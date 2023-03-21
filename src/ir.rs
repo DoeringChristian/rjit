@@ -1,4 +1,10 @@
+use std::collections::HashSet;
+use std::num::NonZeroU64;
+use std::sync::Arc;
+
 use cust::prelude::DeviceBuffer;
+
+use crate::iterators::{DepIter, DepIterOp};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
@@ -59,6 +65,12 @@ pub enum Op {
     Load(ParamId),         // Load from buffer with pointer in params at offset
     LoadLiteral(ParamId),  // Load from params at offset
     Store(VarId, ParamId), // Store at buffer with pointer in params at offset
+}
+
+impl Op {
+    pub fn deps(self) -> DepIterOp {
+        DepIterOp::new(self)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -173,11 +185,12 @@ impl VarType {
 ///
 ///
 ///
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Var {
     pub op: Op,      // Operation used to construct the variable
     pub ty: VarType, // Type of the variable
     pub reg: usize,  // Register Index of that variable
+    pub buffer: Option<Arc<cust::memory::DeviceBuffer<u8>>>,
 }
 
 impl Var {
@@ -197,7 +210,7 @@ impl<'a> std::fmt::Display for Reg<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VarId(pub usize);
 
 impl std::fmt::Display for VarId {
@@ -226,8 +239,7 @@ impl std::ops::Deref for ParamId {
 #[derive(Debug)]
 pub struct Ir {
     vars: Vec<Var>,
-    pub params: Vec<u64>, // Params vec![size, &buffer0, &buffer1]
-    pub n_regs: usize,    // Next register index to use
+    // pub params: Vec<u64>, // Params vec![size, &buffer0, &buffer1]
 }
 
 ///
@@ -243,18 +255,18 @@ impl Default for Ir {
     fn default() -> Self {
         Self {
             vars: Default::default(),
-            params: vec![0],
-            n_regs: Self::FIRST_REGISTER,
+            // params: vec![0],
+            // n_regs: Self::FIRST_REGISTER,
         }
     }
 }
 
 impl Ir {
-    const FIRST_REGISTER: usize = 4;
+    // const FIRST_REGISTER: usize = 4;
     pub fn push_var(&mut self, mut var: Var) -> VarId {
         let id = VarId(self.vars.len());
-        var.reg = self.n_regs;
-        self.n_regs += 1;
+        // var.reg = self.n_regs;
+        // self.n_regs += 1;
         self.vars.push(var);
         id
     }
@@ -270,18 +282,25 @@ impl Ir {
     pub fn ids(&self) -> impl Iterator<Item = VarId> {
         (0..self.vars.len()).map(|i| VarId(i))
     }
-    pub fn push_param(&mut self, param: u64) -> ParamId {
-        let id = ParamId(self.params.len());
-        self.params.push(param);
-        id
+    pub fn deps(&self, schedule: &[VarId]) -> DepIter {
+        DepIter {
+            ir: self,
+            stack: Vec::from(schedule),
+            discovered: HashSet::new(),
+        }
     }
+    // pub fn push_param(&mut self, param: u64) -> ParamId {
+    //     let id = ParamId(self.params.len());
+    //     // self.params.push(param);
+    //     id
+    // }
     pub fn vars(&self) -> &[Var] {
         &self.vars
     }
-    pub fn set_size(&mut self, size: u64) {
-        self.params[0] = size;
-    }
-    pub fn size(&self) -> usize {
-        self.params[0] as _
-    }
+    // pub fn set_size(&mut self, size: u64) {
+    //     self.params[0] = size;
+    // }
+    // pub fn size(&self) -> usize {
+    //     self.params[0] as _
+    // }
 }

@@ -7,10 +7,14 @@ use std::fmt::Write;
 #[derive(Default)]
 pub struct CUDACompiler {
     pub asm: String,
+    pub params: Vec<u64>,
+    pub n_regs: usize,
+    pub schedule: Vec<VarId>,
 }
 
 impl CUDACompiler {
     const ENTRY_POINT: &str = "cujit";
+    const FIRST_REGISTER: usize = 4;
     pub fn module(&self) -> Module {
         let module = Module::from_ptx(
             &self.asm,
@@ -23,13 +27,16 @@ impl CUDACompiler {
         .unwrap();
         module
     }
+    fn size(&self) -> usize {
+        self.params[0] as _
+    }
     pub fn execute(&self, ir: &mut Ir) {
         let module = self.module();
         let func = module.get_function(Self::ENTRY_POINT).unwrap();
 
         let (_, block_size) = func.suggested_launch_configuration(0, 0.into()).unwrap();
 
-        let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
+        let grid_size = (self.size() as u32 + block_size - 1) / block_size;
 
         let stream =
             cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
@@ -41,17 +48,27 @@ impl CUDACompiler {
                     grid_size,
                     block_size,
                     0,
-                    &[ir.params.as_mut_ptr() as *mut std::ffi::c_void],
+                    &[self.params.as_mut_ptr() as *mut std::ffi::c_void],
                 )
                 .unwrap();
         }
 
         stream.synchronize().unwrap();
     }
+    pub fn preprocess(&mut self, ir: &mut Ir) {
+        // Expand schedule
+        self.schedule = ir.deps(&self.schedule).collect::<Vec<_>>();
+
+        self.n_regs = Self::FIRST_REGISTER;
+        for id in self.schedule.iter() {
+            ir.var_mut(*id).reg = self.n_regs;
+            self.n_regs += 1;
+        }
+    }
     #[allow(unused_must_use)]
     pub fn compile(&mut self, ir: &Ir) {
-        let n_params = ir.params.len() as u64;
-        let n_regs = ir.n_regs;
+        let n_params = self.params.len() as u64;
+        let n_regs = self.n_regs;
 
         /* Special registers:
              %r0   :  Index
