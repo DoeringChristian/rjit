@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
+use crate::ir;
+
 #[derive(Clone)]
 pub enum Var {
     Buffer,
+    Intermediate { op: Op },
 }
 
 #[derive(Clone)]
@@ -62,4 +65,17 @@ pub enum Op {
     ConstF32(f32),         // Set a constant value
     Load(Arc<Var>),        // Load from buffer with pointer in params at offset
     LoadLiteral(Arc<Var>), // Load from params at offset
+}
+
+pub fn generate_ir(vars: &[&Var], ir: &mut ir::Ir) {
+    for var in vars {
+        match *var {
+            Var::Buffer => {
+                todo!()
+            }
+            Var::Intermediate { op } => match op {
+                _ => todo!(),
+            },
+        }
+    }
 }
