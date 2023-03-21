@@ -1,7 +1,5 @@
 use cust::prelude::DeviceBuffer;
 
-pub const VAR_OFFSET: usize = 4; // register offset of variables
-
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
     Add(VarId, VarId),
@@ -60,7 +58,7 @@ pub struct VarId(pub usize);
 
 impl std::fmt::Display for VarId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0 + VAR_OFFSET)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -85,12 +83,13 @@ impl Default for Ir {
         Self {
             vars: Default::default(),
             params: vec![0],
-            n_regs: 4,
+            n_regs: Self::FIRST_REGISTER,
         }
     }
 }
 
 impl Ir {
+    const FIRST_REGISTER: usize = 4;
     pub fn push_var(&mut self, mut var: Var) -> VarId {
         let id = VarId(self.vars.len());
         var.reg = self.n_regs;
