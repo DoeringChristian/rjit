@@ -11,29 +11,74 @@ pub enum Op {
 
 #[derive(Clone, Copy, Debug)]
 pub enum VarType {
-    F32,
+    // Void,
+    Bool,
+    I8,
+    U8,
+    I16,
+    U16,
+    I32,
+    U32,
+    I64,
+    U64,
     Ptr,
+    F16,
+    F32,
+    F64,
 }
 impl VarType {
     // Returns the register prefix for this variable
     pub fn prefix(&self) -> &'static str {
         match self {
-            Self::F32 => "%f",
+            Self::Bool => "%p",
+            Self::I8 => "%b",
+            Self::U8 => "%b",
+            Self::I16 => "%w",
+            Self::U16 => "%w",
+            Self::I32 => "%r",
+            Self::U32 => "%r",
+            Self::I64 => "%rd",
+            Self::U64 => "%rd",
             Self::Ptr => "%rd",
+            Self::F16 => "%h",
+            Self::F32 => "%f",
+            Self::F64 => "%d",
         }
     }
     // Retuns the cuda/ptx Representation for this type
     pub fn name_cuda(&self) -> &'static str {
         match self {
-            Self::F32 => "f32",
+            Self::Bool => "pred",
+            Self::I8 => "s8",
+            Self::U8 => "u8",
+            Self::I16 => "s16",
+            Self::U16 => "u16",
+            Self::I32 => "s32",
+            Self::U32 => "u32",
+            Self::I64 => "s64",
+            Self::U64 => "u64",
             Self::Ptr => "u64",
+            Self::F16 => "f16",
+            Self::F32 => "f32",
+            Self::F64 => "f64",
         }
     }
     // Returns the size/stride of this variable
     pub fn size(&self) -> u64 {
         match self {
-            Self::F32 => 4,
+            Self::Bool => 1,
+            Self::I8 => 1,
+            Self::U8 => 1,
+            Self::I16 => 2,
+            Self::U16 => 2,
+            Self::I32 => 4,
+            Self::U32 => 4,
+            Self::I64 => 8,
+            Self::U64 => 8,
             Self::Ptr => 8,
+            Self::F16 => 2,
+            Self::F32 => 4,
+            Self::F64 => 8,
         }
     }
 }
