@@ -15,16 +15,19 @@ pub enum VarType {
     F32,
 }
 impl VarType {
+    // Returns the register prefix for this variable
     pub fn prefix(&self) -> &'static str {
         match self {
             Self::F32 => "%f",
         }
     }
+    // Retuns the cuda/ptx Representation for this type
     pub fn name_cuda(&self) -> &'static str {
         match self {
             Self::F32 => "f32",
         }
     }
+    // Returns the size/stride of this variable
     pub fn size(&self) -> u64 {
         match self {
             Self::F32 => 4,
@@ -34,10 +37,9 @@ impl VarType {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Var {
-    pub op: Op,
-    pub ty: VarType,
-    pub reg: usize,
-    // pub id: VarId,
+    pub op: Op,      // Operation used to construct the variable
+    pub ty: VarType, // Type of the variable
+    pub reg: usize,  // Register Index of that variable
 }
 
 impl Var {
@@ -102,9 +104,9 @@ impl Ir {
     pub fn var_mut(&mut self, id: VarId) -> &mut Var {
         &mut self.vars[id.0]
     }
-    // pub fn pvar(&self, id: VarId) -> Reg {
-    //     Reg(id, self.var(id))
-    // }
+    pub fn reg(&self, id: VarId) -> Reg {
+        self.var(id).reg()
+    }
     pub fn ids(&self) -> impl Iterator<Item = VarId> {
         (0..self.vars.len()).map(|i| VarId(i))
     }
