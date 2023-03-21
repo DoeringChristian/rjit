@@ -11,24 +11,28 @@ pub enum Op {
 #[derive(Clone, Copy, Debug)]
 pub enum VarType {
     F32,
+    Ptr,
 }
 impl VarType {
     // Returns the register prefix for this variable
     pub fn prefix(&self) -> &'static str {
         match self {
             Self::F32 => "%f",
+            Self::Ptr => "%rd",
         }
     }
     // Retuns the cuda/ptx Representation for this type
     pub fn name_cuda(&self) -> &'static str {
         match self {
             Self::F32 => "f32",
+            Self::Ptr => "u64",
         }
     }
     // Returns the size/stride of this variable
     pub fn size(&self) -> u64 {
         match self {
             Self::F32 => 4,
+            Self::Ptr => 8,
         }
     }
 }
