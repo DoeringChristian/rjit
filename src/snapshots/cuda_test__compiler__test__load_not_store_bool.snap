@@ -28,18 +28,20 @@ expression: compiler.asm
 	
 body: // sm_86
 
-	// [0]: Var { op: Load(ParamId(1)), ty: F32, reg: 4 } =>
+	// [0]: Var { op: Load(ParamId(1)), ty: Bool, reg: 4 } =>
 	ld.param.u64 %rd0, [params+8];
-	mad.wide.u32 %rd0, %r0, 4, %rd0;
-	ld.global.cs.f32 %f4, [%rd0];
+	mad.wide.u32 %rd0, %r0, 1, %rd0;
+	ld.global.cs.u8 %w0, [%rd0];
+	setp.ne.u16 %p4, %w0, 0;
 
-	// [1]: Var { op: Not(VarId(0)), ty: F32, reg: 5 } =>
-	not.b32 %f5, %f4;
+	// [1]: Var { op: Not(VarId(0)), ty: Bool, reg: 5 } =>
+	not.pred %p5, %p4;
 
-	// [2]: Var { op: Store(VarId(1), ParamId(1)), ty: F32, reg: 6 } =>
+	// [2]: Var { op: Store(VarId(1), ParamId(1)), ty: Bool, reg: 6 } =>
 	ld.param.u64 %rd0, [params + 8]; // rd0 <- params[offset]
-	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
-	st.global.cs.f32 [%rd0], %f5; // (Index * ty.size() + params[offset])[Index] <- var
+	mad.wide.u32 %rd0, %r0, 1, %rd0; // rd0 <- Index * ty.size() + params[offset]
+	selp.u16 %w0, 1, 0, %p5;
+	st.global.cs.u8 [%rd0], %w0;
 
 	//End of Kernel:
 	add.u32 %r0, %r0, %r1; // r0 <- r0 + r1

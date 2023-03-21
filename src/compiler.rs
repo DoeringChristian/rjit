@@ -228,14 +228,14 @@ impl CUDACompiler {
                 );
 
                 if var.ty == VarType::Bool {
-                    writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", var.reg());
+                    writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", ir.reg(src));
                     writeln!(self.asm, "\tst.global.cs.u8 [%rd0], %w0;");
                 } else {
                     writeln!(
                         self.asm,
                         "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
                         var.ty.name_cuda(),
-                        ir.var(src).reg(),
+                        ir.reg(src)
                     );
                 }
             }
@@ -296,22 +296,22 @@ mod test {
         let size = 10;
         ir.set_size(size as _);
 
-        let x_buf = vec![0u8; size].as_slice().as_dbuf().unwrap();
+        let x_buf = vec![false; size].as_slice().as_dbuf().unwrap();
         let param_id = ir.push_param(x_buf.as_device_ptr().as_raw());
 
         let x = ir.push_var(Var {
             op: Op::Load(param_id),
-            ty: VarType::F32,
+            ty: VarType::Bool,
             reg: 0,
         });
         let y = ir.push_var(Var {
             op: Op::Not(x),
-            ty: VarType::F32,
+            ty: VarType::Bool,
             reg: 0,
         });
         let z = ir.push_var(Var {
             op: Op::Store(y, param_id),
-            ty: VarType::F32,
+            ty: VarType::Bool,
             reg: 0,
         });
 
@@ -321,6 +321,6 @@ mod test {
 
         insta::assert_snapshot!(compiler.asm);
 
-        assert_eq!(&x_buf.as_host_vec().unwrap(), &[0xffu8; 10]);
+        assert_eq!(&x_buf.as_host_vec().unwrap(), &[true; 10]);
     }
 }
