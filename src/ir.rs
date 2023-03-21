@@ -36,7 +36,21 @@ impl VarType {
 pub struct Var {
     pub op: Op,
     pub ty: VarType,
+    pub reg: usize,
     // pub id: VarId,
+}
+
+impl Var {
+    pub fn reg(&self) -> Reg {
+        Reg(self)
+    }
+}
+
+pub struct Reg<'a>(pub &'a Var);
+impl<'a> std::fmt::Display for Reg<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.0.ty.prefix(), self.0.reg)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -52,6 +66,7 @@ impl std::fmt::Display for VarId {
 pub struct Ir {
     vars: Vec<Var>,
     pub params: Vec<u64>,
+    pub n_regs: usize,
 }
 
 ///
@@ -68,20 +83,16 @@ impl Default for Ir {
         Self {
             vars: Default::default(),
             params: vec![0],
+            n_regs: 4,
         }
-    }
-}
-
-pub struct PVar<'a>(pub VarId, pub &'a Var);
-impl<'a> std::fmt::Display for PVar<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.1.ty.prefix(), self.0)
     }
 }
 
 impl Ir {
     pub fn push_var(&mut self, mut var: Var) -> VarId {
         let id = VarId(self.vars.len());
+        var.reg = self.n_regs;
+        self.n_regs += 1;
         self.vars.push(var);
         id
     }
@@ -91,9 +102,9 @@ impl Ir {
     pub fn var_mut(&mut self, id: VarId) -> &mut Var {
         &mut self.vars[id.0]
     }
-    pub fn pvar(&self, id: VarId) -> PVar {
-        PVar(id, self.var(id))
-    }
+    // pub fn pvar(&self, id: VarId) -> Reg {
+    //     Reg(id, self.var(id))
+    // }
     pub fn ids(&self) -> impl Iterator<Item = VarId> {
         (0..self.vars.len()).map(|i| VarId(i))
     }

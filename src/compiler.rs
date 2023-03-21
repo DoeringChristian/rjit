@@ -10,7 +10,7 @@ impl CUDACompiler {
     #[allow(unused_must_use)]
     pub fn compile(&mut self, ir: &Ir) {
         let n_params = ir.params.len() as u64;
-        let n_regs = VAR_OFFSET + ir.vars().len();
+        let n_regs = ir.n_regs;
 
         /* Special registers:
              %r0   :  Index
@@ -113,13 +113,15 @@ impl CUDACompiler {
 
         match var.op {
             Op::Add(lhs, rhs) => {
+                let lhs = ir.var(lhs);
+                let rhs = ir.var(rhs);
                 writeln!(
                     self.asm,
                     "\tadd.{} {}, {}, {};",
                     var.ty.name_cuda(),
-                    PVar(id, var),
-                    ir.pvar(lhs),
-                    ir.pvar(rhs),
+                    var.reg(),
+                    lhs.reg(),
+                    rhs.reg(),
                 );
             }
             Op::ConstF32(val) => {
@@ -127,7 +129,7 @@ impl CUDACompiler {
                     self.asm,
                     "\tmov.{} {}, 0F{:08x};",
                     var.ty.name_cuda(),
-                    PVar(id, var),
+                    var.reg(),
                     unsafe { *(&val as *const f32 as *const u32) }
                 );
             }
@@ -149,7 +151,7 @@ impl CUDACompiler {
                     self.asm,
                     "\tld.global.cs.{} {}, [%rd0];",
                     var.ty.name_cuda(),
-                    PVar(id, var)
+                    var.reg(),
                 );
             }
             Op::Store(src, param_idx) => {
@@ -169,7 +171,7 @@ impl CUDACompiler {
                     self.asm,
                     "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
                     var.ty.name_cuda(),
-                    ir.pvar(src),
+                    ir.var(src).reg(),
                 );
             }
         }

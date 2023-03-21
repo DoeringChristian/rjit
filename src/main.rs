@@ -27,18 +27,22 @@ fn main() {
     let x = ir.push_var(Var {
         op: Op::Load(buf_id),
         ty: VarType::F32,
+        reg: 0,
     });
     let c = ir.push_var(Var {
         op: Op::ConstF32(2.),
         ty: VarType::F32,
+        reg: 0,
     });
     let y = ir.push_var(Var {
         op: Op::Add(x, x),
         ty: VarType::F32,
+        reg: 0,
     });
     let z = ir.push_var(Var {
         op: Op::Store(y, buf_id),
         ty: VarType::F32,
+        reg: 0,
     });
 
     let mut compiler = CUDACompiler::default();
@@ -47,7 +51,7 @@ fn main() {
     let module = Module::from_ptx(
         &compiler.asm,
         &[
-            ModuleJitOption::OptLevel(OptLevel::O4),
+            ModuleJitOption::OptLevel(OptLevel::O0),
             ModuleJitOption::GenenerateDebugInfo(true),
             ModuleJitOption::GenerateLineInfo(true),
         ],
