@@ -12,9 +12,11 @@ use crate::ir::ParamType;
 use self::compiler::CUDACompiler;
 use self::ir::{Ir, Op, Var, VarId, VarType};
 
+mod backend;
 mod compiler;
 mod ir;
 mod iterators;
+mod jit;
 mod trace;
 
 fn main() {
@@ -32,7 +34,7 @@ fn main() {
     let y = ir.add(x, x);
 
     let mut compiler = CUDACompiler::default();
-    ir.schedule = vec![y];
+    ir.scheduled = vec![y];
     compiler.preprocess(&mut ir);
     compiler.compile(&ir);
     compiler.execute(&mut ir);

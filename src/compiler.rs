@@ -59,7 +59,7 @@ impl CUDACompiler {
     pub fn preprocess(&mut self, ir: &mut Ir) {
         // Get all variables in schedule (schedule_group)
         self.schedule_group.clear();
-        ir.deps(&ir.schedule)
+        ir.deps(&ir.scheduled)
             .for_each(|id| self.schedule_group.push(id));
 
         // TODO: calculate size
@@ -77,7 +77,10 @@ impl CUDACompiler {
                 var.param_offset = offset as _;
             }
         }
-        for id in ir.schedule.iter() {}
+        for id in ir.scheduled.clone() {
+            let var = ir.var_mut(id);
+            var.param_ty = ParamType::Output;
+        }
     }
     #[allow(unused_must_use)]
     pub fn compile(&mut self, ir: &Ir) {

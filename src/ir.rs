@@ -9,7 +9,7 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::iterators::DepIter;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ParamType {
     #[default]
     None,
@@ -18,11 +18,12 @@ pub enum ParamType {
     Literal,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Op {
     // Data,
     #[default]
     Nop,
+    Data,
     Neg,
     Not,
     Sqrt,
@@ -66,8 +67,8 @@ pub enum Op {
     Gather,
     Scatter,
     Idx,
-    ConstF32(f32), // Set a constant value
-    ConstU32(u32), // Set a constant value
+    // ConstF32(f32), // Set a constant value
+    // ConstU32(u32), // Set a constant value
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -143,7 +144,7 @@ impl VarType {
         }
     }
     // Returns the size/stride of this variable
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> usize {
         match self {
             Self::Bool => 1,
             Self::I8 => 1,
@@ -183,16 +184,18 @@ impl VarType {
 ///
 ///
 ///
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct Var {
     pub op: Op, // Operation used to construct the variable
     pub deps: SmallVec<[VarId; 4]>,
     pub ty: VarType,                                         // Type of the variable
+    pub buffer: Option<Box<cust::memory::DeviceBuffer<u8>>>, // Optional buffer
+    pub num: usize,                                          // number of elements
     pub param_ty: ParamType,                                 // Parameter type
-    pub buffer: Option<Arc<cust::memory::DeviceBuffer<u8>>>, // Optional buffer
 
-    pub reg: usize,        // Register Index of that variable
-    pub param_offset: u64, // offset in function parameters
+    // This is information set by Jit::assemble
+    pub reg: usize,          // Register Index of that variable
+    pub param_offset: usize, // offset in function parameters
 }
 
 impl Var {
@@ -247,7 +250,7 @@ impl std::ops::Deref for ParamId {
 #[derive(Debug, Default)]
 pub struct Ir {
     vars: Vec<Var>,
-    pub schedule: Vec<VarId>,
+    pub scheduled: Vec<VarId>,
     // pub params: Vec<u64>, // Params vec![size, &buffer0, &buffer1]
 }
 
@@ -291,6 +294,7 @@ impl Ir {
             buffer: None,
             reg: 0,
             param_offset: 0,
+            num: 0,
         })
     }
     pub fn assert_ty(&self, ids: &[VarId]) -> &VarType {
