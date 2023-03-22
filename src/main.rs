@@ -31,8 +31,8 @@ fn main() {
     // dbg!(&x_buf);
 
     let x = ir.buffer_f32(&[1.; 10]);
-    // let c = ir.const_f32(1.);
-    let y = ir.add(x, x);
+    let c = ir.const_f32(1.);
+    let y = ir.add(x, c);
 
     ir.scheduled = vec![y];
 

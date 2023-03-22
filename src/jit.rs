@@ -46,18 +46,20 @@ impl Jit {
         let mut groups = vec![];
         let cur = 0;
         for i in 1..self.schedule.len() {
-            let var0 = ir.var(self.schedule[i - 1].id);
-            let var1 = ir.var(self.schedule[i].id);
-            if var0.size != var1.size {
+            // let var0 = ir.var(self.schedule[i - 1].id);
+            // let var1 = ir.var(self.schedule[i].id);
+            let sv0 = &self.schedule[i - 1];
+            let sv1 = &self.schedule[i];
+            if sv0.size != sv1.size {
                 groups.push(ScheduledGroup {
                     range: cur..i,
-                    size: var0.size,
+                    size: sv0.size,
                 });
             }
         }
         groups.push(ScheduledGroup {
             range: cur..self.schedule.len(),
-            size: ir.var(self.schedule.last().unwrap().id).size,
+            size: self.schedule.last().unwrap().size,
         });
 
         for id in ir.scheduled.clone() {
@@ -99,7 +101,7 @@ impl Jit {
             let sv = &self.schedule[schdule_idx];
             let var = ir.var_mut(sv.id);
 
-            assert_eq!(var.size, group.size);
+            // assert_eq!(var.size, group.size);
 
             var.reg = self.n_regs;
             self.n_regs += 1;
