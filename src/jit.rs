@@ -18,6 +18,7 @@ pub struct ScheduledVar {
     pub id: VarId,
 }
 
+// TODO: pooling for paralel exectution
 #[derive(Default)]
 pub struct Jit {
     schedule: Vec<ScheduledVar>,
@@ -67,7 +68,7 @@ impl Jit {
         }
         dbg!(&groups);
 
-        // TODO: this can be paralelized
+        // TODO: this can be paralelized (rayon)
         for group in groups {
             // Reset parameters for group.
             self.params.clear();
