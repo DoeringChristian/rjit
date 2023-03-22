@@ -10,7 +10,6 @@ pub struct CUDACompiler {
     pub asm: String,
     pub params: Vec<u64>,
     pub n_regs: usize,
-    pub schedule: Vec<VarId>,
     pub schedule_group: Vec<VarId>,
 }
 
@@ -60,9 +59,10 @@ impl CUDACompiler {
     pub fn preprocess(&mut self, ir: &mut Ir) {
         // Get all variables in schedule (schedule_group)
         self.schedule_group.clear();
-        ir.deps(&self.schedule)
+        ir.deps(&ir.schedule)
             .for_each(|id| self.schedule_group.push(id));
 
+        // TODO: calculate size
         self.n_regs = Self::FIRST_REGISTER;
         for id in self.schedule_group.iter() {
             // Set registers for variables
@@ -77,6 +77,7 @@ impl CUDACompiler {
                 var.param_offset = offset as _;
             }
         }
+        for id in ir.schedule {}
     }
     #[allow(unused_must_use)]
     pub fn compile(&mut self, ir: &Ir) {
@@ -150,7 +151,7 @@ impl CUDACompiler {
 
         write!(self.asm, "body: // sm_{}\n", 86); // TODO: compute capability from device
 
-        for id in self.schedule.clone().into_iter() {
+        for id in self.schedule_group.clone().into_iter() {
             let var = ir.var(id);
             match var.param_ty {
                 ParamType::None => self.compile_var(ir, id),

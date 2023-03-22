@@ -32,11 +32,8 @@ fn main() {
     let y = ir.add(x, x);
 
     let mut compiler = CUDACompiler::default();
-    compiler.schedule = vec![y];
+    ir.schedule = vec![y];
     compiler.preprocess(&mut ir);
     compiler.compile(&ir);
     compiler.execute(&mut ir);
-
-    dbg!(&x_buf);
-    dbg!(x_buf.as_host_vec());
 }

@@ -244,29 +244,11 @@ impl std::ops::Deref for ParamId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Ir {
     vars: Vec<Var>,
+    pub schedule: Vec<VarId>,
     // pub params: Vec<u64>, // Params vec![size, &buffer0, &buffer1]
-}
-
-///
-/// Intermediate Representation:
-///
-/// The structure sould be something like this...
-///
-/// Trace -> Ir -> CUDA Ptx
-///
-///
-///
-impl Default for Ir {
-    fn default() -> Self {
-        Self {
-            vars: Default::default(),
-            // params: vec![0],
-            // n_regs: Self::FIRST_REGISTER,
-        }
-    }
 }
 
 impl Ir {
