@@ -77,7 +77,7 @@ impl CUDACompiler {
                 var.param_offset = offset as _;
             }
         }
-        for id in ir.schedule {}
+        for id in ir.schedule.iter() {}
     }
     #[allow(unused_must_use)]
     pub fn compile(&mut self, ir: &Ir) {

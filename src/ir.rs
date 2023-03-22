@@ -324,7 +324,7 @@ impl Ir {
     pub fn to_host_f32(&mut self, id: VarId) -> Vec<f32> {
         let var = self.var(id);
         assert_eq!(var.ty, VarType::F32);
-        let v = var.buffer.unwrap().as_host_vec().unwrap();
+        let v = var.buffer.as_ref().unwrap().as_host_vec().unwrap();
         Vec::from(cast_slice(&v))
     }
 }
