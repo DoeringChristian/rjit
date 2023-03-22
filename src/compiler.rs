@@ -2,7 +2,7 @@ use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 
 use crate::ir::*;
-use crate::jit::Group;
+use crate::jit::{ScheduledGroup, ScheduledVar};
 use std::collections::HashSet;
 use std::fmt::Write;
 
@@ -87,8 +87,8 @@ impl CUDACompiler {
     pub fn assemble(
         &mut self,
         ir: &Ir,
-        group: &Group,
-        schedule: &[VarId],
+        group: &ScheduledGroup,
+        schedule: &[ScheduledVar],
         n_params: usize,
         n_regs: usize,
     ) {
@@ -164,10 +164,10 @@ impl CUDACompiler {
         write!(self.asm, "body: // sm_{}\n", 86); // TODO: compute capability from device
 
         for i in group.range.clone() {
-            let id = schedule[i];
-            let var = ir.var(id);
+            let sv = &schedule[i];
+            let var = ir.var(sv.id);
             match var.param_ty {
-                ParamType::None => self.assemble_var(ir, id),
+                ParamType::None => self.assemble_var(ir, sv.id),
                 ParamType::Literal => {
                     // let offset = param_idx * 8;
                     writeln!(
@@ -203,7 +203,7 @@ impl CUDACompiler {
                     }
                 }
                 ParamType::Output => {
-                    self.assemble_var(ir, id);
+                    self.assemble_var(ir, sv.id);
                     // let offset = param_idx * 8;
                     // dbg!(offset);
                     write!(

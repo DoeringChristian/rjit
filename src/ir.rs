@@ -300,7 +300,7 @@ impl Ir {
             buffer: None,
             reg: 0,
             param_offset: 0,
-            size: 0,
+            size,
         })
     }
     pub fn assert_ty(&self, ids: &[VarId]) -> (usize, &VarType) {
@@ -308,10 +308,10 @@ impl Ir {
             assert_eq!(ty0, ty1);
             ty0
         });
-        let size = ids.iter().map(|id| &self.var(*id).size).reduce(|s0, s1| {
-            assert_eq!(s0, s1);
-            s0
-        });
+        let size = ids
+            .iter()
+            .map(|id| &self.var(*id).size)
+            .reduce(|s0, s1| s0.max(s1));
         (*size.unwrap(), ty.unwrap())
     }
 }
