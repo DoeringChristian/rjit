@@ -3,7 +3,7 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use cust::prelude::DeviceBuffer;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 
 use crate::iterators::DepIter;
 
@@ -66,7 +66,7 @@ pub enum Op {
     ConstU32(u32), // Set a constant value
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VarType {
     // Void,
     Bool,
@@ -138,7 +138,7 @@ impl VarType {
         }
     }
     // Returns the size/stride of this variable
-    pub fn size(self) -> u64 {
+    pub fn size(&self) -> u64 {
         match self {
             Self::Bool => 1,
             Self::I8 => 1,
@@ -155,19 +155,19 @@ impl VarType {
             Self::F64 => 8,
         }
     }
-    pub fn is_uint(self) -> bool {
+    pub fn is_uint(&self) -> bool {
         match self {
             Self::U8 | Self::U16 | Self::U32 | Self::U64 => true,
             _ => false,
         }
     }
-    pub fn is_single(self) -> bool {
+    pub fn is_single(&self) -> bool {
         match self {
             Self::F32 => true,
             _ => false,
         }
     }
-    pub fn is_double(self) -> bool {
+    pub fn is_double(&self) -> bool {
         match self {
             Self::F64 => true,
             _ => false,
@@ -292,18 +292,31 @@ impl Ir {
             discovered: HashSet::new(),
         }
     }
-    // pub fn push_param(&mut self, param: u64) -> ParamId {
-    //     let id = ParamId(self.params.len());
-    //     // self.params.push(param);
-    //     id
-    // }
     pub fn vars(&self) -> &[Var] {
         &self.vars
     }
-    // pub fn set_size(&mut self, size: u64) {
-    //     self.params[0] = size;
-    // }
-    // pub fn size(&self) -> usize {
-    //     self.params[0] as _
-    // }
+    pub fn push_var_intermediate(&mut self, op: Op, deps: &[VarId], ty: VarType) -> VarId {
+        self.push_var(Var {
+            op: Op::Add,
+            deps: SmallVec::from_slice(deps),
+            ty,
+            param_ty: ParamType::None,
+            buffer: None,
+            reg: 0,
+            param_offset: 0,
+        })
+    }
+    pub fn assert_ty(&self, ids: &[VarId]) -> &VarType {
+        let ty = ids.iter().map(|id| &self.var(*id).ty).reduce(|ty0, ty1| {
+            assert_eq!(ty0, ty1);
+            ty0
+        });
+        ty.unwrap()
+    }
+}
+impl Ir {
+    pub fn add(&mut self, lhs: VarId, rhs: VarId) -> VarId {
+        let ty = self.assert_ty(&[lhs, rhs]);
+        self.push_var_intermediate(Op::Add, &[lhs, rhs], ty.clone())
+    }
 }

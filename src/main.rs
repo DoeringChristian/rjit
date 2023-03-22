@@ -47,16 +47,7 @@ fn main() {
         reg: 0,
         param_offset: 0,
     });
-    let y = ir.push_var(Var {
-        op: Op::Add,
-        deps: smallvec![x, x],
-        ty: VarType::F32,
-        buffer: Some(x_buf.clone()),
-        param_ty: ParamType::None,
-
-        reg: 0,
-        param_offset: 0,
-    });
+    let y = ir.add(x, x);
 
     let mut compiler = CUDACompiler::default();
     compiler.schedule = vec![y];

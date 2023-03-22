@@ -57,19 +57,8 @@ impl CUDACompiler {
 
         stream.synchronize().unwrap();
     }
-    fn expand_schedule(&mut self, ir: &Ir, id: VarId, visited: &mut HashSet<VarId>) {
-        let var = ir.var(id);
-        if visited.contains(&id) || var.buffer.is_some() {
-            return;
-        }
-        for dep in var.deps() {
-            self.expand_schedule(ir, id, visited);
-        }
-        self.schedule.push(id);
-        visited.insert(id);
-    }
     pub fn preprocess(&mut self, ir: &mut Ir) {
-        // Expand schedule
+        // Get all variables in schedule (schedule_group)
         self.schedule_group.clear();
         ir.deps(&self.schedule)
             .for_each(|id| self.schedule_group.push(id));
