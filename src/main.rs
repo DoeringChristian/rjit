@@ -5,6 +5,7 @@ use std::sync::Arc;
 use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 use cust::util::{DeviceCopyExt, SliceExt};
+use smallvec::smallvec;
 
 use crate::ir::ParamType;
 
@@ -29,6 +30,7 @@ fn main() {
     let x = ir.push_var(Var {
         op: Op::Nop,
         ty: VarType::F32,
+        deps: smallvec![],
         buffer: Some(x_buf.clone()),
         param_ty: ParamType::Input,
 
@@ -38,6 +40,7 @@ fn main() {
     let c = ir.push_var(Var {
         op: Op::ConstF32(2.),
         ty: VarType::F32,
+        deps: smallvec![],
         buffer: None,
         param_ty: ParamType::None,
 
@@ -45,7 +48,8 @@ fn main() {
         param_offset: 0,
     });
     let y = ir.push_var(Var {
-        op: Op::Add(x, x),
+        op: Op::Add,
+        deps: smallvec![x, x],
         ty: VarType::F32,
         buffer: Some(x_buf.clone()),
         param_ty: ParamType::None,

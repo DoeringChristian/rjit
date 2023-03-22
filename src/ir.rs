@@ -3,8 +3,9 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use cust::prelude::DeviceBuffer;
+use smallvec::SmallVec;
 
-use crate::iterators::{DepIter, DepIterOp};
+use crate::iterators::DepIter;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ParamType {
@@ -18,66 +19,51 @@ pub enum ParamType {
 pub enum Op {
     // Data,
     Nop,
-    Neg(VarId),
-    Not(VarId),
-    Sqrt(VarId),
-    Abs(VarId),
-    Add(VarId, VarId), // Add two variables
-    Sub(VarId, VarId),
-    Mul(VarId, VarId),
-    Div(VarId, VarId),
-    Mod(VarId, VarId),
-    Mulhi(VarId, VarId),
-    Fma(VarId, VarId, VarId),
-    Min(VarId, VarId),
-    Max(VarId, VarId),
-    Cail(VarId),
-    Floor(VarId),
-    Round(VarId),
-    Trunc(VarId),
-    Eq(VarId, VarId),
-    Neq(VarId, VarId),
-    Lt(VarId, VarId),
-    Le(VarId, VarId),
-    Gt(VarId, VarId),
-    Ge(VarId, VarId),
-    Select(VarId, VarId, VarId),
-    Popc(VarId),
-    Clz(VarId),
-    Ctz(VarId),
-    And(VarId, VarId),
-    Or(VarId, VarId),
-    Xor(VarId, VarId),
-    Shl(VarId, VarId),
-    Shr(VarId, VarId),
-    Rcp(VarId, VarId),
-    Rsqrt(VarId, VarId),
-    Sin(VarId, VarId),
-    Cos(VarId, VarId),
-    Exp2(VarId, VarId),
-    Log2(VarId, VarId),
-    Cast(VarId),
-    Bitcast(VarId),
-    Gather {
-        from: VarId,
-        idx: VarId,
-        mask: VarId,
-    },
-    Scatter {
-        from: VarId,
-        to: VarId,
-        idx: VarId,
-        mask: VarId,
-    },
+    Neg,
+    Not,
+    Sqrt,
+    Abs,
+    Add, // Add two variables
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Mulhi,
+    Fma,
+    Min,
+    Max,
+    Cail,
+    Floor,
+    Round,
+    Trunc,
+    Eq,
+    Neq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    Select,
+    Popc,
+    Clz,
+    Ctz,
+    And,
+    Or,
+    Xor,
+    Shl,
+    Shr,
+    Rcp,
+    Rsqrt,
+    Sin,
+    Cos,
+    Exp2,
+    Log2,
+    Cast,
+    Bitcast,
+    Gather,
+    Scatter,
     Idx,
     ConstF32(f32), // Set a constant value
     ConstU32(u32), // Set a constant value
-}
-
-impl Op {
-    pub fn deps(self) -> DepIterOp {
-        DepIterOp::new(self)
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -194,13 +180,20 @@ impl VarType {
 ///
 #[derive(Debug, Clone)]
 pub struct Var {
-    pub op: Op,              // Operation used to construct the variable
-    pub ty: VarType,         // Type of the variable
-    pub param_ty: ParamType, // Parameter type
+    pub op: Op, // Operation used to construct the variable
+    pub deps: SmallVec<[VarId; 4]>,
+    pub ty: VarType,                                         // Type of the variable
+    pub param_ty: ParamType,                                 // Parameter type
     pub buffer: Option<Arc<cust::memory::DeviceBuffer<u8>>>, // Optional buffer
 
     pub reg: usize,        // Register Index of that variable
     pub param_offset: u64, // offset in function parameters
+}
+
+impl Var {
+    pub fn deps(&self) -> &[VarId] {
+        &self.deps
+    }
 }
 
 impl Var {

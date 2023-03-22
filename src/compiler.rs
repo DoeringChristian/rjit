@@ -61,7 +61,7 @@ impl CUDACompiler {
         if visited.contains(&id) || var.buffer.is_some() {
             return;
         }
-        for dep in var.op.deps() {
+        for dep in var.deps() {
             self.expand_schedule(ir, id, visited);
         }
         self.schedule.push(id);
@@ -73,6 +73,7 @@ impl CUDACompiler {
 
         self.n_regs = Self::FIRST_REGISTER;
         for id in self.schedule.iter() {
+            // Set registers for variables
             let mut var = ir.var_mut(*id);
             var.reg = self.n_regs;
             self.n_regs += 1;
@@ -254,14 +255,14 @@ impl CUDACompiler {
         match var.op {
             // Op::Data => {}
             Op::Nop => {}
-            Op::Neg(src) => {
+            Op::Neg => {
                 if var.ty.is_uint() {
                     writeln!(
                         self.asm,
                         "\tneg.s{} {}, {};",
                         var.ty.size() * 8,
                         var.reg(),
-                        ir.reg(src)
+                        ir.reg(var.deps[0])
                     );
                 } else {
                     writeln!(
@@ -269,27 +270,27 @@ impl CUDACompiler {
                         "\tneg.{} {}, {};\n",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(src)
+                        ir.reg(var.deps[0])
                     );
                 }
             }
-            Op::Not(src) => {
+            Op::Not => {
                 writeln!(
                     self.asm,
                     "\tnot.{} {}, {};",
                     var.ty.name_cuda_bin(),
                     var.reg(),
-                    ir.reg(src)
+                    ir.reg(var.deps[0])
                 );
             }
-            Op::Sqrt(src) => {
+            Op::Sqrt => {
                 if var.ty.is_single() {
                     writeln!(
                         self.asm,
                         "\tsqrt.approx.ftz.{} {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(src)
+                        ir.reg(var.deps[0])
                     );
                 } else {
                     writeln!(
@@ -297,48 +298,48 @@ impl CUDACompiler {
                         "\tsqrt.rn.{} {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(src)
+                        ir.reg(var.deps[0])
                     );
                 }
             }
-            Op::Abs(src) => {
+            Op::Abs => {
                 writeln!(
                     self.asm,
                     "\tabs.{} {}, {};",
                     var.ty.name_cuda(),
                     var.reg(),
-                    ir.reg(src)
+                    ir.reg(var.deps[0])
                 );
             }
-            Op::Add(lhs, rhs) => {
+            Op::Add => {
                 writeln!(
                     self.asm,
                     "\tadd.{} {}, {}, {};",
                     var.ty.name_cuda(),
                     var.reg(),
-                    ir.reg(lhs),
-                    ir.reg(rhs),
+                    ir.reg(var.deps[0]),
+                    ir.reg(var.deps[1]),
                 );
             }
-            Op::Sub(lhs, rhs) => {
+            Op::Sub => {
                 writeln!(
                     self.asm,
                     "\tsub.{} {}, {}, {};",
                     var.ty.name_cuda(),
                     var.reg(),
-                    ir.reg(lhs),
-                    ir.reg(rhs)
+                    ir.reg(var.deps[0]),
+                    ir.reg(var.deps[1])
                 );
             }
-            Op::Mul(lhs, rhs) => {
+            Op::Mul => {
                 if var.ty.is_single() {
                     writeln!(
                         self.asm,
                         "\tmul.ftz.{} {}, {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(lhs),
-                        ir.reg(rhs)
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
                     );
                 } else if var.ty.is_double() {
                     writeln!(
@@ -346,8 +347,8 @@ impl CUDACompiler {
                         "\tmul.{} {}, {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(lhs),
-                        ir.reg(rhs)
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
                     );
                 } else {
                     writeln!(
@@ -355,20 +356,20 @@ impl CUDACompiler {
                         "\tmul.lo.{} {}, {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(lhs),
-                        ir.reg(rhs)
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
                     );
                 }
             }
-            Op::Div(lhs, rhs) => {
+            Op::Div => {
                 if var.ty.is_single() {
                     writeln!(
                         self.asm,
                         "\tdiv.approx.ftz.{} {}, {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(lhs),
-                        ir.reg(rhs)
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
                     );
                 } else if var.ty.is_double() {
                     writeln!(
@@ -376,8 +377,8 @@ impl CUDACompiler {
                         "\tdiv.rn.{} {}, {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(lhs),
-                        ir.reg(rhs)
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
                     );
                 } else {
                     writeln!(
@@ -385,59 +386,54 @@ impl CUDACompiler {
                         "\tdiv.{} {}, {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
-                        ir.reg(lhs),
-                        ir.reg(rhs)
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
                     );
                 }
             }
-            Op::Mod(lhs, rhs) => {
+            Op::Mod => {
                 writeln!(
                     self.asm,
                     "\trem.{} {}, {}, {};",
                     var.ty.name_cuda(),
                     var.reg(),
-                    ir.reg(lhs),
-                    ir.reg(rhs)
+                    ir.reg(var.deps[0]),
+                    ir.reg(var.deps[1])
                 );
             }
-            Op::Mulhi(_, _) => todo!(),
-            Op::Fma(_, _, _) => todo!(),
-            Op::Min(_, _) => todo!(),
-            Op::Max(_, _) => todo!(),
-            Op::Cail(_) => todo!(),
-            Op::Floor(_) => todo!(),
-            Op::Round(_) => todo!(),
-            Op::Trunc(_) => todo!(),
-            Op::Eq(_, _) => todo!(),
-            Op::Neq(_, _) => todo!(),
-            Op::Lt(_, _) => todo!(),
-            Op::Le(_, _) => todo!(),
-            Op::Gt(_, _) => todo!(),
-            Op::Ge(_, _) => todo!(),
-            Op::Select(_, _, _) => todo!(),
-            Op::Popc(_) => todo!(),
-            Op::Clz(_) => todo!(),
-            Op::Ctz(_) => todo!(),
-            Op::And(_, _) => todo!(),
-            Op::Or(_, _) => todo!(),
-            Op::Xor(_, _) => todo!(),
-            Op::Shl(_, _) => todo!(),
-            Op::Shr(_, _) => todo!(),
-            Op::Rcp(_, _) => todo!(),
-            Op::Rsqrt(_, _) => todo!(),
-            Op::Sin(_, _) => todo!(),
-            Op::Cos(_, _) => todo!(),
-            Op::Exp2(_, _) => todo!(),
-            Op::Log2(_, _) => todo!(),
-            Op::Cast(_) => todo!(),
-            Op::Bitcast(_) => todo!(),
-            Op::Gather { from, idx, mask } => todo!(),
-            Op::Scatter {
-                from,
-                to,
-                idx,
-                mask,
-            } => todo!(),
+            Op::Mulhi => todo!(),
+            Op::Fma => todo!(),
+            Op::Min => todo!(),
+            Op::Max => todo!(),
+            Op::Cail => todo!(),
+            Op::Floor => todo!(),
+            Op::Round => todo!(),
+            Op::Trunc => todo!(),
+            Op::Eq => todo!(),
+            Op::Neq => todo!(),
+            Op::Lt => todo!(),
+            Op::Le => todo!(),
+            Op::Gt => todo!(),
+            Op::Ge => todo!(),
+            Op::Select => todo!(),
+            Op::Popc => todo!(),
+            Op::Clz => todo!(),
+            Op::Ctz => todo!(),
+            Op::And => todo!(),
+            Op::Or => todo!(),
+            Op::Xor => todo!(),
+            Op::Shl => todo!(),
+            Op::Shr => todo!(),
+            Op::Rcp => todo!(),
+            Op::Rsqrt => todo!(),
+            Op::Sin => todo!(),
+            Op::Cos => todo!(),
+            Op::Exp2 => todo!(),
+            Op::Log2 => todo!(),
+            Op::Cast => todo!(),
+            Op::Bitcast => todo!(),
+            Op::Gather => todo!(),
+            Op::Scatter => todo!(),
             Op::Idx => todo!(),
             Op::ConstF32(val) => {
                 writeln!(
