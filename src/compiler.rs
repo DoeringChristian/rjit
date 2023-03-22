@@ -11,6 +11,7 @@ pub struct CUDACompiler {
     pub params: Vec<u64>,
     pub n_regs: usize,
     pub schedule: Vec<VarId>,
+    pub schedule_group: Vec<VarId>,
 }
 
 impl CUDACompiler {
@@ -69,10 +70,12 @@ impl CUDACompiler {
     }
     pub fn preprocess(&mut self, ir: &mut Ir) {
         // Expand schedule
-        self.schedule = ir.deps(&self.schedule).collect::<Vec<_>>();
+        self.schedule_group.clear();
+        ir.deps(&self.schedule)
+            .for_each(|id| self.schedule_group.push(id));
 
         self.n_regs = Self::FIRST_REGISTER;
-        for id in self.schedule.iter() {
+        for id in self.schedule_group.iter() {
             // Set registers for variables
             let mut var = ir.var_mut(*id);
             var.reg = self.n_regs;
