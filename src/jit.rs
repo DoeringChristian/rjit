@@ -16,10 +16,15 @@ pub struct Jit {
     schedule: Vec<VarId>,
     pub params: Vec<u64>,
     pub n_regs: usize,
+    pub compiler: CUDACompiler,
 }
 
 impl Jit {
     pub fn eval(&mut self, ir: &mut Ir) {
+        self.params.clear();
+        self.n_regs = self.compiler.first_register();
+        self.schedule.clear();
+
         // Sort scheduled variables by size
         self.schedule = ir.deps(&ir.scheduled).collect::<Vec<_>>();
         self.schedule
@@ -42,16 +47,15 @@ impl Jit {
         // TODO: this can be paralelized
         for group in groups {
             // Assemble a group
-            self.assemble(ir, group);
+            self.preprocess(ir, group);
         }
     }
     ///
     /// Assembles a group of varaibles.
     /// This writes into the variables of the internal representation.
     ///
-    fn assemble(&mut self, ir: &mut Ir, group: Group) {
+    fn preprocess(&mut self, ir: &mut Ir, group: Group) {
         // TODO: Implement diffrent backends
-        let compiler = CUDACompiler::default();
         for schdule_idx in group.range {
             let id = self.schedule[schdule_idx];
             let var = ir.var_mut(id);

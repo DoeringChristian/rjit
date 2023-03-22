@@ -36,6 +36,6 @@ fn main() {
     let mut compiler = CUDACompiler::default();
     ir.scheduled = vec![y];
     compiler.preprocess(&mut ir);
-    compiler.compile(&ir);
+    compiler.assemble(&ir);
     compiler.execute(&mut ir);
 }
