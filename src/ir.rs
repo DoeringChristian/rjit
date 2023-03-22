@@ -2,22 +2,26 @@ use std::collections::HashSet;
 use std::num::NonZeroU64;
 use std::sync::Arc;
 
+use bytemuck::cast_slice;
 use cust::prelude::DeviceBuffer;
+use cust::util::SliceExt;
 use smallvec::{smallvec, SmallVec};
 
 use crate::iterators::DepIter;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum ParamType {
+    #[default]
     None,
     Input,
     Output,
     Literal,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum Op {
     // Data,
+    #[default]
     Nop,
     Neg,
     Not,
@@ -66,9 +70,10 @@ pub enum Op {
     ConstU32(u32), // Set a constant value
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum VarType {
     // Void,
+    #[default]
     Bool,
     I8,
     U8,
@@ -178,7 +183,7 @@ impl VarType {
 ///
 ///
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Var {
     pub op: Op, // Operation used to construct the variable
     pub deps: SmallVec<[VarId; 4]>,
@@ -318,5 +323,26 @@ impl Ir {
     pub fn add(&mut self, lhs: VarId, rhs: VarId) -> VarId {
         let ty = self.assert_ty(&[lhs, rhs]);
         self.push_var_intermediate(Op::Add, &[lhs, rhs], ty.clone())
+    }
+    pub fn const_f32(&mut self, val: f32) -> VarId {
+        self.push_var(Var {
+            op: Op::ConstF32(val),
+            deps: smallvec![],
+            ty: VarType::F32,
+            ..Default::default()
+        })
+    }
+    pub fn buffer_f32(&mut self, slice: &[f32]) -> VarId {
+        self.push_var(Var {
+            param_ty: ParamType::Input,
+            buffer: Some(Arc::new(slice.as_dbuf().unwrap().cast::<u8>())),
+            ..Default::default()
+        })
+    }
+    pub fn to_host_f32(&mut self, id: VarId) -> Vec<f32> {
+        let var = self.var(id);
+        assert_eq!(var.ty, VarType::F32);
+        let v = var.buffer.unwrap().as_host_vec().unwrap();
+        Vec::from(cast_slice(&v))
     }
 }
