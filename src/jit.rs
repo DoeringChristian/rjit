@@ -6,12 +6,13 @@ use cust::util::SliceExt;
 use crate::compiler::CUDACompiler;
 use crate::ir::{Ir, Op, ParamType, VarId};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Group {
     pub range: Range<usize>,
-    pub num: usize, // size of the varibles in group
+    pub size: usize, // size of the varibles in group
 }
 
+#[derive(Default)]
 pub struct Jit {
     schedule: Vec<VarId>,
     pub params: Vec<u64>,
@@ -28,55 +29,72 @@ impl Jit {
         // Sort scheduled variables by size
         self.schedule = ir.deps(&ir.scheduled).collect::<Vec<_>>();
         self.schedule
-            .sort_by(|id0, id1| ir.var(*id0).num.cmp(&ir.var(*id1).num));
+            .sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
+
+        dbg!(&self.schedule);
 
         // Group variables of same size
-        let groups = vec![];
+        let mut groups = vec![];
         let cur = 0;
         for i in 1..self.schedule.len() {
             let var0 = ir.var(self.schedule[i - 1]);
             let var1 = ir.var(self.schedule[i]);
-            if var0.num != var1.num {
+            if var0.size != var1.size {
                 groups.push(Group {
                     range: cur..i,
-                    num: var0.num,
+                    size: var0.size,
                 });
             }
         }
+        groups.push(Group {
+            range: cur..self.schedule.len(),
+            size: ir.var(*self.schedule.last().unwrap()).size,
+        });
+
+        for id in ir.scheduled.clone() {
+            ir.var_mut(id).param_ty = ParamType::Output;
+        }
+        dbg!(&groups);
 
         // TODO: this can be paralelized
         for group in groups {
             // Assemble a group
-            self.preprocess(ir, group);
+            self.params.clear();
+            self.params.push(group.size as _);
+            dbg!(&self.params);
+            self.preprocess(ir, &group);
+            self.compiler
+                .assemble(ir, &group, &self.schedule, self.params.len(), self.n_regs);
+            self.compiler.execute(ir, group.size, &mut self.params);
         }
     }
     ///
     /// Assembles a group of varaibles.
     /// This writes into the variables of the internal representation.
     ///
-    fn preprocess(&mut self, ir: &mut Ir, group: Group) {
+    fn preprocess(&mut self, ir: &mut Ir, group: &Group) {
         // TODO: Implement diffrent backends
-        for schdule_idx in group.range {
+        for schdule_idx in group.range.clone() {
             let id = self.schedule[schdule_idx];
             let var = ir.var_mut(id);
 
-            assert_eq!(var.num, group.num);
+            assert_eq!(var.size, group.size);
 
             var.reg = self.n_regs;
             self.n_regs += 1;
 
             if var.param_ty == ParamType::Input {
                 // TODO: This should be compatible with diffrent backends
-                let offset = self.push_param(var.buffer.unwrap().as_device_ptr().as_raw());
+                let offset = self.push_param(var.buffer.as_ref().unwrap().as_device_ptr().as_raw());
                 var.param_offset = offset;
             } else if var.param_ty == ParamType::Output {
                 var.buffer = Some(Box::new(
-                    vec![0u8; var.num * var.ty.size()]
+                    vec![0u8; var.size * var.ty.size()]
                         .as_slice()
                         .as_dbuf()
                         .unwrap(),
                 ));
-                let offset = self.push_param(var.buffer.unwrap().as_device_ptr().as_raw());
+                let offset = self.push_param(var.buffer.as_ref().unwrap().as_device_ptr().as_raw());
                 var.param_offset = offset;
             } else {
             }

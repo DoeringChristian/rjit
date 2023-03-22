@@ -11,6 +11,7 @@ use crate::ir::ParamType;
 
 use self::compiler::CUDACompiler;
 use self::ir::{Ir, Op, Var, VarId, VarType};
+use self::jit::Jit;
 
 mod backend;
 mod compiler;
@@ -30,12 +31,13 @@ fn main() {
     // dbg!(&x_buf);
 
     let x = ir.buffer_f32(&[1.; 10]);
-    let c = ir.const_f32(1.);
+    // let c = ir.const_f32(1.);
     let y = ir.add(x, x);
 
-    let mut compiler = CUDACompiler::default();
     ir.scheduled = vec![y];
-    compiler.preprocess(&mut ir);
-    compiler.assemble(&ir);
-    compiler.execute(&mut ir);
+
+    let mut jit = Jit::default();
+    jit.eval(&mut ir);
+
+    dbg!(ir.to_host_f32(y));
 }

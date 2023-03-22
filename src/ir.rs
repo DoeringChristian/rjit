@@ -18,7 +18,7 @@ pub enum ParamType {
     Literal,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum Op {
     // Data,
     #[default]
@@ -67,8 +67,8 @@ pub enum Op {
     Gather,
     Scatter,
     Idx,
-    // ConstF32(f32), // Set a constant value
-    // ConstU32(u32), // Set a constant value
+    ConstF32(f32), // Set a constant value
+                   // ConstU32(u32), // Set a constant value
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -190,7 +190,7 @@ pub struct Var {
     pub deps: SmallVec<[VarId; 4]>,
     pub ty: VarType,                                         // Type of the variable
     pub buffer: Option<Box<cust::memory::DeviceBuffer<u8>>>, // Optional buffer
-    pub num: usize,                                          // number of elements
+    pub size: usize,                                         // number of elements
     pub param_ty: ParamType,                                 // Parameter type
 
     // This is information set by Jit::assemble
@@ -285,7 +285,13 @@ impl Ir {
     pub fn vars(&self) -> &[Var] {
         &self.vars
     }
-    pub fn push_var_intermediate(&mut self, op: Op, deps: &[VarId], ty: VarType) -> VarId {
+    pub fn push_var_intermediate(
+        &mut self,
+        op: Op,
+        deps: &[VarId],
+        ty: VarType,
+        size: usize,
+    ) -> VarId {
         self.push_var(Var {
             op: Op::Add,
             deps: SmallVec::from_slice(deps),
@@ -294,21 +300,25 @@ impl Ir {
             buffer: None,
             reg: 0,
             param_offset: 0,
-            num: 0,
+            size: 0,
         })
     }
-    pub fn assert_ty(&self, ids: &[VarId]) -> &VarType {
+    pub fn assert_ty(&self, ids: &[VarId]) -> (usize, &VarType) {
         let ty = ids.iter().map(|id| &self.var(*id).ty).reduce(|ty0, ty1| {
             assert_eq!(ty0, ty1);
             ty0
         });
-        ty.unwrap()
+        let size = ids.iter().map(|id| &self.var(*id).size).reduce(|s0, s1| {
+            assert_eq!(s0, s1);
+            s0
+        });
+        (*size.unwrap(), ty.unwrap())
     }
 }
 impl Ir {
     pub fn add(&mut self, lhs: VarId, rhs: VarId) -> VarId {
-        let ty = self.assert_ty(&[lhs, rhs]);
-        self.push_var_intermediate(Op::Add, &[lhs, rhs], ty.clone())
+        let (size, ty) = self.assert_ty(&[lhs, rhs]);
+        self.push_var_intermediate(Op::Add, &[lhs, rhs], ty.clone(), size)
     }
     pub fn const_f32(&mut self, val: f32) -> VarId {
         self.push_var(Var {
@@ -321,7 +331,9 @@ impl Ir {
     pub fn buffer_f32(&mut self, slice: &[f32]) -> VarId {
         self.push_var(Var {
             param_ty: ParamType::Input,
-            buffer: Some(Arc::new(slice.as_dbuf().unwrap().cast::<u8>())),
+            buffer: Some(Box::new(slice.as_dbuf().unwrap().cast::<u8>())),
+            size: slice.len(),
+            ty: VarType::F32,
             ..Default::default()
         })
     }
