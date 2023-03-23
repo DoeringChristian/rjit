@@ -67,6 +67,7 @@ impl Jit {
         for i in 0..self.kernels.len() {
             self.kernels[i].execute(&mut self.schedules[i]);
         }
+        ir.clear_schedule();
     }
     pub fn kernel_debug(&self) -> String {
         let mut string = String::new();

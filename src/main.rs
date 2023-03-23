@@ -24,8 +24,8 @@ fn main() {
     let e = ir.add(x, d);
     let y = ir.add(x, c);
 
-    ir.scheduled = vec![y];
+    ir.schedule(&[y]);
 
     jit.eval(&mut ir);
-    dbg!(&jit);
+    dbg!(ir.to_vec_f32(y));
 }
