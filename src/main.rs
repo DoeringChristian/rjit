@@ -37,5 +37,5 @@ fn main() {
 
     jit.eval(&mut ir);
 
-    dbg!(ir.to_host_f32(y));
+    dbg!(ir.to_vec_f32(y));
 }
