@@ -6,6 +6,15 @@ use crate::schedule::ScheduleIr;
 use crate::trace::{Ir, Op, ParamType};
 
 // TODO: pooling for paralel exectution
+///
+/// The Jit Compiler first generates schedules (Intermediate Representation) from a Trace.
+/// It then assembles and compiles a Kernel depending on the Backend.
+///
+/// Trace (Ir) -> [Schedule; N] -> [Kernel; N]
+///
+/// Where N is the number of schedule groups.
+/// These are extracted from the scheduled variables in the Trace (Ir).
+///
 #[derive(Debug)]
 pub struct Jit {
     pub backend: Arc<dyn Backend>,
@@ -62,6 +71,12 @@ impl Jit {
             })
             .collect::<Vec<_>>();
     }
+    ///
+    /// Evaluates a Trace by first constructing Schedules, which are then compiled and assembled
+    /// into kernels.
+    ///
+    /// A the end, all scheduled variables are overwritten with the calculated data.
+    ///
     pub fn eval(&mut self, ir: &mut Ir) {
         self.compile(ir);
         for i in 0..self.kernels.len() {
@@ -77,6 +92,10 @@ impl Jit {
         ir.scheduled.clear();
         // ir.clear_schedule();
     }
+    ///
+    /// Writes the kernel assemblies into a string which can then be checked by snapshot testing
+    /// tools such as insta.
+    ///
     pub fn kernel_debug(&self) -> String {
         let mut string = String::new();
         for (i, k) in self.kernels.iter().enumerate() {

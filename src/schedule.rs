@@ -136,6 +136,9 @@ impl ScheduleIr {
             self.collect(ir, *id);
         }
     }
+    ///
+    /// Traverse computation graph and collect variables into Schedule.
+    ///
     pub fn collect(&mut self, ir: &mut Ir, id: VarId) -> SVarId {
         if self.visited.contains_key(&id) {
             return self.visited[&id];
