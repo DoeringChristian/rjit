@@ -31,7 +31,7 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: Ptr, param_ty: Input, reg: 4, param_offset: 1, literal: 140120856461824, size: 1 } =>
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: Ptr, param_ty: Input, reg: 4, param_offset: 1, literal: 0, size: 1 } =>
 	ld.param.u64 %rd4, [params+8];
 
 	// [1]: ScheduleVar { op: Nop, deps: [], ty: U32, param_ty: Input, reg: 5, param_offset: 2, literal: 0, size: 3 } =>

@@ -15,7 +15,7 @@ impl std::fmt::Display for SVarId {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ScheduleVar {
     pub op: Op,
     pub deps: SmallVec<[SVarId; 4]>,
@@ -25,23 +25,6 @@ pub struct ScheduleVar {
     pub param_offset: usize,
     pub literal: u64,
     pub size: usize,
-}
-impl Debug for ScheduleVar {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut s = f.debug_struct("ScheduleVar");
-        s.field("op", &self.op)
-            .field("deps", &self.deps)
-            .field("ty", &self.ty)
-            .field("param_ty", &self.param_ty)
-            .field("reg", &self.reg)
-            .field("param_offset", &self.param_offset);
-
-        if self.is_literal() {}
-
-        s.field("literal", &self.literal)
-            .field("size", &self.size)
-            .finish()
-    }
 }
 
 impl ScheduleVar {
@@ -124,6 +107,11 @@ impl ScheduleIr {
     pub fn n_regs(&self) -> usize {
         self.n_regs
     }
+    fn next_reg(&mut self) -> usize {
+        let reg = self.n_regs;
+        self.n_regs += 1;
+        reg
+    }
     pub fn size(&self) -> usize {
         self.params[0] as usize
     }
@@ -133,7 +121,7 @@ impl ScheduleIr {
     pub fn params_mut(&mut self) -> &mut [u64] {
         &mut self.params
     }
-    fn push_var(&mut self, mut var: ScheduleVar) -> SVarId {
+    fn push_var(&mut self, var: ScheduleVar) -> SVarId {
         let id = SVarId(self.vars.len());
         self.vars.push(var);
         id
@@ -167,38 +155,44 @@ impl ScheduleIr {
 
         let var = ir.var_mut(id);
 
-        let mut param_offset = 0;
-        let reg = self.n_regs;
-        self.n_regs += 1;
-        match var.param_ty {
-            ParamType::Input => {
-                // TODO: This should be compatible with diffrent backends
-                if var.is_literal() {
-                    let offset = self.push_param(var.literal);
-                    param_offset = offset;
-                } else {
-                    let offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
-                    param_offset = offset;
-                }
-            }
-            ParamType::Output => {
-                var.buffer = Some(self.backend.buffer_uninit(var.size * var.ty.size()));
-                let offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
-                param_offset = offset;
-            }
-            ParamType::None => {}
-        }
-
-        let id = self.push_var(ScheduleVar {
+        let mut sv = ScheduleVar {
             op: var.op,
             ty: var.ty.clone(),
             deps,
             param_ty: var.param_ty,
-            reg,
-            param_offset,
+            reg: self.next_reg(),
+            param_offset: 0,
             literal: var.literal,
             size: var.size,
-        });
+        };
+        let mut param_offset = 0;
+        match var.param_ty {
+            ParamType::Input => {
+                // TODO: This should be compatible with diffrent backends
+                if var.is_literal() {
+                    sv.param_offset = self.push_param(var.literal);
+                    sv.literal = 0; // Literal is pushed over params
+                } else {
+                    sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
+                }
+            }
+            ParamType::Output => {
+                var.buffer = Some(self.backend.buffer_uninit(var.size * var.ty.size()));
+                sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
+            }
+            ParamType::None => {}
+        }
+
+        let id = self.push_var(sv);
+        // let id = self.push_var(ScheduleVar {
+        //     op: var.op,
+        //     ty: var.ty.clone(),
+        //     deps,
+        //     param_ty: var.param_ty,
+        //     reg,
+        //     param_offset,
+        //     literal: var.literal,
+        // });
 
         id
     }
