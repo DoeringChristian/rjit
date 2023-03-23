@@ -2,7 +2,7 @@ use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 
 use crate::jit::{ScheduledGroup, ScheduledVar};
-use crate::schedule::{SVarId, Schedule};
+use crate::schedule::{SVarId, ScheduleIr};
 use crate::trace::*;
 use std::collections::HashSet;
 use std::fmt::Write;
@@ -33,7 +33,7 @@ impl CUDACompiler {
         .unwrap();
         module
     }
-    pub fn execute(&mut self, ir: &mut Schedule) {
+    pub fn execute(&mut self, ir: &mut ScheduleIr) {
         let module = self.module();
         let func = module.get_function(Self::ENTRY_POINT).unwrap();
 
@@ -59,7 +59,7 @@ impl CUDACompiler {
         stream.synchronize().unwrap();
     }
     #[allow(unused_must_use)]
-    pub fn assemble(&mut self, ir: &Schedule) {
+    pub fn assemble(&mut self, ir: &ScheduleIr) {
         self.asm.clear();
         let n_params = ir.n_params();
         let n_regs = ir.n_regs();
@@ -222,7 +222,7 @@ impl CUDACompiler {
     }
 
     #[allow(unused_must_use)]
-    fn assemble_var(&mut self, ir: &Schedule, id: SVarId) {
+    fn assemble_var(&mut self, ir: &ScheduleIr, id: SVarId) {
         let var = ir.var(id);
         writeln!(self.asm, "");
         writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);

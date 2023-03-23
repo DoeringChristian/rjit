@@ -35,8 +35,11 @@ impl ScheduleVar {
     }
 }
 
+///
+/// Intermediate representation for scheduled variables
+///
 #[derive(Default, Debug)]
-pub struct Schedule {
+pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
     n_regs: usize,
@@ -44,7 +47,7 @@ pub struct Schedule {
     size: usize,
 }
 
-impl Schedule {
+impl ScheduleIr {
     pub fn new(compiler: &CUDACompiler, size: usize) -> Self {
         Self {
             n_regs: compiler.first_register(),

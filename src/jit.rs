@@ -5,7 +5,7 @@ use std::sync::Arc;
 use cust::util::SliceExt;
 
 use crate::compiler::CUDACompiler;
-use crate::schedule::Schedule;
+use crate::schedule::ScheduleIr;
 use crate::trace::{Ir, Op, ParamType, VarId};
 
 #[derive(Clone, Debug)]
@@ -43,13 +43,13 @@ impl Jit {
             let var1 = ir.var(scheduled[i]);
             size = var0.size;
             if var0.size != var1.size {
-                let mut tmp = Schedule::new(&self.compiler, size);
+                let mut tmp = ScheduleIr::new(&self.compiler, size);
                 tmp.collect_vars(ir, &scheduled[cur..i]);
                 schedules.push(tmp);
             }
         }
         size = ir.var(*scheduled.last().unwrap()).size;
-        let mut tmp = Schedule::new(&self.compiler, size);
+        let mut tmp = ScheduleIr::new(&self.compiler, size);
 
         tmp.collect_vars(ir, &scheduled[cur..scheduled.len()]);
         schedules.push(tmp);
