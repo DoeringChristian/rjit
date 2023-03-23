@@ -170,7 +170,10 @@ impl ScheduleIr {
                 // TODO: This should be compatible with diffrent backends
                 if var.is_literal() {
                     sv.param_offset = self.push_param(var.literal);
-                    sv.literal = 0; // Literal is pushed over params
+
+                    // Literal is pushed via params => we can set it to zero so that snapshot
+                    // testing works.
+                    sv.literal = 0;
                 } else {
                     sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
                 }
