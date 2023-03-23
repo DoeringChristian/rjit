@@ -7,7 +7,6 @@ use self::jit::Jit;
 use self::trace::Ir;
 
 mod backend;
-mod compiler;
 mod jit;
 mod schedule;
 mod trace;

@@ -2,11 +2,9 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use cust::util::SliceExt;
 use smallvec::SmallVec;
 
 use crate::backend::Backend;
-use crate::compiler::CUDAKernel;
 use crate::trace::{Ir, Op, ParamType, VarId, VarType};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
