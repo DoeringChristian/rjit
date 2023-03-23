@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use cust::util::SliceExt;
 use smallvec::SmallVec;
@@ -23,6 +23,11 @@ pub struct ScheduleVar {
     pub reg: usize,
     pub param_offset: usize,
 }
+
+///
+/// Helper struct for printing register names.
+/// <prefix><register_index>
+///
 pub struct Reg<'a>(pub &'a ScheduleVar);
 impl<'a> std::fmt::Display for Reg<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

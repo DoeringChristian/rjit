@@ -1,28 +1,10 @@
-use std::collections::{HashMap, HashSet};
-use std::ops::Range;
-use std::sync::Arc;
-
-use cust::util::SliceExt;
-
 use crate::compiler::CUDACompiler;
 use crate::schedule::ScheduleIr;
-use crate::trace::{Ir, Op, ParamType, VarId};
-
-#[derive(Clone, Debug)]
-pub struct ScheduledGroup {
-    pub range: Range<usize>,
-    pub size: usize, // size of the varibles in group
-}
-#[derive(Debug, Clone)]
-pub struct ScheduledVar {
-    pub size: usize,
-    pub id: VarId,
-}
+use crate::trace::{Ir, ParamType};
 
 // TODO: pooling for paralel exectution
 #[derive(Default)]
 pub struct Jit {
-    schedule: Vec<ScheduledVar>,
     pub compiler: CUDACompiler,
 }
 
@@ -36,7 +18,7 @@ impl Jit {
         }
 
         let cur = 0;
-        let mut size = 0;
+        let mut size;
         let mut schedules = vec![];
         for i in 1..scheduled.len() {
             let var0 = ir.var(scheduled[i - 1]);

@@ -1,18 +1,13 @@
 use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 
-use crate::jit::{ScheduledGroup, ScheduledVar};
 use crate::schedule::{SVarId, ScheduleIr};
 use crate::trace::*;
-use std::collections::HashSet;
 use std::fmt::Write;
 
 #[derive(Default)]
 pub struct CUDACompiler {
     pub asm: String,
-    // pub params: Vec<u64>,
-    // pub n_regs: usize,
-    // pub schedule_group: Vec<VarId>,
 }
 
 impl CUDACompiler {

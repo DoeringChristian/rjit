@@ -1,9 +1,6 @@
 use std::collections::HashSet;
-use std::num::NonZeroU64;
-use std::sync::Arc;
 
 use bytemuck::cast_slice;
-use cust::prelude::DeviceBuffer;
 use cust::util::SliceExt;
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
@@ -202,19 +199,8 @@ impl Var {
     }
 }
 
-///
-/// Helper struct for printing register names.
-/// <prefix><register_index>
-///
-
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VarId(pub DefaultKey);
-
-// impl std::fmt::Display for VarId {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{:?}", self.0)
-//     }
-// }
 
 #[derive(Clone, Copy, Debug)]
 pub struct ParamId(usize);
@@ -237,14 +223,10 @@ impl std::ops::Deref for ParamId {
 pub struct Ir {
     vars: SlotMap<DefaultKey, Var>,
     pub scheduled: Vec<VarId>,
-    // pub params: Vec<u64>, // Params vec![size, &buffer0, &buffer1]
 }
 
 impl Ir {
-    // const FIRST_REGISTER: usize = 4;
     pub fn push_var(&mut self, mut var: Var) -> VarId {
-        // let id = VarId(self.vars.len());
-        // Increase rc for dependencies
         for dep in var.deps.iter() {
             self.inc_rc(*dep);
         }

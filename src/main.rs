@@ -1,17 +1,5 @@
-use std::ffi::c_void;
-use std::num::NonZeroU64;
-use std::sync::Arc;
-
-use cust::module::{ModuleJitOption, OptLevel};
-use cust::prelude::Module;
-use cust::util::{DeviceCopyExt, SliceExt};
-use smallvec::smallvec;
-
-use crate::trace::ParamType;
-
-use self::compiler::CUDACompiler;
 use self::jit::Jit;
-use self::trace::{Ir, Op, Var, VarId, VarType};
+use self::trace::Ir;
 
 mod backend;
 mod compiler;
