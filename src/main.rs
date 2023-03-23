@@ -26,10 +26,6 @@ fn main() {
 
     let mut ir = Ir::default();
 
-    let size = 10;
-    // let x_buf = Arc::new(vec![1f32; size].as_slice().as_dbuf().unwrap().cast::<u8>());
-    // dbg!(&x_buf);
-
     let x = ir.buffer_f32(&[1.; 10]);
     let c = ir.const_f32(1.);
     let y = ir.add(x, c);

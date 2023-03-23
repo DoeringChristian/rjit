@@ -63,3 +63,6 @@ impl Jit {
         }
     }
 }
+
+#[cfg(test)]
+mod test {}
