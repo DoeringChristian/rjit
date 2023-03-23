@@ -196,7 +196,8 @@ pub struct Var {
     pub param_ty: ParamType,             // Parameter type
     pub rc: usize,
     pub literal: u64,
-    pub stop_traversal: bool,
+    pub stop_traversal: bool, // Tells the scheduling routine to stop traversing at this variable even
+                              // though it has dependencies.
 }
 impl Debug for Var {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -353,7 +354,11 @@ impl Ir {
             ..Default::default()
         })
     }
-    pub fn pointer_of(&mut self, src: VarId) -> VarId {
+    ///
+    /// Returns a variable pointing to the buffer of another variable (if that variable has a
+    /// buffer).
+    ///
+    pub fn pointer_to(&mut self, src: VarId) -> VarId {
         // TODO: Eval var if needed.
         let var = self.var(src);
         self.push_var(Var {
@@ -393,7 +398,7 @@ impl Ir {
     }
     pub fn gather(&mut self, src: VarId, index: VarId, mask: Option<VarId>) -> VarId {
         let mask = mask.unwrap_or(self.const_bool(true));
-        let ptr = self.pointer_of(src);
+        let ptr = self.pointer_to(src);
         self.push_var(Var {
             op: Op::Gather,
             deps: smallvec![ptr, index, mask],
