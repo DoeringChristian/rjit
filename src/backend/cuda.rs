@@ -708,16 +708,22 @@ impl CUDAKernel {
                 }
             }
             Op::Scatter => todo!(),
-            Op::Idx => todo!(),
-            // Op::ConstF32(val) => {
-            //     writeln!(
-            //         self.asm,
-            //         "\tmov.{} {}, 0F{:08x};",
-            //         var.ty.name_cuda(),
-            //         var.reg(),
-            //         unsafe { *(&val as *const _ as *const u32) }
-            //     );
-            // }
+            Op::Idx => {
+                writeln!(
+                    self.asm,
+                    "\tmov.{} {}, %r0;\n",
+                    var.ty.name_cuda(),
+                    var.reg()
+                );
+            } // Op::ConstF32(val) => {
+              //     writeln!(
+              //         self.asm,
+              //         "\tmov.{} {}, 0F{:08x};",
+              //         var.ty.name_cuda(),
+              //         var.reg(),
+              //         unsafe { *(&val as *const _ as *const u32) }
+              //     );
+              // }
         }
     }
 }
@@ -733,7 +739,7 @@ mod test {
     use super::CUDABackend;
 
     #[test]
-    fn load_add_store_f32() {
+    fn load_add_f32() {
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
         let mut jit = Jit::new(&backend);
         let mut ir = Ir::new(&backend);
@@ -751,7 +757,7 @@ mod test {
     }
     #[test]
     fn load_gather_f32() {
-        pretty_env_logger::init();
+        // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
         let mut jit = Jit::new(&backend);
         let mut ir = Ir::new(&backend);
@@ -767,5 +773,22 @@ mod test {
         insta::assert_snapshot!(jit.kernel_debug());
 
         assert_eq!(ir.to_vec_f32(y), vec![1., 2., 5.]);
+    }
+    #[test]
+    fn index() {
+        // pretty_env_logger::init();
+        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
+        let mut jit = Jit::new(&backend);
+        let mut ir = Ir::new(&backend);
+
+        let i = ir.index(10);
+
+        ir.schedule(&[i]);
+
+        jit.eval(&mut ir);
+
+        insta::assert_snapshot!(jit.kernel_debug());
+
+        assert_eq!(ir.to_vec_u32(i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 }

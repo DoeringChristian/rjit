@@ -396,6 +396,12 @@ impl Ir {
         let v = var.buffer.as_ref().unwrap().as_vec();
         Vec::from(cast_slice(&v))
     }
+    pub fn to_vec_u32(&mut self, id: VarId) -> Vec<u32> {
+        let var = self.var(id);
+        assert_eq!(var.ty, VarType::U32);
+        let v = var.buffer.as_ref().unwrap().as_vec();
+        Vec::from(cast_slice(&v))
+    }
     pub fn gather(&mut self, src: VarId, index: VarId, mask: Option<VarId>) -> VarId {
         let mask = mask.unwrap_or(self.const_bool(true));
         let ptr = self.pointer_to(src);
@@ -404,6 +410,15 @@ impl Ir {
             deps: smallvec![ptr, index, mask],
             ty: self.var(src).ty.clone(),
             size: self.var(index).size,
+            ..Default::default()
+        })
+    }
+    pub fn index(&mut self, size: usize) -> VarId {
+        self.push_var(Var {
+            op: Op::Idx,
+            deps: smallvec![],
+            ty: VarType::U32,
+            size,
             ..Default::default()
         })
     }
