@@ -26,15 +26,6 @@ fn main() {
 
     ir.scheduled = vec![y];
 
-    dbg!(&ir);
-
-    // ir.dec_rc(d);
-
-    dbg!(&ir);
-
-    // ir.dec_rc(e);
-
     jit.eval(&mut ir);
-
-    dbg!(ir.to_vec_f32(y));
+    dbg!(&jit);
 }

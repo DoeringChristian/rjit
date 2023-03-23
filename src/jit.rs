@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::sync::Arc;
 
 use crate::backend::{Backend, Kernel};
@@ -5,6 +6,7 @@ use crate::schedule::ScheduleIr;
 use crate::trace::{Ir, ParamType};
 
 // TODO: pooling for paralel exectution
+#[derive(Debug)]
 pub struct Jit {
     pub backend: Arc<dyn Backend>,
     pub schedules: Vec<ScheduleIr>,
@@ -65,6 +67,16 @@ impl Jit {
         for i in 0..self.kernels.len() {
             self.kernels[i].execute(&mut self.schedules[i]);
         }
+    }
+    pub fn kernel_debug(&self) -> String {
+        let mut string = String::new();
+        for (i, k) in self.kernels.iter().enumerate() {
+            writeln!(string, "===============================================").unwrap();
+            writeln!(string, "Kernel {}:", i).unwrap();
+            writeln!(string, "").unwrap();
+            write!(string, "{}", k.assembly()).unwrap();
+        }
+        string
     }
 }
 

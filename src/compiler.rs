@@ -211,8 +211,6 @@ impl CUDAKernel {
         }}\n"
         );
 
-        println!("{}", self.asm);
-
         std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
     }
 

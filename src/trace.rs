@@ -312,6 +312,18 @@ impl Ir {
             .reduce(|s0, s1| s0.max(s1));
         (*size.unwrap(), ty.unwrap())
     }
+    pub fn schedule(&mut self, ids: &[VarId]) {
+        for id in ids {
+            self.inc_rc(*id);
+            self.scheduled.push(*id);
+        }
+    }
+    pub fn clear_schedule(&mut self) {
+        for id in self.scheduled.clone() {
+            self.dec_rc(id);
+        }
+        self.scheduled.clear();
+    }
 }
 impl Ir {
     pub fn add(&mut self, lhs: VarId, rhs: VarId) -> VarId {

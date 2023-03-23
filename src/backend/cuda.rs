@@ -4,10 +4,11 @@ use cust::util::SliceExt;
 
 use crate::schedule::{SVarId, ScheduleIr};
 use crate::trace::*;
-use std::fmt::Write;
+use std::fmt::{Debug, Write};
 
 use super::{Backend, Buffer, Kernel};
 
+#[derive(Debug)]
 pub struct CUDABackend {
     ctx: Context,
 }
@@ -56,6 +57,14 @@ impl Buffer for CUDABuffer {
 pub struct CUDAKernel {
     pub asm: String,
     pub module: Option<Module>,
+}
+
+impl Debug for CUDAKernel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CUDAKernel")
+            .field("asm", &self.asm)
+            .finish()
+    }
 }
 
 impl Kernel for CUDAKernel {
@@ -217,8 +226,6 @@ impl Kernel for CUDAKernel {
         }}\n"
         );
 
-        println!("{}", self.asm);
-
         std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
     }
 
@@ -263,6 +270,10 @@ impl Kernel for CUDAKernel {
         }
 
         stream.synchronize().unwrap();
+    }
+
+    fn assembly(&self) -> &str {
+        &self.asm
     }
 }
 
@@ -632,5 +643,34 @@ impl CUDAKernel {
             //     );
             // }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use crate::backend::Backend;
+    use crate::jit::Jit;
+    use crate::trace::Ir;
+
+    use super::CUDABackend;
+
+    #[test]
+    fn load_add_store_f32() {
+        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
+        let mut jit = Jit::new(&backend);
+        let mut ir = Ir::new(&backend);
+
+        let x = ir.buffer_f32(&[1.; 10]);
+        let y = ir.add(x, x);
+
+        ir.schedule(&[y]);
+
+        jit.eval(&mut ir);
+
+        insta::assert_snapshot!(jit.kernel_debug());
+
+        assert_eq!(ir.to_vec_f32(y), vec![2f32; 10]);
     }
 }
