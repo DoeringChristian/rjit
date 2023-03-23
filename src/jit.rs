@@ -53,7 +53,7 @@ impl Jit {
 
         tmp.collect_vars(ir, &scheduled[cur..scheduled.len()]);
         schedules.push(tmp);
-        dbg!(&schedules);
+        // dbg!(&schedules);
 
         // TODO: this can be paralelized (rayon)
         for schedule in schedules.iter_mut() {

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use bytemuck::cast_slice;
 use cust::prelude::DeviceBuffer;
 use cust::util::SliceExt;
+use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
 
 use crate::iterators::DepIter;
@@ -207,13 +208,13 @@ impl Var {
 ///
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub struct VarId(pub usize);
+pub struct VarId(pub DefaultKey);
 
-impl std::fmt::Display for VarId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// impl std::fmt::Display for VarId {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{:?}", self.0)
+//     }
+// }
 
 #[derive(Clone, Copy, Debug)]
 pub struct ParamId(usize);
@@ -234,7 +235,7 @@ impl std::ops::Deref for ParamId {
 
 #[derive(Debug, Default)]
 pub struct Ir {
-    vars: Vec<Var>,
+    vars: SlotMap<DefaultKey, Var>,
     pub scheduled: Vec<VarId>,
     // pub params: Vec<u64>, // Params vec![size, &buffer0, &buffer1]
 }
@@ -242,14 +243,13 @@ pub struct Ir {
 impl Ir {
     // const FIRST_REGISTER: usize = 4;
     pub fn push_var(&mut self, mut var: Var) -> VarId {
-        let id = VarId(self.vars.len());
+        // let id = VarId(self.vars.len());
         // Increase rc for dependencies
         for dep in var.deps.iter() {
             self.inc_rc(*dep);
         }
         var.rc = 1;
-        self.vars.push(var);
-        id
+        VarId(self.vars.insert(var))
     }
     pub fn inc_rc(&mut self, id: VarId) {
         self.var_mut(id).rc += 1;
@@ -258,7 +258,10 @@ impl Ir {
         let var = self.var_mut(id);
         var.rc -= 1;
         if var.rc == 0 {
-            todo!()
+            for dep in var.deps.clone() {
+                self.dec_rc(dep);
+            }
+            self.vars.remove(id.0).unwrap();
         }
     }
     pub fn var(&self, id: VarId) -> &Var {
@@ -267,18 +270,12 @@ impl Ir {
     pub fn var_mut(&mut self, id: VarId) -> &mut Var {
         &mut self.vars[id.0]
     }
-    pub fn ids(&self) -> impl Iterator<Item = VarId> {
-        (0..self.vars.len()).map(|i| VarId(i))
-    }
     pub fn deps(&self, schedule: &[VarId]) -> DepIter {
         DepIter {
             ir: self,
             stack: Vec::from(schedule),
             discovered: HashSet::new(),
         }
-    }
-    pub fn vars(&self) -> &[Var] {
-        &self.vars
     }
     pub fn push_var_intermediate(
         &mut self,
