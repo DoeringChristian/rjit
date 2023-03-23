@@ -12,7 +12,7 @@ mod schedule;
 mod trace;
 
 fn main() {
-    let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
+    let backend = Arc::new(CUDABackend::new());
 
     let mut jit = Jit::new(&backend);
 

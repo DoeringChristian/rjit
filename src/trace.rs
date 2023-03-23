@@ -184,17 +184,17 @@ impl VarType {
 ///
 ///
 #[derive(Default)]
-pub struct Var {
+pub struct Var<B: Backend> {
     pub op: Op, // Operation used to construct the variable
     pub deps: SmallVec<[VarId; 4]>,
-    pub ty: VarType,                     // Type of the variable
-    pub buffer: Option<Box<dyn Buffer>>, // Optional buffer
-    pub size: usize,                     // number of elements
-    pub param_ty: ParamType,             // Parameter type
+    pub ty: VarType,         // Type of the variable
+    pub buffer: Option<B>,   // Optional buffer
+    pub size: usize,         // number of elements
+    pub param_ty: ParamType, // Parameter type
     pub rc: usize,
     pub literal: u64,
 }
-impl Debug for Var {
+impl<B: Backend> Debug for Var<B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Var")
             .field("op", &self.op)
@@ -208,11 +208,11 @@ impl Debug for Var {
     }
 }
 
-impl Var {
-    pub fn deps(&self) -> &[VarId] {
-        &self.deps
-    }
-}
+// impl Var {
+//     pub fn deps(&self) -> &[VarId] {
+//         &self.deps
+//     }
+// }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VarId(pub DefaultKey);
@@ -234,12 +234,12 @@ impl std::ops::Deref for ParamId {
     }
 }
 
-pub struct Ir {
-    vars: SlotMap<DefaultKey, Var>,
+pub struct Ir<B: Backend> {
+    vars: SlotMap<DefaultKey, Var<B>>,
     pub scheduled: Vec<VarId>,
-    backend: Arc<dyn Backend>,
+    backend: Arc<B>,
 }
-impl Debug for Ir {
+impl<B: Backend> Debug for Ir<B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ir")
             .field("vars", &self.vars)
@@ -249,15 +249,15 @@ impl Debug for Ir {
     }
 }
 
-impl Ir {
-    pub fn new(backend: &Arc<dyn Backend>) -> Self {
+impl<B: Backend> Ir<B> {
+    pub fn new(backend: &Arc<B>) -> Self {
         Self {
             backend: backend.clone(),
             vars: SlotMap::default(),
             scheduled: Vec::default(),
         }
     }
-    pub fn push_var(&mut self, mut var: Var) -> VarId {
+    pub fn push_var(&mut self, mut var: Var<B>) -> VarId {
         for dep in var.deps.iter() {
             self.inc_rc(*dep);
         }
@@ -277,10 +277,10 @@ impl Ir {
             self.vars.remove(id.0).unwrap();
         }
     }
-    pub fn var(&self, id: VarId) -> &Var {
+    pub fn var(&self, id: VarId) -> &Var<B> {
         &self.vars[id.0]
     }
-    pub fn var_mut(&mut self, id: VarId) -> &mut Var {
+    pub fn var_mut(&mut self, id: VarId) -> &mut Var<B> {
         &mut self.vars[id.0]
     }
     pub fn push_var_intermediate(
@@ -325,7 +325,7 @@ impl Ir {
         self.scheduled.clear();
     }
 }
-impl Ir {
+impl<B: Backend> Ir<B> {
     pub fn add(&mut self, lhs: VarId, rhs: VarId) -> VarId {
         let (size, ty) = self.assert_ty(&[lhs, rhs]);
         self.push_var_intermediate(Op::Add, &[lhs, rhs], ty.clone(), size)

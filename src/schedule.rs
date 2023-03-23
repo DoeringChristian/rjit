@@ -74,15 +74,15 @@ impl ScheduleVar {
 /// Intermediate representation for scheduled variables
 ///
 // #[derive(Default)]
-pub struct ScheduleIr {
+pub struct ScheduleIr<B: Backend> {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
     n_regs: usize,
     visited: HashMap<VarId, SVarId>,
-    backend: Arc<dyn Backend>,
+    backend: Arc<B>,
 }
 
-impl Debug for ScheduleIr {
+impl<B: Backend> Debug for ScheduleIr<B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ScheduleIr")
             .field("vars", &self.vars)
@@ -94,8 +94,8 @@ impl Debug for ScheduleIr {
     }
 }
 
-impl ScheduleIr {
-    pub fn new(backend: &Arc<dyn Backend>, first_register: usize, size: usize) -> Self {
+impl<B: Backend> ScheduleIr<B> {
+    pub fn new(backend: &Arc<B>, first_register: usize, size: usize) -> Self {
         Self {
             n_regs: first_register,
             params: vec![size as _],
@@ -141,12 +141,12 @@ impl ScheduleIr {
         self.params.push(param);
         idx
     }
-    pub fn collect_vars(&mut self, ir: &mut Ir, ids: &[VarId]) {
+    pub fn collect_vars(&mut self, ir: &mut Ir<B>, ids: &[VarId]) {
         for id in ids {
             self.collect(ir, *id);
         }
     }
-    pub fn collect(&mut self, ir: &mut Ir, id: VarId) -> SVarId {
+    pub fn collect(&mut self, ir: &mut Ir<B>, id: VarId) -> SVarId {
         if self.visited.contains_key(&id) {
             return self.visited[&id];
         }

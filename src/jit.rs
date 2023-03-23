@@ -7,21 +7,21 @@ use crate::trace::{Ir, ParamType};
 
 // TODO: pooling for paralel exectution
 #[derive(Debug)]
-pub struct Jit {
-    pub backend: Arc<dyn Backend>,
-    pub schedules: Vec<ScheduleIr>,
-    pub kernels: Vec<Box<dyn Kernel>>,
+pub struct Jit<B: Backend> {
+    pub backend: Arc<B>,
+    pub schedules: Vec<ScheduleIr<B>>,
+    pub kernels: Vec<B::Kernel>,
 }
 
-impl Jit {
-    pub fn new(backend: &Arc<dyn Backend>) -> Self {
+impl<B: Backend> Jit<B> {
+    pub fn new(backend: &Arc<B>) -> Self {
         Self {
             backend: backend.clone(),
             schedules: vec![],
             kernels: vec![],
         }
     }
-    pub fn compile(&mut self, ir: &mut Ir) {
+    pub fn compile(&mut self, ir: &mut Ir<B>) {
         self.schedules.clear();
         self.kernels.clear();
         let mut scheduled = ir.scheduled.clone();
@@ -62,7 +62,7 @@ impl Jit {
             })
             .collect::<Vec<_>>();
     }
-    pub fn eval(&mut self, ir: &mut Ir) {
+    pub fn eval(&mut self, ir: &mut Ir<B>) {
         self.compile(ir);
         for i in 0..self.kernels.len() {
             self.kernels[i].execute(&mut self.schedules[i]);

@@ -21,24 +21,28 @@ impl CUDABackend {
 }
 
 impl Backend for CUDABackend {
-    fn new_kernel(&self) -> Box<dyn Kernel> {
-        Box::new(CUDAKernel::default())
+    fn new_kernel(&self) -> CUDAKernel {
+        CUDAKernel::default()
     }
     fn first_register(&self) -> usize {
         CUDAKernel::FIRST_REGISTER
     }
 
-    fn buffer_uninit(&self, size: usize) -> Box<dyn super::Buffer> {
-        Box::new(CUDABuffer {
+    fn buffer_uninit(&self, size: usize) -> Self::Buffer {
+        CUDABuffer {
             buffer: vec![0u8; size].as_slice().as_dbuf().unwrap(),
-        })
+        }
     }
 
-    fn buffer_from_slice(&self, slice: &[u8]) -> Box<dyn super::Buffer> {
-        Box::new(CUDABuffer {
+    fn buffer_from_slice(&self, slice: &[u8]) -> Self::Buffer {
+        CUDABuffer {
             buffer: slice.as_dbuf().unwrap(),
-        })
+        }
     }
+
+    type Kernel = CUDAKernel;
+
+    type Buffer = CUDABuffer;
 }
 
 pub struct CUDABuffer {
@@ -69,7 +73,7 @@ impl Debug for CUDAKernel {
 
 impl Kernel for CUDAKernel {
     #[allow(unused_must_use)]
-    fn assemble(&mut self, ir: &ScheduleIr) {
+    fn assemble(&mut self, ir: &ScheduleIr<CUDABackend>) {
         self.asm.clear();
         let n_params = ir.n_params();
         let n_regs = ir.n_regs();
@@ -242,7 +246,7 @@ impl Kernel for CUDAKernel {
             .unwrap(),
         );
     }
-    fn execute(&mut self, ir: &mut ScheduleIr) {
+    fn execute(&mut self, ir: &mut ScheduleIr<CUDABackend>) {
         let func = self
             .module
             .as_ref()
@@ -281,7 +285,7 @@ impl CUDAKernel {
     const ENTRY_POINT: &str = "cujit";
     const FIRST_REGISTER: usize = 4;
     #[allow(unused_must_use)]
-    fn assemble_var(&mut self, ir: &ScheduleIr, id: SVarId) {
+    fn assemble_var(&mut self, ir: &ScheduleIr<CUDABackend>, id: SVarId) {
         let var = ir.var(id);
         writeln!(self.asm, "");
         writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);
