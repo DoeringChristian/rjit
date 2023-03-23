@@ -192,6 +192,7 @@ pub struct Var {
     pub buffer: Option<Box<cust::memory::DeviceBuffer<u8>>>, // Optional buffer
     pub size: usize,                                         // number of elements
     pub param_ty: ParamType,                                 // Parameter type
+    pub rc: usize,
 }
 
 impl Var {
@@ -242,10 +243,23 @@ impl Ir {
     // const FIRST_REGISTER: usize = 4;
     pub fn push_var(&mut self, mut var: Var) -> VarId {
         let id = VarId(self.vars.len());
-        // var.reg = self.n_regs;
-        // self.n_regs += 1;
+        // Increase rc for dependencies
+        for dep in var.deps.iter() {
+            self.inc_rc(*dep);
+        }
+        var.rc = 1;
         self.vars.push(var);
         id
+    }
+    pub fn inc_rc(&mut self, id: VarId) {
+        self.var_mut(id).rc += 1;
+    }
+    pub fn dec_rc(&mut self, id: VarId) {
+        let var = self.var_mut(id);
+        var.rc -= 1;
+        if var.rc == 0 {
+            todo!()
+        }
     }
     pub fn var(&self, id: VarId) -> &Var {
         &self.vars[id.0]
@@ -280,6 +294,7 @@ impl Ir {
             param_ty: ParamType::None,
             buffer: None,
             size,
+            rc: 0,
         })
     }
     pub fn assert_ty(&self, ids: &[VarId]) -> (usize, &VarType) {
