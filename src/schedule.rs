@@ -15,6 +15,12 @@ impl std::fmt::Display for SVarId {
     }
 }
 
+///
+/// A Representation of a variable used in the ScheduleIr.
+/// This only holds data that is needed to compile the Kernel.
+///
+/// Variables are densly stored in the ScheduleIr, simplifying the compilation.
+///
 #[derive(Debug, Default)]
 pub struct ScheduleVar {
     pub op: Op,
