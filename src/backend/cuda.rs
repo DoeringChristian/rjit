@@ -278,6 +278,15 @@ impl CUDAKernel {
         match var.op {
             // Op::Data => {}
             Op::Nop => {}
+            Op::Literal => {
+                writeln!(
+                    self.asm,
+                    "\tmov.{} {}, 0x{:x};\n",
+                    var.ty.name_cuda_bin(),
+                    var.reg(),
+                    var.literal
+                );
+            }
             Op::Data => {}
             Op::Neg => {
                 if var.ty.is_uint() {
@@ -425,16 +434,170 @@ impl CUDAKernel {
                     ir.reg(var.deps[1])
                 );
             }
-            Op::Mulhi => todo!(),
-            Op::Fma => todo!(),
-            Op::Min => todo!(),
-            Op::Max => todo!(),
-            Op::Cail => todo!(),
-            Op::Floor => todo!(),
-            Op::Round => todo!(),
-            Op::Trunc => todo!(),
-            Op::Eq => todo!(),
-            Op::Neq => todo!(),
+            Op::Mulhi => {
+                writeln!(
+                    self.asm,
+                    "\tmul.hi.{} {}, {}, {}",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0]),
+                    ir.reg(var.deps[1])
+                );
+            }
+            Op::Fma => {
+                if var.ty.is_single() {
+                    writeln!(
+                        self.asm,
+                        "\tfma.rn.ftz.{} {}, {}, {}, {}",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                        ir.reg(var.deps[2]),
+                    );
+                } else if var.ty.is_double() {
+                    writeln!(
+                        self.asm,
+                        "\tfma.rn.{} {}, {}, {}, {}",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                        ir.reg(var.deps[2]),
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tmad.lo.{} {}, {}, {}, {}",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                        ir.reg(var.deps[2]),
+                    );
+                }
+            }
+            Op::Min => {
+                if var.ty.is_single() {
+                    writeln!(
+                        self.asm,
+                        "\tmin.ftz.{} {}, {}, {};\n",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tmin.{} {}, {}, {};\n",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                    );
+                }
+            }
+            Op::Max => {
+                if var.ty.is_single() {
+                    writeln!(
+                        self.asm,
+                        "\tmax.ftz.{} {}, {}, {};\n",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tmax.{} {}, {}, {};\n",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                    );
+                }
+            }
+            Op::Cail => {
+                writeln!(
+                    self.asm,
+                    "\tcvt.rpi.{0}.{0} {1}, {2};\n",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0]),
+                );
+            }
+            Op::Floor => {
+                writeln!(
+                    self.asm,
+                    "\tcvt.rmi.{0}.{0} {1}, {2};\n",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0]),
+                );
+            }
+            Op::Round => {
+                writeln!(
+                    self.asm,
+                    "\tcvt.rni.{0}.{0} {1}, {2};\n",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0]),
+                );
+            }
+            Op::Trunc => {
+                writeln!(
+                    self.asm,
+                    "\tcvt.rzi.{0}.{0} {1}, {2};\n",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0]),
+                );
+            }
+            Op::Eq => {
+                if var.ty.is_bool() {
+                    writeln!(
+                        self.asm,
+                        "\txor.{0} {1}, {2}, {3};\n\
+                        \tnot.{0} {1}, {1};",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.eq.{}, {}, {}, {};\n",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                    );
+                }
+            }
+            Op::Neq => {
+                if var.ty.is_bool() {
+                    writeln!(
+                        self.asm,
+                        "\txor.{} {}, {}, {};",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.ne.{} {}, {}, {};\n",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                }
+            }
             Op::Lt => todo!(),
             Op::Le => todo!(),
             Op::Gt => todo!(),
@@ -459,80 +622,15 @@ impl CUDAKernel {
             Op::Gather => todo!(),
             Op::Scatter => todo!(),
             Op::Idx => todo!(),
-            Op::ConstF32(val) => {
-                writeln!(
-                    self.asm,
-                    "\tmov.{} {}, 0F{:08x};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    unsafe { *(&val as *const _ as *const u32) }
-                );
-            } // Op::ConstU32(val) => {
-              //     writeln!(
-              //         self.asm,
-              //         "\tmov.{} {}, 0X{:08x};",
-              //         var.ty.name_cuda(),
-              //         var.reg(),
-              //         unsafe { *(&val as *const _ as *const u32) }
-              //     );
-              // } // Op::Load(param_idx) => {
-              //     // Load from params
-              //     writeln!(
-              //         self.asm,
-              //         "\tld.param.u64 %rd0, [params+{}];",
-              //         param_idx.offset()
-              //     );
-              //     writeln!(
-              //         self.asm,
-              //         "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
-              //         var.ty.size()
-              //     );
-              //     if var.ty == VarType::Bool {
-              //         writeln!(self.asm, "\tld.global.cs.u8 %w0, [%rd0];");
-              //         writeln!(self.asm, "\tsetp.ne.u16 {}, %w0, 0;", var.reg());
-              //     } else {
-              //         writeln!(
-              //             self.asm,
-              //             "\tld.global.cs.{} {}, [%rd0];",
-              //             var.ty.name_cuda(),
-              //             var.reg(),
-              //         );
-              //     }
-              // }
-              // Op::LoadLiteral(param_idx) => {
-              //     // let offset = param_idx * 8;
-              //     writeln!(
-              //         self.asm,
-              //         "\tld.param.{} {}, [params+{}];",
-              //         var.ty.name_cuda(),
-              //         var.reg(),
-              //         param_idx.offset()
-              //     );
-              // }
-              // Op::Store(src, param_idx) => {
-              //     // let offset = param_idx * 8;
-              //     // dbg!(offset);
-              //     write!(
-              //         self.asm,
-              //         "\tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
-              //         \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
-              //         params[offset]\n",
-              //         param_idx.offset(),
-              //         var.ty.size(),
-              //     );
-              //
-              //     if var.ty == VarType::Bool {
-              //         writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", ir.reg(src));
-              //         writeln!(self.asm, "\tst.global.cs.u8 [%rd0], %w0;");
-              //     } else {
-              //         writeln!(
-              //             self.asm,
-              //             "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
-              //             var.ty.name_cuda(),
-              //             ir.reg(src)
-              //         );
-              //     }
-              // }
+            // Op::ConstF32(val) => {
+            //     writeln!(
+            //         self.asm,
+            //         "\tmov.{} {}, 0F{:08x};",
+            //         var.ty.name_cuda(),
+            //         var.reg(),
+            //         unsafe { *(&val as *const _ as *const u32) }
+            //     );
+            // }
         }
     }
 }

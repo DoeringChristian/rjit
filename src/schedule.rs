@@ -23,8 +23,34 @@ pub struct ScheduleVar {
     pub param_ty: ParamType,
     pub reg: usize,
     pub param_offset: usize,
+    pub literal: u64,
 }
 
+///
+/// Helper struct for printing literals.
+///
+// pub struct Literal<'a>(pub &'a ScheduleVar);
+
+// impl<'a> std::fmt::Display for Literal<'a> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self.0.ty {
+//             VarType::Bool => write!(f, "{}", if self.0.literal == 0 { "False" } else { "True" }),
+//             VarType::I8 => write!(f, "0x{:02x}", self.0.literal),
+//             VarType::U8 => write!(f, "0x{:02x}", self.0.literal),
+//             VarType::I16 => write!(f, "0x{:04x}", self.0.literal),
+//             VarType::U16 => write!(f, "0x{:04x}", self.0.literal),
+//             VarType::I32 => write!(f, "0x{:08x}", self.0.literal),
+//             VarType::U32 => write!(f, "0x{:08x}", self.0.literal),
+//             VarType::I64 => write!(f, "0x{:016x}", self.0.literal),
+//             VarType::U64 => write!(f, "0x{:016x}", self.0.literal),
+//             VarType::Ptr => write!(f, "0x{:016x}", self.0.literal),
+//             VarType::F16 => write!(f, "0f{:04x}", self.0.literal),
+//             VarType::F32 => write!(f, "0f{:08x}", self.0.literal),
+//             VarType::F64 => write!(f, "0f{:016x}", self.0.literal),
+//         }
+//     }
+// }
+//
 ///
 /// Helper struct for printing register names.
 /// <prefix><register_index>
@@ -39,6 +65,9 @@ impl ScheduleVar {
     pub fn reg(&self) -> Reg {
         Reg(self)
     }
+    // pub fn lit(&self) -> Literal {
+    //     Literal(self)
+    // }
 }
 
 ///
@@ -84,6 +113,9 @@ impl ScheduleIr {
     pub fn reg(&self, id: SVarId) -> Reg {
         self.var(id).reg()
     }
+    // pub fn lit(&self, id: SVarId) -> Literal {
+    //     self.var(id).lit()
+    // }
     pub fn n_params(&self) -> usize {
         self.params.len()
     }
@@ -151,6 +183,7 @@ impl ScheduleIr {
             param_ty: var.param_ty,
             reg,
             param_offset,
+            literal: var.literal,
         });
 
         id

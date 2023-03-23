@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use bytemuck::cast_slice;
+use bytemuck::checked::cast;
 use cust::util::SliceExt;
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
@@ -23,6 +24,7 @@ pub enum Op {
     // Data,
     #[default]
     Nop,
+    Literal,
     Data,
     Neg,
     Not,
@@ -67,11 +69,11 @@ pub enum Op {
     Gather,
     Scatter,
     Idx,
-    ConstF32(f32), // Set a constant value
-                   // ConstU32(u32), // Set a constant value
+    // ConstF32(f32), // Set a constant value
+    // ConstU32(u32), // Set a constant value
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub enum VarType {
     // Void,
     #[default]
@@ -168,16 +170,13 @@ impl VarType {
         }
     }
     pub fn is_single(&self) -> bool {
-        match self {
-            Self::F32 => true,
-            _ => false,
-        }
+        *self == Self::F32
     }
     pub fn is_double(&self) -> bool {
-        match self {
-            Self::F64 => true,
-            _ => false,
-        }
+        *self == Self::F64
+    }
+    pub fn is_bool(&self) -> bool {
+        *self == Self::Bool
     }
 }
 
@@ -193,6 +192,7 @@ pub struct Var {
     pub size: usize,                     // number of elements
     pub param_ty: ParamType,             // Parameter type
     pub rc: usize,
+    pub literal: u64,
 }
 impl Debug for Var {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -298,6 +298,7 @@ impl Ir {
             buffer: None,
             size,
             rc: 0,
+            literal: 0,
         })
     }
     pub fn assert_ty(&self, ids: &[VarId]) -> (usize, &VarType) {
@@ -319,9 +320,10 @@ impl Ir {
     }
     pub fn const_f32(&mut self, val: f32) -> VarId {
         self.push_var(Var {
-            op: Op::ConstF32(val),
+            op: Op::Literal,
             deps: smallvec![],
             ty: VarType::F32,
+            literal: cast::<_, u32>(val) as _,
             ..Default::default()
         })
     }
