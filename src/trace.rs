@@ -10,6 +10,9 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::backend::{Backend, Buffer};
 
+///
+/// TODO: better param enum
+///
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ParamType {
     #[default]
