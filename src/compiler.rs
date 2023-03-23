@@ -1,8 +1,8 @@
 use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 
-use crate::ir::*;
 use crate::jit::{ScheduledGroup, ScheduledVar};
+use crate::trace::*;
 use std::collections::HashSet;
 use std::fmt::Write;
 

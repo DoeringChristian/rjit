@@ -7,15 +7,14 @@ use cust::prelude::Module;
 use cust::util::{DeviceCopyExt, SliceExt};
 use smallvec::smallvec;
 
-use crate::ir::ParamType;
+use crate::trace::ParamType;
 
 use self::compiler::CUDACompiler;
-use self::ir::{Ir, Op, Var, VarId, VarType};
 use self::jit::Jit;
+use self::trace::{Ir, Op, Var, VarId, VarType};
 
 mod backend;
 mod compiler;
-mod ir;
 mod iterators;
 mod jit;
 mod trace;

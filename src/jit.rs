@@ -5,7 +5,7 @@ use std::sync::Arc;
 use cust::util::SliceExt;
 
 use crate::compiler::CUDACompiler;
-use crate::ir::{Ir, Op, ParamType, VarId};
+use crate::trace::{Ir, Op, ParamType, VarId};
 
 #[derive(Clone, Debug)]
 pub struct ScheduledGroup {

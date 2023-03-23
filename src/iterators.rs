@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::ir::{Ir, Op, VarId};
+use crate::trace::{Ir, Op, VarId};
 
 pub struct DepIter<'a> {
     pub ir: &'a Ir,
