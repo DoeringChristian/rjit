@@ -2,6 +2,7 @@ use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::Module;
 
 use crate::jit::{ScheduledGroup, ScheduledVar};
+use crate::schedule::{SVarId, Schedule};
 use crate::trace::*;
 use std::collections::HashSet;
 use std::fmt::Write;
@@ -32,13 +33,13 @@ impl CUDACompiler {
         .unwrap();
         module
     }
-    pub fn execute(&mut self, ir: &mut Ir, size: usize, params: &mut [u64]) {
+    pub fn execute(&mut self, ir: &mut Schedule) {
         let module = self.module();
         let func = module.get_function(Self::ENTRY_POINT).unwrap();
 
         let (_, block_size) = func.suggested_launch_configuration(0, 0.into()).unwrap();
 
-        let grid_size = (size as u32 + block_size - 1) / block_size;
+        let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
 
         let stream =
             cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
@@ -50,51 +51,18 @@ impl CUDACompiler {
                     grid_size,
                     block_size,
                     0,
-                    &[params.as_mut_ptr() as *mut std::ffi::c_void],
+                    &[ir.params_mut().as_mut_ptr() as *mut std::ffi::c_void],
                 )
                 .unwrap();
         }
 
         stream.synchronize().unwrap();
     }
-    // pub fn preprocess(&mut self, ir: &mut Ir) {
-    //     // Get all variables in schedule (schedule_group)
-    //     self.schedule_group.clear();
-    //     ir.deps(&ir.scheduled)
-    //         .for_each(|id| self.schedule_group.push(id));
-    //
-    //     // TODO: calculate size
-    //     self.n_regs = Self::FIRST_REGISTER;
-    //     for id in self.schedule_group.iter() {
-    //         // Set registers for variables
-    //         let mut var = ir.var_mut(*id);
-    //         var.reg = self.n_regs;
-    //         self.n_regs += 1;
-    //
-    //         // Push buffer pointer to params and set param_offset
-    //         if let Some(buffer) = &var.buffer {
-    //             let offset = self.params.len();
-    //             self.params.push(buffer.as_device_ptr().as_raw());
-    //             var.param_offset = offset as _;
-    //         }
-    //     }
-    //     for id in ir.scheduled.clone() {
-    //         let var = ir.var_mut(id);
-    //         var.param_ty = ParamType::Output;
-    //     }
-    // }
     #[allow(unused_must_use)]
-    pub fn assemble(
-        &mut self,
-        ir: &Ir,
-        group: &ScheduledGroup,
-        schedule: &[ScheduledVar],
-        n_params: usize,
-        n_regs: usize,
-    ) {
+    pub fn assemble(&mut self, ir: &Schedule) {
         self.asm.clear();
-        // let n_params = self.params.len() as u64;
-        // let n_regs = self.n_regs;
+        let n_params = ir.n_params();
+        let n_regs = ir.n_regs();
 
         /* Special registers:
              %r0   :  Index
@@ -163,11 +131,10 @@ impl CUDACompiler {
 
         write!(self.asm, "body: // sm_{}\n", 86); // TODO: compute capability from device
 
-        for i in group.range.clone() {
-            let sv = &schedule[i];
-            let var = ir.var(sv.id);
+        for id in ir.ids() {
+            let var = ir.var(id);
             match var.param_ty {
-                ParamType::None => self.assemble_var(ir, sv.id),
+                ParamType::None => self.assemble_var(ir, id),
                 ParamType::Literal => {
                     // let offset = param_idx * 8;
                     writeln!(
@@ -180,6 +147,8 @@ impl CUDACompiler {
                 }
                 ParamType::Input => {
                     // Load from params
+                    writeln!(self.asm, "");
+                    writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);
                     writeln!(
                         self.asm,
                         "\tld.param.u64 %rd0, [params+{}];",
@@ -203,7 +172,7 @@ impl CUDACompiler {
                     }
                 }
                 ParamType::Output => {
-                    self.assemble_var(ir, sv.id);
+                    self.assemble_var(ir, id);
                     // let offset = param_idx * 8;
                     // dbg!(offset);
                     write!(
@@ -253,7 +222,7 @@ impl CUDACompiler {
     }
 
     #[allow(unused_must_use)]
-    fn assemble_var(&mut self, ir: &Ir, id: VarId) {
+    fn assemble_var(&mut self, ir: &Schedule, id: SVarId) {
         let var = ir.var(id);
         writeln!(self.asm, "");
         writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);

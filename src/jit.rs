@@ -5,6 +5,7 @@ use std::sync::Arc;
 use cust::util::SliceExt;
 
 use crate::compiler::CUDACompiler;
+use crate::schedule::Schedule;
 use crate::trace::{Ir, Op, ParamType, VarId};
 
 #[derive(Clone, Debug)]
@@ -22,111 +23,46 @@ pub struct ScheduledVar {
 #[derive(Default)]
 pub struct Jit {
     schedule: Vec<ScheduledVar>,
-    pub params: Vec<u64>, // Kernel parameters used to transfer information to the kernel
-    pub n_regs: usize,
+    // pub params: Vec<u64>, // Kernel parameters used to transfer information to the kernel
+    // pub n_regs: usize,
     pub compiler: CUDACompiler,
-    pub visited: HashSet<(usize, VarId)>,
+    // pub visited: HashSet<(usize, VarId)>,
 }
 
 impl Jit {
     pub fn eval(&mut self, ir: &mut Ir) {
-        self.params.clear();
-        // self.n_regs = self.compiler.first_register();
-        self.schedule.clear();
+        let mut scheduled = ir.scheduled.clone();
+        scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
 
-        // Sort scheduled variables by size
-        for id in ir.scheduled.iter() {
-            let var = ir.var(*id);
-            self.var_traverse(ir, *id, var.size);
+        for id in scheduled.iter() {
+            ir.var_mut(*id).param_ty = ParamType::Output;
         }
-        self.schedule.sort_by(|sv0, sv1| sv0.size.cmp(&sv1.size));
 
-        dbg!(&self.schedule);
-
-        // Group variables of same size
-        let mut groups = vec![];
         let cur = 0;
-        for i in 1..self.schedule.len() {
-            // let var0 = ir.var(self.schedule[i - 1].id);
-            // let var1 = ir.var(self.schedule[i].id);
-            let sv0 = &self.schedule[i - 1];
-            let sv1 = &self.schedule[i];
-            if sv0.size != sv1.size {
-                groups.push(ScheduledGroup {
-                    range: cur..i,
-                    size: sv0.size,
-                });
+        let mut size = 0;
+        let mut schedules = vec![];
+        for i in 1..scheduled.len() {
+            let var0 = ir.var(scheduled[i - 1]);
+            let var1 = ir.var(scheduled[i]);
+            size = var0.size;
+            if var0.size != var1.size {
+                let mut tmp = Schedule::new(&self.compiler, size);
+                tmp.collect_vars(ir, &scheduled[cur..i]);
+                schedules.push(tmp);
             }
         }
-        groups.push(ScheduledGroup {
-            range: cur..self.schedule.len(),
-            size: self.schedule.last().unwrap().size,
-        });
+        size = ir.var(*scheduled.last().unwrap()).size;
+        let mut tmp = Schedule::new(&self.compiler, size);
 
-        for id in ir.scheduled.clone() {
-            ir.var_mut(id).param_ty = ParamType::Output;
-        }
-        dbg!(&groups);
+        tmp.collect_vars(ir, &scheduled[cur..scheduled.len()]);
+        schedules.push(tmp);
+        dbg!(&schedules);
 
         // TODO: this can be paralelized (rayon)
-        for group in groups {
-            // Reset parameters for group.
-            self.params.clear();
-            self.params.push(group.size as _);
-            self.n_regs = self.compiler.first_register();
-
-            dbg!(&self.params);
-            self.preprocess(ir, &group);
-            self.compiler
-                .assemble(ir, &group, &self.schedule, self.params.len(), self.n_regs);
-            self.compiler.execute(ir, group.size, &mut self.params);
+        for schedule in schedules.iter_mut() {
+            let mut compiler = CUDACompiler::default();
+            compiler.assemble(schedule);
+            compiler.execute(schedule);
         }
-    }
-    fn var_traverse(&mut self, ir: &Ir, id: VarId, size: usize) {
-        if !self.visited.insert((size, id)) {
-            return;
-        }
-        let var = ir.var(id);
-        for id in var.deps.iter() {
-            self.var_traverse(ir, *id, size);
-        }
-        self.schedule.push(ScheduledVar { size, id });
-    }
-    ///
-    /// Assembles a group of varaibles.
-    /// This writes into the variables of the internal representation.
-    ///
-    fn preprocess(&mut self, ir: &mut Ir, group: &ScheduledGroup) {
-        // TODO: Implement diffrent backends
-        for schdule_idx in group.range.clone() {
-            let sv = &self.schedule[schdule_idx];
-            let var = ir.var_mut(sv.id);
-
-            // assert_eq!(var.size, group.size);
-
-            var.reg = self.n_regs;
-            self.n_regs += 1;
-
-            if var.param_ty == ParamType::Input {
-                // TODO: This should be compatible with diffrent backends
-                let offset = self.push_param(var.buffer.as_ref().unwrap().as_device_ptr().as_raw());
-                var.param_offset = offset;
-            } else if var.param_ty == ParamType::Output {
-                var.buffer = Some(Box::new(
-                    vec![0u8; var.size * var.ty.size()]
-                        .as_slice()
-                        .as_dbuf()
-                        .unwrap(),
-                ));
-                let offset = self.push_param(var.buffer.as_ref().unwrap().as_device_ptr().as_raw());
-                var.param_offset = offset;
-            } else {
-            }
-        }
-    }
-    fn push_param(&mut self, param: u64) -> usize {
-        let idx = self.params.len();
-        self.params.push(param);
-        idx
     }
 }

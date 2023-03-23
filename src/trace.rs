@@ -192,10 +192,6 @@ pub struct Var {
     pub buffer: Option<Box<cust::memory::DeviceBuffer<u8>>>, // Optional buffer
     pub size: usize,                                         // number of elements
     pub param_ty: ParamType,                                 // Parameter type
-
-    // This is information set by Jit::assemble
-    pub reg: usize,          // Register Index of that variable
-    pub param_offset: usize, // offset in function parameters
 }
 
 impl Var {
@@ -204,22 +200,10 @@ impl Var {
     }
 }
 
-impl Var {
-    pub fn reg(&self) -> Reg {
-        Reg(self)
-    }
-}
-
 ///
 /// Helper struct for printing register names.
 /// <prefix><register_index>
 ///
-pub struct Reg<'a>(pub &'a Var);
-impl<'a> std::fmt::Display for Reg<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.0.ty.prefix(), self.0.reg)
-    }
-}
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VarId(pub usize);
@@ -269,9 +253,6 @@ impl Ir {
     pub fn var_mut(&mut self, id: VarId) -> &mut Var {
         &mut self.vars[id.0]
     }
-    pub fn reg(&self, id: VarId) -> Reg {
-        self.var(id).reg()
-    }
     pub fn ids(&self) -> impl Iterator<Item = VarId> {
         (0..self.vars.len()).map(|i| VarId(i))
     }
@@ -298,8 +279,6 @@ impl Ir {
             ty,
             param_ty: ParamType::None,
             buffer: None,
-            reg: 0,
-            param_offset: 0,
             size,
         })
     }

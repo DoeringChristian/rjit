@@ -17,6 +17,7 @@ mod backend;
 mod compiler;
 mod iterators;
 mod jit;
+mod schedule;
 mod trace;
 
 fn main() {
