@@ -165,7 +165,6 @@ impl ScheduleIr {
             literal: var.literal,
             size: var.size,
         };
-        let mut param_offset = 0;
         match var.param_ty {
             ParamType::Input => {
                 // TODO: This should be compatible with diffrent backends
@@ -184,15 +183,6 @@ impl ScheduleIr {
         }
 
         let id = self.push_var(sv);
-        // let id = self.push_var(ScheduleVar {
-        //     op: var.op,
-        //     ty: var.ty.clone(),
-        //     deps,
-        //     param_ty: var.param_ty,
-        //     reg,
-        //     param_offset,
-        //     literal: var.literal,
-        // });
 
         id
     }
