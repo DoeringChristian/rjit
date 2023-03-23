@@ -742,7 +742,7 @@ mod test {
         let mut jit = Jit::new(&backend);
         let mut ir = Ir::new(&backend);
 
-        let x = ir.buffer_f32(&[1.; 10]);
+        let x = ir.buffer_f32(&[1., 2., 3., 4., 5.]);
         let i = ir.buffer_u32(&[0, 1, 4]);
         let y = ir.gather(x, i, None);
 
@@ -752,6 +752,6 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(ir.to_vec_f32(y), vec![2f32; 10]);
+        assert_eq!(ir.to_vec_f32(y), vec![1., 2., 5.]);
     }
 }
