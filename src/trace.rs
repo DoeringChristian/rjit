@@ -19,7 +19,7 @@ pub enum ParamType {
     Literal,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Op {
     // Data,
     #[default]
@@ -193,6 +193,7 @@ pub struct Var {
     pub param_ty: ParamType,             // Parameter type
     pub rc: usize,
     pub literal: u64,
+    pub stop_traversal: bool,
 }
 impl Debug for Var {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -299,6 +300,7 @@ impl Ir {
             size,
             rc: 0,
             literal: 0,
+            stop_traversal: false,
         })
     }
     pub fn assert_ty(&self, ids: &[VarId]) -> (usize, &VarType) {
@@ -318,12 +320,12 @@ impl Ir {
             self.scheduled.push(*id);
         }
     }
-    pub fn clear_schedule(&mut self) {
-        for id in self.scheduled.clone() {
-            self.dec_rc(id);
-        }
-        self.scheduled.clear();
-    }
+    // pub fn clear_schedule(&mut self) {
+    //     for id in self.scheduled.clone() {
+    //         self.dec_rc(id);
+    //     }
+    //     self.scheduled.clear();
+    // }
 }
 impl Ir {
     pub fn add(&mut self, lhs: VarId, rhs: VarId) -> VarId {
@@ -339,6 +341,29 @@ impl Ir {
             ..Default::default()
         })
     }
+    pub fn const_bool(&mut self, val: bool) -> VarId {
+        self.push_var(Var {
+            op: Op::Literal,
+            deps: smallvec![],
+            ty: VarType::Bool,
+            literal: cast::<_, u8>(val) as _,
+            ..Default::default()
+        })
+    }
+    pub fn pointer_of(&mut self, src: VarId) -> VarId {
+        // TODO: Eval var if needed.
+        let var = self.var(src);
+        self.push_var(Var {
+            op: Op::Literal,
+            param_ty: ParamType::Literal,
+            deps: smallvec![],
+            ty: VarType::Ptr,
+            literal: var.buffer.as_ref().unwrap().as_ptr(),
+            size: 1,
+            stop_traversal: true,
+            ..Default::default()
+        })
+    }
     pub fn buffer_f32(&mut self, slice: &[f32]) -> VarId {
         self.push_var(Var {
             param_ty: ParamType::Input,
@@ -348,10 +373,30 @@ impl Ir {
             ..Default::default()
         })
     }
+    pub fn buffer_u32(&mut self, slice: &[u32]) -> VarId {
+        self.push_var(Var {
+            param_ty: ParamType::Input,
+            buffer: Some(self.backend.buffer_from_slice(cast_slice(slice))),
+            size: slice.len(),
+            ty: VarType::U32,
+            ..Default::default()
+        })
+    }
     pub fn to_vec_f32(&mut self, id: VarId) -> Vec<f32> {
         let var = self.var(id);
         assert_eq!(var.ty, VarType::F32);
         let v = var.buffer.as_ref().unwrap().as_vec();
         Vec::from(cast_slice(&v))
+    }
+    pub fn gather(&mut self, src: VarId, index: VarId, mask: Option<VarId>) -> VarId {
+        let mask = mask.unwrap_or(self.const_bool(true));
+        let ptr = self.pointer_of(src);
+        self.push_var(Var {
+            op: Op::Gather,
+            deps: smallvec![ptr, index, mask],
+            ty: self.var(src).ty.clone(),
+            size: self.var(index).size,
+            ..Default::default()
+        })
     }
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::backend::{Backend, Kernel};
 use crate::schedule::ScheduleIr;
-use crate::trace::{Ir, ParamType};
+use crate::trace::{Ir, Op, ParamType};
 
 // TODO: pooling for paralel exectution
 #[derive(Debug)]
@@ -67,7 +67,15 @@ impl Jit {
         for i in 0..self.kernels.len() {
             self.kernels[i].execute(&mut self.schedules[i]);
         }
-        ir.clear_schedule();
+        for id in ir.scheduled.clone() {
+            ir.dec_rc(id);
+            let var = ir.var_mut(id);
+            var.param_ty = ParamType::Input;
+            var.deps.clear();
+            var.op = Op::Data;
+        }
+        ir.scheduled.clear();
+        // ir.clear_schedule();
     }
     pub fn kernel_debug(&self) -> String {
         let mut string = String::new();

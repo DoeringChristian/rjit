@@ -227,6 +227,8 @@ impl Kernel for CUDAKernel {
         );
 
         std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
+
+        log::trace!("{}", self.asm);
     }
 
     fn compile(&mut self) {
@@ -630,7 +632,67 @@ impl CUDAKernel {
             Op::Log2 => todo!(),
             Op::Cast => todo!(),
             Op::Bitcast => todo!(),
-            Op::Gather => todo!(),
+            Op::Gather => {
+                // d0: src
+                // d1: index
+                // d2: mask
+                let d0 = ir.var(var.deps[0]);
+                let d1 = ir.var(var.deps[1]);
+                let d2 = ir.var(var.deps[2]);
+                let unmasked = d2.is_literal() && d2.literal != 0;
+                let is_bool = var.ty.is_bool();
+
+                if !unmasked {
+                    writeln!(self.asm, "\t@!{} bra l_{}_masked;", d2.reg(), var.reg_idx());
+                }
+
+                if var.ty.size() == 1 {
+                    write!(
+                        self.asm,
+                        "\tcvt.u64.{} %rd3, {};\n\
+                        \tadd.u64 %rd3, %rd3, {};\n",
+                        d1.ty.name_cuda(),
+                        d1.reg(),
+                        d0.reg()
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tmad.wide.{} %rd3, {}, {}, {};\n",
+                        d1.ty.name_cuda(),
+                        d1.reg(),
+                        var.ty.size(),
+                        d0.reg()
+                    );
+                }
+                if is_bool {
+                    write!(
+                        self.asm,
+                        "\tld.global.nc.u8 %w0, [%rd3];\n\
+                        \tsetp.ne.u16 {}, %w0, 0;\n",
+                        var.reg()
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tld.global.nc.{} {}, [%rd3];",
+                        var.ty.name_cuda(),
+                        var.reg()
+                    );
+                }
+                if !unmasked {
+                    write!(
+                        self.asm,
+                        "\tbra.uni l_{0}_done;\n\n\
+                        l_{0}_masked:\n\
+                            mov.{1} {2}, 0;\n\n\
+                        l_{0}_done:\n",
+                        var.reg_idx(),
+                        var.ty.name_cuda_bin(),
+                        var.reg()
+                    );
+                }
+            }
             Op::Scatter => todo!(),
             Op::Idx => todo!(),
             // Op::ConstF32(val) => {
@@ -664,6 +726,25 @@ mod test {
 
         let x = ir.buffer_f32(&[1.; 10]);
         let y = ir.add(x, x);
+
+        ir.schedule(&[y]);
+
+        jit.eval(&mut ir);
+
+        insta::assert_snapshot!(jit.kernel_debug());
+
+        assert_eq!(ir.to_vec_f32(y), vec![2f32; 10]);
+    }
+    #[test]
+    fn load_gather_f32() {
+        pretty_env_logger::init();
+        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
+        let mut jit = Jit::new(&backend);
+        let mut ir = Ir::new(&backend);
+
+        let x = ir.buffer_f32(&[1.; 10]);
+        let i = ir.buffer_u32(&[0, 1, 4]);
+        let y = ir.gather(x, i, None);
 
         ir.schedule(&[y]);
 
