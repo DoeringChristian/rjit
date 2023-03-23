@@ -23,10 +23,7 @@ pub struct ScheduledVar {
 #[derive(Default)]
 pub struct Jit {
     schedule: Vec<ScheduledVar>,
-    // pub params: Vec<u64>, // Kernel parameters used to transfer information to the kernel
-    // pub n_regs: usize,
     pub compiler: CUDACompiler,
-    // pub visited: HashSet<(usize, VarId)>,
 }
 
 impl Jit {
