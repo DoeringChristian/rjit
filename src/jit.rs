@@ -23,6 +23,9 @@ pub struct Jit {
 }
 
 impl Jit {
+    ///
+    /// Construct a new Jit Compiler from a backend.
+    ///
     pub fn new(backend: &Arc<dyn Backend>) -> Self {
         Self {
             backend: backend.clone(),
@@ -30,6 +33,13 @@ impl Jit {
             kernels: vec![],
         }
     }
+    ///
+    /// Compiles the computation graph of all scheduled variables in a Trace (Ir).
+    ///
+    /// First, all scheduled variables with the same size are grouped.
+    /// Then, a Schedule Intermediate Representation is constructed from the groups.
+    /// In the end a set of Kernels is assembled and compiled.
+    ///
     pub fn compile(&mut self, ir: &mut Ir) {
         self.schedules.clear();
         self.kernels.clear();
