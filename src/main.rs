@@ -1,3 +1,8 @@
+use std::sync::Arc;
+
+use crate::backend::cuda::CUDABackend;
+use crate::backend::Backend;
+
 use self::jit::Jit;
 use self::trace::Ir;
 
@@ -8,9 +13,11 @@ mod schedule;
 mod trace;
 
 fn main() {
-    let ctx = cust::quick_init().unwrap();
+    let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
 
-    let mut ir = Ir::default();
+    let mut jit = Jit::new(&backend);
+
+    let mut ir = Ir::new(&backend);
 
     let x = ir.buffer_f32(&[1.; 10]);
     let c = ir.const_f32(1.);
@@ -28,7 +35,6 @@ fn main() {
 
     // ir.dec_rc(e);
 
-    let mut jit = Jit::default();
     jit.eval(&mut ir);
 
     dbg!(ir.to_host_f32(y));

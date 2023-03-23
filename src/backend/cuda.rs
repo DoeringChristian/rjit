@@ -1,60 +1,66 @@
 use cust::module::{ModuleJitOption, OptLevel};
-use cust::prelude::Module;
+use cust::prelude::{Context, DeviceBuffer, Module};
+use cust::util::SliceExt;
 
 use crate::schedule::{SVarId, ScheduleIr};
 use crate::trace::*;
 use std::fmt::Write;
 
+use super::{Backend, Buffer, Kernel};
+
+pub struct CUDABackend {
+    ctx: Context,
+}
+impl CUDABackend {
+    pub fn new() -> Self {
+        Self {
+            ctx: cust::quick_init().unwrap(),
+        }
+    }
+}
+
+impl Backend for CUDABackend {
+    fn new_kernel(&self) -> Box<dyn Kernel> {
+        Box::new(CUDAKernel::default())
+    }
+    fn first_register(&self) -> usize {
+        CUDAKernel::FIRST_REGISTER
+    }
+
+    fn buffer_uninit(&self, size: usize) -> Box<dyn super::Buffer> {
+        Box::new(CUDABuffer {
+            buffer: vec![0u8; size].as_slice().as_dbuf().unwrap(),
+        })
+    }
+
+    fn buffer_from_slice(&self, slice: &[u8]) -> Box<dyn super::Buffer> {
+        Box::new(CUDABuffer {
+            buffer: slice.as_dbuf().unwrap(),
+        })
+    }
+}
+
+pub struct CUDABuffer {
+    buffer: DeviceBuffer<u8>,
+}
+impl Buffer for CUDABuffer {
+    fn as_ptr(&self) -> u64 {
+        self.buffer.as_device_ptr().as_raw()
+    }
+    fn as_vec(&self) -> Vec<u8> {
+        self.buffer.as_host_vec().unwrap()
+    }
+}
+
 #[derive(Default)]
 pub struct CUDAKernel {
     pub asm: String,
+    pub module: Option<Module>,
 }
 
-impl CUDAKernel {
-    const ENTRY_POINT: &str = "cujit";
-    const FIRST_REGISTER: usize = 4;
-    pub fn first_register(&self) -> usize {
-        Self::FIRST_REGISTER
-    }
-    pub fn module(&self) -> Module {
-        let module = Module::from_ptx(
-            &self.asm,
-            &[
-                ModuleJitOption::OptLevel(OptLevel::O0),
-                ModuleJitOption::GenenerateDebugInfo(true),
-                ModuleJitOption::GenerateLineInfo(true),
-            ],
-        )
-        .unwrap();
-        module
-    }
-    pub fn execute(&mut self, ir: &mut ScheduleIr) {
-        let module = self.module();
-        let func = module.get_function(Self::ENTRY_POINT).unwrap();
-
-        let (_, block_size) = func.suggested_launch_configuration(0, 0.into()).unwrap();
-
-        let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
-
-        let stream =
-            cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
-
-        unsafe {
-            stream
-                .launch(
-                    &func,
-                    grid_size,
-                    block_size,
-                    0,
-                    &[ir.params_mut().as_mut_ptr() as *mut std::ffi::c_void],
-                )
-                .unwrap();
-        }
-
-        stream.synchronize().unwrap();
-    }
+impl Kernel for CUDAKernel {
     #[allow(unused_must_use)]
-    pub fn assemble(&mut self, ir: &ScheduleIr) {
+    fn assemble(&mut self, ir: &ScheduleIr) {
         self.asm.clear();
         let n_params = ir.n_params();
         let n_regs = ir.n_regs();
@@ -216,6 +222,53 @@ impl CUDAKernel {
         std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
     }
 
+    fn compile(&mut self) {
+        self.module = Some(
+            Module::from_ptx(
+                &self.asm,
+                &[
+                    ModuleJitOption::OptLevel(OptLevel::O0),
+                    ModuleJitOption::GenenerateDebugInfo(true),
+                    ModuleJitOption::GenerateLineInfo(true),
+                ],
+            )
+            .unwrap(),
+        );
+    }
+    fn execute(&mut self, ir: &mut ScheduleIr) {
+        let func = self
+            .module
+            .as_ref()
+            .expect("Need to compile Kernel before we can execute it!")
+            .get_function(Self::ENTRY_POINT)
+            .unwrap();
+
+        let (_, block_size) = func.suggested_launch_configuration(0, 0.into()).unwrap();
+
+        let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
+
+        let stream =
+            cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
+
+        unsafe {
+            stream
+                .launch(
+                    &func,
+                    grid_size,
+                    block_size,
+                    0,
+                    &[ir.params_mut().as_mut_ptr() as *mut std::ffi::c_void],
+                )
+                .unwrap();
+        }
+
+        stream.synchronize().unwrap();
+    }
+}
+
+impl CUDAKernel {
+    const ENTRY_POINT: &str = "cujit";
+    const FIRST_REGISTER: usize = 4;
     #[allow(unused_must_use)]
     fn assemble_var(&mut self, ir: &ScheduleIr, id: SVarId) {
         let var = ir.var(id);
@@ -483,6 +536,3 @@ impl CUDAKernel {
         }
     }
 }
-
-#[cfg(test)]
-mod test {}

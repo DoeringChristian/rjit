@@ -1,9 +1,13 @@
 use std::collections::HashSet;
+use std::fmt::Debug;
+use std::sync::Arc;
 
 use bytemuck::cast_slice;
 use cust::util::SliceExt;
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
+
+use crate::backend::{Backend, Buffer};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ParamType {
@@ -180,15 +184,28 @@ impl VarType {
 ///
 ///
 ///
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Var {
     pub op: Op, // Operation used to construct the variable
     pub deps: SmallVec<[VarId; 4]>,
-    pub ty: VarType,                                         // Type of the variable
-    pub buffer: Option<Box<cust::memory::DeviceBuffer<u8>>>, // Optional buffer
-    pub size: usize,                                         // number of elements
-    pub param_ty: ParamType,                                 // Parameter type
+    pub ty: VarType,                     // Type of the variable
+    pub buffer: Option<Box<dyn Buffer>>, // Optional buffer
+    pub size: usize,                     // number of elements
+    pub param_ty: ParamType,             // Parameter type
     pub rc: usize,
+}
+impl Debug for Var {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Var")
+            .field("op", &self.op)
+            .field("deps", &self.deps)
+            .field("ty", &self.ty)
+            // .field("buffer", &self.buffer)
+            .field("size", &self.size)
+            .field("param_ty", &self.param_ty)
+            .field("rc", &self.rc)
+            .finish()
+    }
 }
 
 impl Var {
@@ -217,13 +234,29 @@ impl std::ops::Deref for ParamId {
     }
 }
 
-#[derive(Debug, Default)]
 pub struct Ir {
     vars: SlotMap<DefaultKey, Var>,
     pub scheduled: Vec<VarId>,
+    backend: Arc<dyn Backend>,
+}
+impl Debug for Ir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Ir")
+            .field("vars", &self.vars)
+            .field("scheduled", &self.scheduled)
+            // .field("backend", &self.backend)
+            .finish()
+    }
 }
 
 impl Ir {
+    pub fn new(backend: &Arc<dyn Backend>) -> Self {
+        Self {
+            backend: backend.clone(),
+            vars: SlotMap::default(),
+            scheduled: Vec::default(),
+        }
+    }
     pub fn push_var(&mut self, mut var: Var) -> VarId {
         for dep in var.deps.iter() {
             self.inc_rc(*dep);
@@ -295,7 +328,7 @@ impl Ir {
     pub fn buffer_f32(&mut self, slice: &[f32]) -> VarId {
         self.push_var(Var {
             param_ty: ParamType::Input,
-            buffer: Some(Box::new(slice.as_dbuf().unwrap().cast::<u8>())),
+            buffer: Some(self.backend.buffer_from_slice(cast_slice(slice))),
             size: slice.len(),
             ty: VarType::F32,
             ..Default::default()
@@ -304,7 +337,7 @@ impl Ir {
     pub fn to_host_f32(&mut self, id: VarId) -> Vec<f32> {
         let var = self.var(id);
         assert_eq!(var.ty, VarType::F32);
-        let v = var.buffer.as_ref().unwrap().as_host_vec().unwrap();
+        let v = var.buffer.as_ref().unwrap().as_vec();
         Vec::from(cast_slice(&v))
     }
 }

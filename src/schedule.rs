@@ -1,9 +1,12 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
+use std::sync::Arc;
 
 use cust::util::SliceExt;
 use smallvec::SmallVec;
 
-use crate::compiler::CUDACompiler;
+use crate::backend::Backend;
+use crate::compiler::CUDAKernel;
 use crate::trace::{Ir, Op, ParamType, VarId, VarType};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -43,21 +46,35 @@ impl ScheduleVar {
 ///
 /// Intermediate representation for scheduled variables
 ///
-#[derive(Default, Debug)]
+// #[derive(Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
     n_regs: usize,
     visited: HashMap<VarId, SVarId>,
-    size: usize,
+    backend: Arc<dyn Backend>,
+}
+
+impl Debug for ScheduleIr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ScheduleIr")
+            .field("vars", &self.vars)
+            .field("params", &self.params)
+            .field("n_regs", &self.n_regs)
+            .field("visited", &self.visited)
+            // .field("backend", &self.backend)
+            .finish()
+    }
 }
 
 impl ScheduleIr {
-    pub fn new(compiler: &CUDACompiler, size: usize) -> Self {
+    pub fn new(backend: &Arc<dyn Backend>, first_register: usize, size: usize) -> Self {
         Self {
-            n_regs: compiler.first_register(),
+            n_regs: first_register,
             params: vec![size as _],
-            ..Default::default()
+            vars: Default::default(),
+            visited: Default::default(),
+            backend: backend.clone(),
         }
     }
     pub fn ids(&self) -> impl Iterator<Item = SVarId> {
@@ -120,16 +137,11 @@ impl ScheduleIr {
         self.n_regs += 1;
         if var.param_ty == ParamType::Input {
             // TODO: This should be compatible with diffrent backends
-            let offset = self.push_param(var.buffer.as_ref().unwrap().as_device_ptr().as_raw());
+            let offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
             param_offset = offset;
         } else if var.param_ty == ParamType::Output {
-            var.buffer = Some(Box::new(
-                vec![0u8; var.size * var.ty.size()]
-                    .as_slice()
-                    .as_dbuf()
-                    .unwrap(),
-            ));
-            let offset = self.push_param(var.buffer.as_ref().unwrap().as_device_ptr().as_raw());
+            var.buffer = Some(self.backend.buffer_uninit(var.size * var.ty.size()));
+            let offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
             param_offset = offset;
         } else {
         }
