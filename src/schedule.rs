@@ -167,7 +167,6 @@ impl ScheduleIr {
         };
         match var.param_ty {
             ParamType::Input => {
-                // TODO: This should be compatible with diffrent backends
                 if var.is_literal() {
                     sv.param_offset = self.push_param(var.literal);
 
