@@ -3,7 +3,6 @@ use self::trace::Ir;
 
 mod backend;
 mod compiler;
-mod iterators;
 mod jit;
 mod schedule;
 mod trace;

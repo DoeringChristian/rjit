@@ -5,8 +5,6 @@ use cust::util::SliceExt;
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
 
-use crate::iterators::DepIter;
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ParamType {
     #[default]
@@ -252,13 +250,6 @@ impl Ir {
     pub fn var_mut(&mut self, id: VarId) -> &mut Var {
         &mut self.vars[id.0]
     }
-    pub fn deps(&self, schedule: &[VarId]) -> DepIter {
-        DepIter {
-            ir: self,
-            stack: Vec::from(schedule),
-            discovered: HashSet::new(),
-        }
-    }
     pub fn push_var_intermediate(
         &mut self,
         op: Op,
@@ -267,7 +258,7 @@ impl Ir {
         size: usize,
     ) -> VarId {
         self.push_var(Var {
-            op: Op::Add,
+            op,
             deps: SmallVec::from_slice(deps),
             ty,
             param_ty: ParamType::None,
