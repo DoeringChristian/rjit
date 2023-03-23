@@ -145,30 +145,44 @@ impl Kernel for CUDAKernel {
             let var = ir.var(id);
             match var.param_ty {
                 ParamType::None => self.assemble_var(ir, id),
-                ParamType::Literal => {
-                    // let offset = param_idx * 8;
-                    writeln!(
-                        self.asm,
-                        "\tld.param.{} {}, [params+{}];",
-                        var.ty.name_cuda(),
-                        var.reg(),
-                        var.param_offset * 8,
-                    );
-                }
+                // ParamType::Literal => {
+                //     // let offset = param_idx * 8;
+                //     writeln!(
+                //         self.asm,
+                //         "\tld.param.{} {}, [params+{}];",
+                //         var.ty.name_cuda(),
+                //         var.reg(),
+                //         var.param_offset * 8,
+                //     );
+                // }
                 ParamType::Input => {
                     // Load from params
                     writeln!(self.asm, "");
                     writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);
-                    writeln!(
-                        self.asm,
-                        "\tld.param.u64 %rd0, [params+{}];",
-                        var.param_offset * 8
-                    );
-                    writeln!(
-                        self.asm,
-                        "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
-                        var.ty.size()
-                    );
+                    if var.is_literal() {
+                        writeln!(
+                            self.asm,
+                            "\tld.param.{} {}, [params+{}];",
+                            var.ty.name_cuda(),
+                            var.reg(),
+                            var.param_offset * 8,
+                        );
+                        continue;
+                    } else {
+                        writeln!(
+                            self.asm,
+                            "\tld.param.u64 %rd0, [params+{}];",
+                            var.param_offset * 8
+                        );
+                    }
+                    if var.size > 1 {
+                        writeln!(
+                            self.asm,
+                            "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
+                            var.ty.size()
+                        );
+                    }
+
                     if var.ty == VarType::Bool {
                         writeln!(self.asm, "\tld.global.cs.u8 %w0, [%rd0];");
                         writeln!(self.asm, "\tsetp.ne.u16 {}, %w0, 0;", var.reg());

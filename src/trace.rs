@@ -19,7 +19,7 @@ pub enum ParamType {
     None,
     Input,
     Output,
-    Literal,
+    // Literal,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -214,8 +214,8 @@ impl Debug for Var {
 }
 
 impl Var {
-    pub fn deps(&self) -> &[VarId] {
-        &self.deps
+    pub fn is_literal(&self) -> bool {
+        self.op == Op::Literal
     }
 }
 
@@ -363,7 +363,7 @@ impl Ir {
         let var = self.var(src);
         self.push_var(Var {
             op: Op::Literal,
-            param_ty: ParamType::Literal,
+            param_ty: ParamType::Input,
             deps: smallvec![],
             ty: VarType::Ptr,
             literal: var.buffer.as_ref().unwrap().as_ptr(),

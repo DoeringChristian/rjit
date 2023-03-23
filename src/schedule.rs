@@ -15,7 +15,7 @@ impl std::fmt::Display for SVarId {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct ScheduleVar {
     pub op: Op,
     pub deps: SmallVec<[SVarId; 4]>,
@@ -24,6 +24,24 @@ pub struct ScheduleVar {
     pub reg: usize,
     pub param_offset: usize,
     pub literal: u64,
+    pub size: usize,
+}
+impl Debug for ScheduleVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_struct("ScheduleVar");
+        s.field("op", &self.op)
+            .field("deps", &self.deps)
+            .field("ty", &self.ty)
+            .field("param_ty", &self.param_ty)
+            .field("reg", &self.reg)
+            .field("param_offset", &self.param_offset);
+
+        if self.is_literal() {}
+
+        s.field("literal", &self.literal)
+            .field("size", &self.size)
+            .finish()
+    }
 }
 
 impl ScheduleVar {
@@ -155,16 +173,17 @@ impl ScheduleIr {
         match var.param_ty {
             ParamType::Input => {
                 // TODO: This should be compatible with diffrent backends
-                let offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
-                param_offset = offset;
+                if var.is_literal() {
+                    let offset = self.push_param(var.literal);
+                    param_offset = offset;
+                } else {
+                    let offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
+                    param_offset = offset;
+                }
             }
             ParamType::Output => {
                 var.buffer = Some(self.backend.buffer_uninit(var.size * var.ty.size()));
                 let offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
-                param_offset = offset;
-            }
-            ParamType::Literal => {
-                let offset = self.push_param(var.literal);
                 param_offset = offset;
             }
             ParamType::None => {}
@@ -178,6 +197,7 @@ impl ScheduleIr {
             reg,
             param_offset,
             literal: var.literal,
+            size: var.size,
         });
 
         id
