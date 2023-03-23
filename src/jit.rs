@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::backend::Backend;
+use crate::backend::{Backend, Kernel};
 use crate::schedule::ScheduleIr;
 use crate::trace::{Ir, ParamType};
 
@@ -15,7 +15,7 @@ impl Jit {
             backend: backend.clone(),
         }
     }
-    pub fn eval(&mut self, ir: &mut Ir) {
+    pub fn compile(&mut self, ir: &mut Ir) -> Vec<(ScheduleIr, Box<dyn Kernel>)> {
         let mut scheduled = ir.scheduled.clone();
         scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
 
@@ -44,11 +44,21 @@ impl Jit {
         // dbg!(&schedules);
 
         // TODO: this can be paralelized (rayon)
-        for schedule in schedules.iter_mut() {
-            let mut kernel = self.backend.new_kernel();
-            kernel.assemble(schedule);
-            kernel.compile();
-            kernel.execute(schedule);
+        let kernels = schedules
+            .into_iter()
+            .map(|mut s| {
+                let mut kernel = self.backend.new_kernel();
+                kernel.assemble(&mut s);
+                kernel.compile();
+                (s, kernel)
+            })
+            .collect::<Vec<_>>();
+        kernels
+    }
+    pub fn eval(&mut self, ir: &mut Ir) {
+        let kernels = self.compile(ir);
+        for (mut s, mut kernel) in kernels {
+            kernel.execute(&mut s);
         }
     }
 }
