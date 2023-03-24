@@ -69,7 +69,7 @@ pub enum Op {
     Log2,
     Cast,
     Bitcast,
-    Gather,
+    Gather, // Gather operation (gathering directly from buffer).
     Scatter,
     Idx,
     // ConstF32(f32), // Set a constant value
@@ -257,6 +257,12 @@ impl Debug for Ir {
     }
 }
 
+#[derive(Debug)]
+struct VarInfo {
+    ty: VarType,
+    size: usize,
+}
+
 impl Ir {
     pub fn new(backend: &Arc<dyn Backend>) -> Self {
         Self {
@@ -310,16 +316,23 @@ impl Ir {
             stop_traversal: false,
         })
     }
-    pub fn assert_ty(&self, ids: &[VarId]) -> (usize, &VarType) {
-        let ty = ids.iter().map(|id| &self.var(*id).ty).reduce(|ty0, ty1| {
-            assert_eq!(ty0, ty1);
-            ty0
-        });
+    pub fn assert_ty(&self, ids: &[VarId]) -> VarInfo {
+        let ty = ids
+            .iter()
+            .map(|id| &self.var(*id).ty)
+            .reduce(|ty0, ty1| {
+                assert_eq!(ty0, ty1);
+                ty0
+            })
+            .unwrap()
+            .clone();
         let size = ids
             .iter()
             .map(|id| &self.var(*id).size)
-            .reduce(|s0, s1| s0.max(s1));
-        (*size.unwrap(), ty.unwrap())
+            .reduce(|s0, s1| s0.max(s1))
+            .unwrap()
+            .clone();
+        VarInfo { ty, size }
     }
     pub fn schedule(&mut self, ids: &[VarId]) {
         for id in ids {
@@ -336,12 +349,12 @@ impl Ir {
 }
 impl Ir {
     pub fn add(&mut self, lhs: VarId, rhs: VarId) -> VarId {
-        let (size, ty) = self.assert_ty(&[lhs, rhs]);
-        self.push_var_intermediate(Op::Add, &[lhs, rhs], ty.clone(), size)
+        let info = self.assert_ty(&[lhs, rhs]);
+        self.push_var_intermediate(Op::Add, &[lhs, rhs], info.ty, info.size)
     }
     pub fn mul(&mut self, lhs: VarId, rhs: VarId) -> VarId {
-        let (size, ty) = self.assert_ty(&[lhs, rhs]);
-        self.push_var_intermediate(Op::Mul, &[lhs, rhs], ty.clone(), size)
+        let info = self.assert_ty(&[lhs, rhs]);
+        self.push_var_intermediate(Op::Mul, &[lhs, rhs], info.ty, info.size)
     }
     // TODO: use generics for consts
     pub fn const_f32(&mut self, val: f32) -> VarId {
@@ -425,7 +438,19 @@ impl Ir {
         let v = var.buffer.as_ref().unwrap().as_vec();
         Vec::from(cast_slice(&v))
     }
-    pub fn reindex(&mut self, id: VarId, new_idx: VarId, size: usize) -> Option<VarId> {
+    pub fn and(&mut self, lhs: VarId, rhs: VarId) -> VarId {
+        let info = self.assert_ty(&[lhs, rhs]);
+
+        let v_lhs = self.var(lhs);
+        let v_rhs = self.var(rhs);
+
+        if info.size > 0 && v_lhs.ty != v_rhs.ty && !v_lhs.ty.is_bool() {
+            panic!("Invalid operands!");
+        }
+
+        self.push_var_intermediate(Op::And, &[lhs, rhs], info.ty, info.size)
+    }
+    fn reindex(&mut self, id: VarId, new_idx: VarId, size: usize) -> Option<VarId> {
         let var = self.var(id);
 
         if var.is_data() {
@@ -489,8 +514,10 @@ impl Ir {
 
         let res = self.reindex(src, index, self.var(index).size);
 
-        if let Some(src) = res {
-            return src;
+        if let Some(res) = res {
+            self.dec_rc(src);
+            // let res = self.and(res, mask); // TODO: masking
+            return res;
         }
 
         unimplemented!();
