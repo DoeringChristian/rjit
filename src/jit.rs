@@ -46,8 +46,11 @@ impl Jit {
         let mut scheduled = ir.scheduled.clone();
         scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
 
+        // For every scheduled variable (destination) we have to create a new buffer
         for id in scheduled.iter() {
-            ir.var_mut(*id).param_ty = ParamType::Output;
+            let var = ir.var_mut(*id);
+            var.param_ty = ParamType::Output;
+            var.buffer = Some(self.backend.buffer_uninit(var.size * var.ty.size()));
         }
 
         let cur = 0;
@@ -92,6 +95,10 @@ impl Jit {
         for i in 0..self.kernels.len() {
             self.kernels[i].execute(&mut self.schedules[i]);
         }
+
+        // After executing the kernels, the Trace (Ir) is cleaned up.
+        // To do so, we first decrement the refcount and then set the ParamType to Input and op to
+        // Data
         for id in ir.scheduled.clone() {
             ir.dec_rc(id);
             let var = ir.var_mut(id);

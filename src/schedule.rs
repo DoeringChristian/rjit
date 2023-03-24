@@ -145,7 +145,7 @@ impl ScheduleIr {
     ///
     /// Traverse computation graph and collect variables into Schedule.
     ///
-    pub fn collect(&mut self, ir: &mut Ir, id: VarId) -> SVarId {
+    pub fn collect(&mut self, ir: &Ir, id: VarId) -> SVarId {
         if self.visited.contains_key(&id) {
             return self.visited[&id];
         }
@@ -161,8 +161,6 @@ impl ScheduleIr {
                 .map(|id| self.collect(ir, id))
                 .collect::<SmallVec<[_; 4]>>()
         };
-
-        let var = ir.var_mut(id);
 
         let mut sv = ScheduleVar {
             op: var.op,
@@ -187,7 +185,6 @@ impl ScheduleIr {
                 }
             }
             ParamType::Output => {
-                var.buffer = Some(self.backend.buffer_uninit(var.size * var.ty.size()));
                 sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
             }
             ParamType::None => {}
