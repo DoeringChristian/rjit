@@ -17,6 +17,7 @@ smallvec = "1.10.0"
 
 [dev-dependencies]
 insta = { version = "1.28.0" }
+rusty-hook = "0.11.2"
 
 [profile.dev.packages.insta]
 opt-level = 3
@@ -24,3 +25,6 @@ opt-level = 3
 [profile.dev.packages.similar]
 opt-level = 3
 
+
+[hooks]
+pre-commit = "cargo test"
