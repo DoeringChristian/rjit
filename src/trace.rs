@@ -456,6 +456,13 @@ impl Ir {
 
         self.push_var_intermediate(Op::And, &[lhs, rhs], info.ty, info.size)
     }
+    ///
+    /// Reindex a variable with a new index and size.
+    /// (Normally size is the size of the index)
+    ///
+    /// For now we construct a separate set of variables in the Ir.
+    /// However, it should sometimes be possible to reuse the old ones.
+    ///
     fn reindex(&mut self, id: VarId, new_idx: VarId, size: usize) -> Option<VarId> {
         let var = self.var(id);
 
@@ -466,7 +473,16 @@ impl Ir {
         let mut deps = smallvec![];
         if !var.is_literal() {
             for dep in var.deps.clone() {
-                deps.push(self.reindex(dep, new_idx, size)?);
+                if let Some(dep) = self.reindex(dep, new_idx, size) {
+                    deps.push(dep);
+                } else {
+                    // Cleanup
+                    for dep in deps {
+                        self.dec_rc(dep);
+                    }
+                    return None;
+                }
+                // deps.push(self.reindex(dep, new_idx, size)?);
             }
         }
 
