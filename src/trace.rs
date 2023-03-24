@@ -358,19 +358,23 @@ impl Ir {
     /// Returns a variable pointing to the buffer of another variable (if that variable has a
     /// buffer).
     ///
-    pub fn pointer_to(&mut self, src: VarId) -> VarId {
+    pub fn pointer_to(&mut self, src: VarId) -> Option<VarId> {
         // TODO: Eval var if needed.
-        let var = self.var(src);
-        self.push_var(Var {
-            op: Op::Literal,
-            param_ty: ParamType::Input,
-            deps: smallvec![],
-            ty: VarType::Ptr,
-            literal: var.buffer.as_ref().unwrap().as_ptr(),
-            size: 1,
-            stop_traversal: true,
-            ..Default::default()
-        })
+        let src = self.var(src);
+        if let Some(buffer) = src.buffer.as_ref() {
+            Some(self.push_var(Var {
+                op: Op::Literal,
+                param_ty: ParamType::Input,
+                deps: smallvec![],
+                ty: VarType::Ptr,
+                literal: buffer.as_ptr(),
+                size: 1,
+                stop_traversal: true,
+                ..Default::default()
+            }))
+        } else {
+            None
+        }
     }
     pub fn buffer_f32(&mut self, slice: &[f32]) -> VarId {
         self.push_var(Var {
@@ -378,6 +382,7 @@ impl Ir {
             buffer: Some(self.backend.buffer_from_slice(cast_slice(slice))),
             size: slice.len(),
             ty: VarType::F32,
+            op: Op::Data,
             ..Default::default()
         })
     }
@@ -387,6 +392,7 @@ impl Ir {
             buffer: Some(self.backend.buffer_from_slice(cast_slice(slice))),
             size: slice.len(),
             ty: VarType::U32,
+            op: Op::Data,
             ..Default::default()
         })
     }
@@ -404,11 +410,12 @@ impl Ir {
     }
     pub fn gather(&mut self, src: VarId, index: VarId, mask: Option<VarId>) -> VarId {
         let mask = mask.unwrap_or(self.const_bool(true));
-        let ptr = self.pointer_to(src);
+        let ty = self.var(src).ty.clone();
+        let src = self.pointer_to(src).unwrap_or(src);
         self.push_var(Var {
             op: Op::Gather,
-            deps: smallvec![ptr, index, mask],
-            ty: self.var(src).ty.clone(),
+            deps: smallvec![src, index, mask],
+            ty,
             size: self.var(index).size,
             ..Default::default()
         })

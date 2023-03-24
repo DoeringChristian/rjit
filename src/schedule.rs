@@ -142,6 +142,9 @@ impl ScheduleIr {
             self.collect(ir, *id);
         }
     }
+    pub fn reindex(&mut self, ir: &Ir, id: VarId) -> Option<SVarId> {
+        todo!()
+    }
     ///
     /// Traverse computation graph and collect variables into Schedule.
     ///
@@ -154,6 +157,12 @@ impl ScheduleIr {
         // Collect dependencies
         let deps = if var.stop_traversal {
             smallvec![]
+        } else if var.op == Op::Gather {
+            smallvec![
+                self.collect(ir, var.deps[0]),
+                self.collect(ir, var.deps[1]),
+                self.collect(ir, var.deps[2])
+            ]
         } else {
             var.deps
                 .clone()
