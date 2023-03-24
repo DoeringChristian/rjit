@@ -196,13 +196,16 @@ impl ScheduleIr {
             sv.deps = smallvec![]
         } else if var.op == Op::Gather {
             //
-            // For gather operations there are three ways to resolve them.
+            // For gather operations there are three ways to resolve them:
+            //
             // If the source is a Pointer (i.e. VarType::Ptr) we can simply gather from that
             // pointer.
+            //
             // If the source is trivial (i.e. there are no dependencies on Input variablse
             // ParamType::Input) we can
             // reindex the variable.
-            // Finally, if the variable depends on Inputs we need to launch multiple Kernesl (this
+            //
+            // Finally, if the variable depends on Inputs we need to launch multiple Kernels (this
             // is not yet implemented).
             //
             let src = var.deps[0];
