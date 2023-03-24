@@ -8,10 +8,19 @@ edition = "2021"
 [dependencies]
 bytemuck = "1.13.1"
 cust = { git = "https://github.com/DoeringChristian/Rust-CUDA.git", branch = "cast-double-free" }
-insta = "1.28.0"
 itertools = "0.10.5"
 log = "0.4.17"
 pretty_env_logger = "0.4.0"
 rayon = "1.7.0"
 slotmap = "1.0.6"
 smallvec = "1.10.0"
+
+[dev-dependencies]
+insta = { version = "1.28.0" }
+
+[profile.dev.packages.insta]
+opt-level = 3
+
+[profile.dev.packages.similar]
+opt-level = 3
+
