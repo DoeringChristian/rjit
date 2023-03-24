@@ -172,6 +172,9 @@ impl VarType {
             _ => false,
         }
     }
+    pub fn is_float(&self) -> bool {
+        *self == VarType::F16 || *self == VarType::F32 || *self == VarType::F64
+    }
     pub fn is_single(&self) -> bool {
         *self == Self::F32
     }
@@ -316,16 +319,9 @@ impl Ir {
             stop_traversal: false,
         })
     }
-    pub fn assert_ty(&self, ids: &[VarId]) -> VarInfo {
-        let ty = ids
-            .iter()
-            .map(|id| &self.var(*id).ty)
-            .reduce(|ty0, ty1| {
-                assert_eq!(ty0, ty1);
-                ty0
-            })
-            .unwrap()
-            .clone();
+    pub fn var_info(&self, ids: &[VarId]) -> VarInfo {
+        let ty = self.var(*ids.first().unwrap()).ty.clone(); // TODO: Fix (first non void)
+
         let size = ids
             .iter()
             .map(|id| &self.var(*id).size)
@@ -349,11 +345,11 @@ impl Ir {
 }
 impl Ir {
     pub fn add(&mut self, lhs: VarId, rhs: VarId) -> VarId {
-        let info = self.assert_ty(&[lhs, rhs]);
+        let info = self.var_info(&[lhs, rhs]);
         self.push_var_intermediate(Op::Add, &[lhs, rhs], info.ty, info.size)
     }
     pub fn mul(&mut self, lhs: VarId, rhs: VarId) -> VarId {
-        let info = self.assert_ty(&[lhs, rhs]);
+        let info = self.var_info(&[lhs, rhs]);
         self.push_var_intermediate(Op::Mul, &[lhs, rhs], info.ty, info.size)
     }
     // TODO: use generics for consts
@@ -438,13 +434,23 @@ impl Ir {
         let v = var.buffer.as_ref().unwrap().as_vec();
         Vec::from(cast_slice(&v))
     }
+    pub fn cast(&mut self, src: VarId, ty: VarType) -> VarId {
+        let v = self.var(src);
+        self.push_var(Var {
+            op: Op::Cast,
+            deps: smallvec![src],
+            ty: ty,
+            size: v.size,
+            ..Default::default()
+        })
+    }
     pub fn and(&mut self, lhs: VarId, rhs: VarId) -> VarId {
-        let info = self.assert_ty(&[lhs, rhs]);
+        let info = self.var_info(&[lhs, rhs]);
 
         let v_lhs = self.var(lhs);
         let v_rhs = self.var(rhs);
 
-        if info.size > 0 && v_lhs.ty != v_rhs.ty && !v_lhs.ty.is_bool() {
+        if info.size > 0 && v_lhs.ty != v_rhs.ty && !v_rhs.ty.is_bool() {
             panic!("Invalid operands!");
         }
 
@@ -510,13 +516,14 @@ impl Ir {
                 size: self.var(index).size,
                 ..Default::default()
             });
-        };
+        }
 
         let res = self.reindex(src, index, self.var(index).size);
 
         if let Some(res) = res {
             self.dec_rc(src);
-            // let res = self.and(res, mask); // TODO: masking
+            // let mask = self.cast(mask, self.var(res).ty.clone());
+            let res = self.and(res, mask); // TODO: masking
             return res;
         }
 

@@ -50,15 +50,19 @@ impl<'a> std::fmt::Display for Reg<'a> {
     }
 }
 impl ScheduleVar {
+    ///
+    /// Returns a helper struct (Reg) that can be displayed with the correct prefix for the
+    /// variable type.
+    ///
     pub fn reg(&self) -> Reg {
         Reg(self)
     }
+    ///
+    /// Returns the raw index of the register for this variable.
+    ///
     pub fn reg_idx(&self) -> usize {
         self.reg
     }
-    // pub fn lit(&self) -> Literal {
-    //     Literal(self)
-    // }
 }
 
 ///

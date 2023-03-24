@@ -201,7 +201,8 @@ impl Kernel for CUDAKernel {
                     // dbg!(offset);
                     write!(
                         self.asm,
-                        "\tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
+                        "\t// Store:\n\
+                        \tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
                             \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
                             params[offset]\n",
                         var.param_offset * 8,
@@ -228,7 +229,7 @@ impl Kernel for CUDAKernel {
         writeln!(self.asm, "\n\t//End of Kernel:");
         writeln!(
             self.asm,
-            "\tadd.u32 %r0, %r0, %r1; // r0 <- r0 + r1\n\
+            "\n\tadd.u32 %r0, %r0, %r1; // r0 <- r0 + r1\n\
             \tsetp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2\n\
             \t@!%p0 bra body; // if p0 => body\n\
             \n"
@@ -633,7 +634,30 @@ impl CUDAKernel {
             Op::Popc => todo!(),
             Op::Clz => todo!(),
             Op::Ctz => todo!(),
-            Op::And => todo!(),
+            Op::And => {
+                let d0 = ir.var(var.deps[0]);
+                let d1 = ir.var(var.deps[1]);
+
+                if d0.ty == d1.ty {
+                    writeln!(
+                        self.asm,
+                        "\tand.{} {}, {}, {};",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        d0.reg(),
+                        d1.reg()
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tselp.{} {}, {}, 0, {};",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        d0.reg(),
+                        d1.reg()
+                    );
+                }
+            }
             Op::Or => todo!(),
             Op::Xor => todo!(),
             Op::Shl => todo!(),
@@ -644,8 +668,93 @@ impl CUDAKernel {
             Op::Cos => todo!(),
             Op::Exp2 => todo!(),
             Op::Log2 => todo!(),
-            Op::Cast => todo!(),
-            Op::Bitcast => todo!(),
+            Op::Cast => {
+                let d0 = ir.var(var.deps[0]);
+                if var.ty.is_bool() {
+                    if d0.ty.is_float() {
+                        writeln!(
+                            self.asm,
+                            "\tsetp.ne.{} {}, {}, 0.0;",
+                            d0.ty.name_cuda(),
+                            var.reg(),
+                            d0.reg()
+                        );
+                    } else {
+                        writeln!(
+                            self.asm,
+                            "\tsetp.ne.{} {}, {}, 0;",
+                            d0.ty.name_cuda(),
+                            var.reg(),
+                            d0.reg()
+                        );
+                    }
+                } else if d0.ty.is_bool() {
+                    if var.ty.is_float() {
+                        writeln!(
+                            self.asm,
+                            "\tselp.{} {}, 1.0, 0.0, {};",
+                            var.ty.name_cuda(),
+                            var.reg(),
+                            d0.reg()
+                        );
+                    } else {
+                        writeln!(
+                            self.asm,
+                            "\tselp.{} {}, 1, 0, {};",
+                            var.ty.name_cuda(),
+                            var.reg(),
+                            d0.reg()
+                        );
+                    }
+                } else if var.ty.is_float() && !d0.ty.is_float() {
+                    writeln!(
+                        self.asm,
+                        "\tcvt.rn.{}.{} {}, {};",
+                        var.ty.name_cuda(),
+                        d0.ty.name_cuda(),
+                        var.reg(),
+                        d0.reg()
+                    );
+                } else if !var.ty.is_float() && d0.ty.is_float() {
+                    writeln!(
+                        self.asm,
+                        "\tcvt.rzi.{}.{} {}, {};",
+                        var.ty.name_cuda(),
+                        d0.ty.name_cuda(),
+                        var.reg(),
+                        d0.reg()
+                    );
+                } else if var.ty.is_float() && d0.ty.is_float() {
+                    if var.ty.size() < d0.ty.size() {
+                        writeln!(
+                            self.asm,
+                            "\tcvt.rn.{}.{} {}, {};",
+                            var.ty.name_cuda(),
+                            d0.ty.name_cuda(),
+                            var.reg(),
+                            d0.reg()
+                        );
+                    } else {
+                        writeln!(
+                            self.asm,
+                            "\tcvt.{}.{} {}, {};",
+                            var.ty.name_cuda(),
+                            d0.ty.name_cuda(),
+                            var.reg(),
+                            d0.reg()
+                        );
+                    }
+                }
+            }
+            Op::Bitcast => {
+                writeln!(
+                    self.asm,
+                    "    mov.{} {}, {};",
+                    var.ty.name_cuda_bin(),
+                    var.reg(),
+                    ir.reg(var.deps[0])
+                );
+            }
             Op::Gather => {
                 // d0: src
                 // d1: index
