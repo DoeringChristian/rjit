@@ -12,9 +12,9 @@ Kernel 0:
 .entry cujit(
 	.param .align 8 .b8 params[16]) {
 
-	.reg.b8   %b <8>; .reg.b16 %w<8>; .reg.b32 %r<8>;
-	.reg.b64  %rd<8>; .reg.f32 %f<8>; .reg.f64 %d<8>;
-	.reg.pred %p <8>;
+	.reg.b8   %b <7>; .reg.b16 %w<7>; .reg.b32 %r<7>;
+	.reg.b64  %rd<7>; .reg.f32 %f<7>; .reg.f64 %d<7>;
+	.reg.pred %p <7>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -31,21 +31,19 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 6, param_offset: 0, literal: 0, size: 3 } =>
-	mov.u32 %r6, %r0;
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 5, param_offset: 0, literal: 0, size: 3 } =>
+	mov.u32 %r5, %r0;
 
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 7, param_offset: 0, literal: 2, size: 0 } =>
-	mov.b32 %r7, 0x2;
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 6, param_offset: 0, literal: 2, size: 0 } =>
+	mov.b32 %r6, 0x2;
 
 
-	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: None, reg: 5, param_offset: 0, literal: 0, size: 3 } =>
-	add.u32 %r5, %r6, %r7;
-
-	// [3]: ScheduleVar { op: Nop, deps: [], ty: U32, param_ty: Output, reg: 5, param_offset: 1, literal: 0, size: 3 } =>
+	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: Output, reg: 4, param_offset: 1, literal: 0, size: 3 } =>
+	add.u32 %r4, %r5, %r6;
 	ld.param.u64 %rd0, [params + 8]; // rd0 <- params[offset]
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
-	st.global.cs.u32 [%rd0], %r5; // (Index * ty.size() + params[offset])[Index] <- var
+	st.global.cs.u32 [%rd0], %r4; // (Index * ty.size() + params[offset])[Index] <- var
 
 	//End of Kernel:
 	add.u32 %r0, %r0, %r1; // r0 <- r0 + r1

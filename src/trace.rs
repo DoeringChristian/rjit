@@ -217,6 +217,9 @@ impl Var {
     pub fn is_literal(&self) -> bool {
         self.op == Op::Literal
     }
+    pub fn is_data(&self) -> bool {
+        self.op == Op::Data
+    }
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -422,17 +425,75 @@ impl Ir {
         let v = var.buffer.as_ref().unwrap().as_vec();
         Vec::from(cast_slice(&v))
     }
+    pub fn reindex(&mut self, id: VarId, new_idx: VarId, size: usize) -> Option<VarId> {
+        let var = self.var(id);
+
+        if var.is_data() {
+            return None;
+        }
+
+        let mut deps = smallvec![];
+        if !var.is_literal() {
+            for dep in var.deps.clone() {
+                deps.push(self.reindex(dep, new_idx, size)?);
+            }
+        }
+
+        let var = self.var(id);
+
+        if var.op == Op::Idx {
+            self.inc_rc(new_idx);
+            return Some(new_idx);
+        } else {
+            return Some(self.push_var(Var {
+                op: var.op,
+                deps,
+                ty: var.ty.clone(),
+                buffer: None,
+                size,
+                param_ty: var.param_ty,
+                rc: 0,
+                literal: var.literal,
+                stop_traversal: var.stop_traversal,
+            }));
+        }
+    }
+    ///
+    /// For gather operations there are three ways to resolve them:
+    ///
+    /// If the source is a Pointer (i.e. VarType::Ptr) we can simply gather from that
+    /// pointer.
+    ///
+    /// If the source is trivial (i.e. there are no dependencies on Input variablse
+    /// ParamType::Input) we can
+    /// reindex the variable.
+    ///
+    /// Finally, if the variable depends on Inputs we need to launch multiple Kernels (this
+    /// is not yet implemented).
+    ///
     pub fn gather(&mut self, src: VarId, index: VarId, mask: Option<VarId>) -> VarId {
         let mask = mask.unwrap_or(self.const_bool(true));
         let ty = self.var(src).ty.clone();
-        let src = self.pointer_to(src).unwrap_or(src);
-        self.push_var(Var {
-            op: Op::Gather,
-            deps: smallvec![src, index, mask],
-            ty,
-            size: self.var(index).size,
-            ..Default::default()
-        })
+
+        let res = self.pointer_to(src);
+
+        if let Some(src) = res {
+            return self.push_var(Var {
+                op: Op::Gather,
+                deps: smallvec![src, index, mask],
+                ty,
+                size: self.var(index).size,
+                ..Default::default()
+            });
+        };
+
+        let res = self.reindex(src, index, self.var(index).size);
+
+        if let Some(src) = res {
+            return src;
+        }
+
+        unimplemented!();
     }
     pub fn index(&mut self, size: usize) -> VarId {
         self.push_var(Var {

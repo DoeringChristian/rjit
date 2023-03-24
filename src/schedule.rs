@@ -194,36 +194,6 @@ impl ScheduleIr {
         // Collect dependencies
         if var.stop_traversal {
             sv.deps = smallvec![]
-        } else if var.op == Op::Gather {
-            //
-            // For gather operations there are three ways to resolve them:
-            //
-            // If the source is a Pointer (i.e. VarType::Ptr) we can simply gather from that
-            // pointer.
-            //
-            // If the source is trivial (i.e. there are no dependencies on Input variablse
-            // ParamType::Input) we can
-            // reindex the variable.
-            //
-            // Finally, if the variable depends on Inputs we need to launch multiple Kernels (this
-            // is not yet implemented).
-            //
-            let src = var.deps[0];
-            if ir.var(src).ty == VarType::Ptr {
-                sv.deps = var
-                    .deps
-                    .iter()
-                    .map(|id| self.collect(ir, *id, idx))
-                    .collect::<SmallVec<[_; 4]>>();
-            } else if Self::is_trivial(ir, src, true) {
-                let new_idx = self.collect(ir, var.deps[1], idx);
-                let src_reindexed = self.collect(ir, var.deps[0], Some(new_idx));
-
-                sv.reg = self.var(src_reindexed).reg;
-                sv.op = Op::Nop;
-            } else {
-                unimplemented!("Need to spawn new Kernel!")
-            }
         } else {
             sv.deps = var
                 .deps
