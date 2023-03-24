@@ -69,7 +69,10 @@ pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
     n_regs: usize,
-    visited: HashMap<VarId, SVarId>,
+    // The index into the hashmap consists of
+    // the variable id and an optional index for
+    // reindexing.
+    visited: HashMap<(VarId, Option<SVarId>), SVarId>,
     backend: Arc<dyn Backend>,
 }
 
@@ -139,47 +142,91 @@ impl ScheduleIr {
     }
     pub fn collect_vars(&mut self, ir: &mut Ir, ids: &[VarId]) {
         for id in ids {
-            self.collect(ir, *id);
+            self.collect(ir, *id, None);
         }
     }
-    pub fn reindex(&mut self, ir: &Ir, id: VarId) -> Option<SVarId> {
-        todo!()
+    fn is_trivial(ir: &Ir, id: VarId, is_trivial: bool) -> bool {
+        let var = ir.var(id);
+        if var.param_ty == ParamType::Input {
+            return false;
+        } else {
+            var.deps
+                .iter()
+                .map(|id| Self::is_trivial(ir, *id, is_trivial))
+                .fold(true, |a, b| a && b)
+        }
     }
     ///
     /// Traverse computation graph and collect variables into Schedule.
     ///
-    pub fn collect(&mut self, ir: &Ir, id: VarId) -> SVarId {
-        if self.visited.contains_key(&id) {
-            return self.visited[&id];
+    /// If a gather operation is encountered, that only depends on trivial operations we can
+    /// reindex it using the parameter idx.
+    ///
+    pub fn collect(&mut self, ir: &Ir, id: VarId, idx: Option<SVarId>) -> SVarId {
+        if self.visited.contains_key(&(id, idx)) {
+            return self.visited[&(id, idx)];
         }
+
         let var = ir.var(id);
 
-        // Collect dependencies
-        let deps = if var.stop_traversal {
-            smallvec![]
-        } else if var.op == Op::Gather {
-            smallvec![
-                self.collect(ir, var.deps[0]),
-                self.collect(ir, var.deps[1]),
-                self.collect(ir, var.deps[2])
-            ]
-        } else {
-            var.deps
-                .clone()
-                .into_iter()
-                .map(|id| self.collect(ir, id))
-                .collect::<SmallVec<[_; 4]>>()
-        };
+        // Apply reindexing if we encountered an Index and are reindexing.
+        // Input variables cannot be reindexed.
+        if idx.is_some() {
+            if var.param_ty == ParamType::Input {
+                panic!("We cannot reindex input variables");
+            }
+            if var.op == Op::Idx {
+                return idx.unwrap();
+            }
+        }
 
         let mut sv = ScheduleVar {
             op: var.op,
             ty: var.ty.clone(),
-            deps,
-            param_ty: var.param_ty,
+            deps: smallvec![],
             reg: self.next_reg(),
+            param_ty: var.param_ty,
             param_offset: 0,
             literal: var.literal,
             size: var.size,
+        };
+
+        // Collect dependencies
+        if var.stop_traversal {
+            sv.deps = smallvec![]
+        } else if var.op == Op::Gather {
+            //
+            // For gather operations there are three ways to resolve them.
+            // If the source is a Pointer (i.e. VarType::Ptr) we can simply gather from that
+            // pointer.
+            // If the source is trivial (i.e. there are no dependencies on Input variablse
+            // ParamType::Input) we can
+            // reindex the variable.
+            // Finally, if the variable depends on Inputs we need to launch multiple Kernesl (this
+            // is not yet implemented).
+            //
+            let src = var.deps[0];
+            if ir.var(src).ty == VarType::Ptr {
+                sv.deps = var
+                    .deps
+                    .iter()
+                    .map(|id| self.collect(ir, *id, idx))
+                    .collect::<SmallVec<[_; 4]>>();
+            } else if Self::is_trivial(ir, src, true) {
+                let new_idx = self.collect(ir, var.deps[1], idx);
+                let src_reindexed = self.collect(ir, var.deps[0], Some(new_idx));
+
+                sv.reg = self.var(src_reindexed).reg;
+                sv.op = Op::Nop;
+            } else {
+                unimplemented!("Need to spawn new Kernel!")
+            }
+        } else {
+            sv.deps = var
+                .deps
+                .iter()
+                .map(|id| self.collect(ir, *id, idx))
+                .collect::<SmallVec<[_; 4]>>();
         };
         match var.param_ty {
             ParamType::Input => {

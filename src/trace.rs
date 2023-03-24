@@ -336,11 +336,25 @@ impl Ir {
         let (size, ty) = self.assert_ty(&[lhs, rhs]);
         self.push_var_intermediate(Op::Add, &[lhs, rhs], ty.clone(), size)
     }
+    pub fn mul(&mut self, lhs: VarId, rhs: VarId) -> VarId {
+        let (size, ty) = self.assert_ty(&[lhs, rhs]);
+        self.push_var_intermediate(Op::Mul, &[lhs, rhs], ty.clone(), size)
+    }
+    // TODO: use generics for consts
     pub fn const_f32(&mut self, val: f32) -> VarId {
         self.push_var(Var {
             op: Op::Literal,
             deps: smallvec![],
             ty: VarType::F32,
+            literal: cast::<_, u32>(val) as _,
+            ..Default::default()
+        })
+    }
+    pub fn const_u32(&mut self, val: u32) -> VarId {
+        self.push_var(Var {
+            op: Op::Literal,
+            deps: smallvec![],
+            ty: VarType::U32,
             literal: cast::<_, u32>(val) as _,
             ..Default::default()
         })

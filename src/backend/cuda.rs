@@ -775,6 +775,29 @@ mod test {
         assert_eq!(ir.to_vec_f32(y), vec![1., 2., 5.]);
     }
     #[test]
+    fn reindex() {
+        // pretty_env_logger::init();
+        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
+        let mut jit = Jit::new(&backend);
+        let mut ir = Ir::new(&backend);
+
+        let x = ir.index(10);
+
+        let i = ir.index(3);
+        let c = ir.const_u32(2);
+        let i = ir.add(i, c);
+
+        let y = ir.gather(x, i, None);
+
+        ir.schedule(&[y]);
+
+        jit.eval(&mut ir);
+
+        insta::assert_snapshot!(jit.kernel_debug());
+
+        assert_eq!(ir.to_vec_u32(y), vec![2, 3, 4]);
+    }
+    #[test]
     fn index() {
         // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
