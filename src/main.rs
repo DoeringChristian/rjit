@@ -34,5 +34,4 @@ fn main() {
     // ir.schedule(&[y]);
     //
     // jit.eval(&mut ir);
-    // dbg!(ir.to_vec_f32(y));
 }

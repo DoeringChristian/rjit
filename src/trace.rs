@@ -331,10 +331,10 @@ impl Trace {
         }
     }
     fn var(&self, r: &Ref) -> MappedRwLockReadGuard<Var> {
+        assert!(Arc::ptr_eq(&self.ir, &r.ir));
         RwLockReadGuard::map(self.ir.read(), |d| d.var(r.id))
     }
     fn push_var(&self, var: Var) -> Ref {
-        dbg!(self.ir.is_locked());
         let id = self.ir.write().push_var(var);
         Ref {
             id,
@@ -342,6 +342,9 @@ impl Trace {
         }
     }
     fn push_var_intermediate(&self, op: Op, deps: &[Ref], ty: VarType, size: usize) -> Ref {
+        for dep in deps {
+            assert!(Arc::ptr_eq(&self.ir, &dep.ir));
+        }
         self.push_var(Var {
             op,
             deps: deps.iter().map(|r| r.id).collect(),
@@ -414,7 +417,6 @@ impl Trace {
 }
 impl Trace {
     pub fn to_vec_f32(&self, r: &Ref) -> Vec<f32> {
-        dbg!(self.ir.is_locked());
         let var = self.var(&r);
         assert_eq!(var.ty, VarType::F32);
         let v = var.buffer.as_ref().unwrap().as_vec();
@@ -490,10 +492,8 @@ impl Trace {
         })
     }
     pub fn pointer_to(&self, src: &Ref) -> Option<Ref> {
-        dbg!(self.ir.is_locked());
         // TODO: Eval var if needed.
         let ptr = self.var(&src).buffer.as_ref().map(|b| b.as_ptr());
-        dbg!(self.ir.is_locked());
         if let Some(ptr) = ptr {
             Some(self.push_var(Var {
                 op: Op::Literal,
@@ -518,23 +518,17 @@ impl Trace {
     fn reindex(&self, r: &Ref, new_idx: &Ref, size: usize) -> Option<Ref> {
         let var = self.var(&r);
 
-        dbg!(self.ir.is_locked());
-
         if var.is_data() {
             return None;
         }
 
-        dbg!(self.ir.is_locked());
-
         let mut deps = smallvec![];
         if !var.is_literal() {
             for dep in var.deps.clone() {
-                dbg!(self.ir.is_locked());
                 let dep = Ref {
                     id: dep,
                     ir: self.ir.clone(),
                 };
-                dbg!(self.ir.is_locked());
                 if let Some(dep) = self.reindex(&dep, new_idx, size) {
                     deps.push(dep.id);
                 } else {
@@ -543,13 +537,11 @@ impl Trace {
             }
         }
 
-        dbg!(self.ir.is_locked());
         if var.op == Op::Idx {
             drop(var);
             // self.inc_rc(new_idx);
             return Some(new_idx.clone());
         } else {
-            dbg!(self.ir.is_locked());
             return Some(self.push_var(Var {
                 op: var.op,
                 deps,
@@ -578,18 +570,13 @@ impl Trace {
     ///
     pub fn gather(&self, src: Ref, index: Ref, mask: Option<Ref>) -> Ref {
         let mask = mask.unwrap_or(self.const_bool(true));
-        dbg!(self.ir.is_locked());
 
         let res = self.pointer_to(&src);
 
-        dbg!(self.ir.is_locked());
-
         // let var = self.var(&src);
         let ty = self.var(&src).ty.clone();
-        dbg!(self.ir.is_locked());
 
         if let Some(src) = res {
-            dbg!(self.ir.is_locked());
             let size = self.var(&index).size;
             let ret = self.push_var(Var {
                 op: Op::Gather,
@@ -598,19 +585,12 @@ impl Trace {
                 size,
                 ..Default::default()
             });
-            dbg!(self.ir.is_locked());
             return ret;
         }
 
-        dbg!(self.ir.is_locked());
-
         let size = self.var(&index).size;
 
-        dbg!(self.ir.is_locked());
-
         let res = self.reindex(&src, &index, size);
-
-        dbg!();
 
         if let Some(res) = res {
             let res = self.and(res, mask); // TODO: masking
@@ -632,7 +612,6 @@ pub struct Ref {
 
 impl Clone for Ref {
     fn clone(&self) -> Self {
-        dbg!(self.ir.is_locked());
         self.ir.write().inc_rc(self.id);
         Self {
             id: self.id.clone(),
@@ -643,7 +622,6 @@ impl Clone for Ref {
 
 impl Drop for Ref {
     fn drop(&mut self) {
-        dbg!(self.ir.is_locked());
         self.ir.write().dec_rc(self.id);
     }
 }

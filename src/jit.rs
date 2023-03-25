@@ -70,7 +70,6 @@ impl Jit {
 
         tmp.collect_vars(ir, &scheduled[cur..scheduled.len()]);
         self.schedules.push(tmp);
-        // dbg!(&schedules);
 
         // TODO: this can be paralelized (rayon)
         self.kernels = self

@@ -6,7 +6,6 @@ use cust::util::SliceExt;
 use crate::schedule::{SVarId, ScheduleIr};
 use crate::trace::*;
 use std::fmt::{Debug, Write};
-use std::mem::ManuallyDrop;
 
 use super::{Backend, Buffer, Kernel};
 
@@ -211,7 +210,6 @@ impl Kernel for CUDAKernel {
                 ParamType::Output => {
                     self.assemble_var(ir, id);
                     // let offset = param_idx * 8;
-                    // dbg!(offset);
                     write!(
                         self.asm,
                         "\t// Store:\n\
@@ -888,17 +886,9 @@ mod test {
         let i = ir.buffer_u32(&[0, 1, 4]);
         let y = ir.gather(x, i, None);
 
-        dbg!(&ir);
-
         ir.schedule(&[y.clone()]);
 
-        dbg!(&ir);
-
         jit.eval(&mut ir.ir.write());
-
-        dbg!(&ir);
-
-        print!("{}", jit.kernel_debug());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -917,11 +907,7 @@ mod test {
         let c = ir.const_u32(2);
         let i = ir.add(i, c);
 
-        dbg!();
-
         let y = ir.gather(x, i, None);
-
-        dbg!();
 
         ir.schedule(&[y.clone()]);
 
