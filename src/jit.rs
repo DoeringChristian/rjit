@@ -73,8 +73,6 @@ impl Jit {
         tmp.collect_vars(ir, &scheduled[cur..scheduled.len()]);
         self.schedules.push(tmp);
 
-        fn assert_send_sync<T: Send + Sync>() {}
-
         self.kernels = self
             .schedules
             .par_iter()
