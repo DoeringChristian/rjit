@@ -293,6 +293,29 @@ impl Ir {
             self.vars.remove(id.0).unwrap();
         }
     }
+    pub fn schedule<'a, I: Iterator<Item = &'a VarId>>(&mut self, ids: I) {
+        for id in ids {
+            self.inc_rc(*id);
+            self.scheduled.push(*id);
+        }
+    }
+    pub fn clear_schedule(&mut self) {
+        for id in self.scheduled.clone() {
+            self.dec_rc(id);
+        }
+        self.scheduled.clear();
+    }
+    pub fn clear_deps(&mut self, id: VarId) {
+        let var = self.var(id);
+
+        for dep in var.deps.clone() {
+            self.dec_rc(dep);
+        }
+
+        let var = self.var_mut(id);
+
+        var.deps.clear();
+    }
     pub fn var(&self, id: VarId) -> &Var {
         &self.vars[id.0]
     }
@@ -465,10 +488,7 @@ impl Trace {
             assert!(Arc::ptr_eq(&self.ir, &r.ir));
         }
         let mut ir = self.ir.write();
-        for r in refs {
-            ir.inc_rc(r.id);
-            ir.scheduled.push(r.id);
-        }
+        ir.schedule(refs.iter().map(|r| &r.id));
     }
     pub fn eval(&self) {
         self.jit.lock().eval(&mut self.ir.write());

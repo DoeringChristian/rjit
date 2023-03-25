@@ -102,20 +102,14 @@ impl Jit {
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to
         // Data
         for id in ir.scheduled.clone() {
-            let var = ir.var(id);
-
-            for dep in var.deps.clone() {
-                ir.dec_rc(dep);
-            }
+            ir.clear_deps(id);
 
             let var = ir.var_mut(id);
 
-            var.deps.clear();
             var.param_ty = ParamType::Input;
             var.op = Op::Data;
-            ir.dec_rc(id);
         }
-        ir.scheduled.clear();
+        ir.clear_schedule();
         // ir.clear_schedule();
     }
     ///
