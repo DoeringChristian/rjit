@@ -853,8 +853,7 @@ mod test {
     use std::sync::Arc;
 
     use crate::backend::Backend;
-    use crate::jit::Jit;
-    use crate::trace::{Ir, Trace};
+    use crate::trace::Trace;
 
     use super::CUDABackend;
 
