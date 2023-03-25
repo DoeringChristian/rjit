@@ -313,11 +313,11 @@ impl Ir {
 }
 
 ///
-/// Wrapper arround an Intermediate Representation (Ir) for implementing automatic Refcounting.
+/// Wrapper arround an Intermediate Representation (Ir) and Just in Time Compiler (Jit) for implementing automatic Refcounting.
 ///
 #[derive(Debug)]
 pub struct Trace {
-    pub ir: Arc<RwLock<Ir>>,
+    ir: Arc<RwLock<Ir>>,
     backend: Arc<dyn Backend>,
     jit: Mutex<Jit>,
 }
@@ -343,7 +343,7 @@ impl Trace {
             ir: self.ir.clone(),
         }
     }
-    fn push_var_intermediate(&self, op: Op, deps: &[Ref], ty: VarType, size: usize) -> Ref {
+    fn push_var_intermediate(&self, op: Op, deps: &[&Ref], ty: VarType, size: usize) -> Ref {
         for dep in deps {
             assert!(Arc::ptr_eq(&self.ir, &dep.ir));
         }
@@ -358,6 +358,10 @@ impl Trace {
             literal: 0,
             stop_traversal: false,
         })
+    }
+    fn var_info<const N: usize>(&self, refs: [&Ref; N]) -> VarInfo {
+        let ids = refs.iter().map(|r| r.id).collect::<Vec<_>>();
+        self.ir.read().var_info(&ids)
     }
 }
 ///
@@ -457,6 +461,9 @@ impl Trace {
         self.jit.lock().kernel_debug()
     }
     pub fn schedule(&self, refs: &[Ref]) {
+        for r in refs {
+            assert!(Arc::ptr_eq(&self.ir, &r.ir));
+        }
         let mut ir = self.ir.write();
         for r in refs {
             ir.inc_rc(r.id);
@@ -471,19 +478,19 @@ impl Trace {
 /// Binary Operations:
 ///
 impl Trace {
-    pub fn add(&self, lhs: Ref, rhs: Ref) -> Ref {
-        let info = self.ir.read().var_info(&[lhs.id, rhs.id]);
+    pub fn add(&self, lhs: &Ref, rhs: &Ref) -> Ref {
+        let info = self.var_info([&lhs, &rhs]);
         self.push_var_intermediate(Op::Add, &[lhs, rhs], info.ty, info.size)
     }
-    pub fn mul(&self, lhs: Ref, rhs: Ref) -> Ref {
-        let info = self.ir.read().var_info(&[lhs.id, rhs.id]);
+    pub fn mul(&self, lhs: &Ref, rhs: &Ref) -> Ref {
+        let info = self.var_info([&lhs, &rhs]);
         self.push_var_intermediate(Op::Mul, &[lhs, rhs], info.ty, info.size)
     }
-    pub fn and(&self, lhs: Ref, rhs: Ref) -> Ref {
-        let info = self.ir.read().var_info(&[lhs.id, rhs.id]);
+    pub fn and(&self, lhs: &Ref, rhs: &Ref) -> Ref {
+        let info = self.var_info([lhs, rhs]);
 
-        let ty_lhs = self.ir.read().var(lhs.id).ty.clone();
-        let ty_rhs = self.ir.read().var(rhs.id).ty.clone();
+        let ty_lhs = self.var(&lhs).ty.clone();
+        let ty_rhs = self.var(&rhs).ty.clone();
 
         if info.size > 0 && ty_lhs != ty_rhs && !ty_rhs.is_bool() {
             panic!("Invalid operands!");
@@ -582,8 +589,8 @@ impl Trace {
     /// Finally, if the variable depends on Inputs we need to launch multiple Kernels (this
     /// is not yet implemented).
     ///
-    pub fn gather(&self, src: Ref, index: Ref, mask: Option<Ref>) -> Ref {
-        let mask = mask.unwrap_or(self.const_bool(true));
+    pub fn gather(&self, src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
+        let mask: Ref = mask.map(|m| m.clone()).unwrap_or(self.const_bool(true));
 
         let res = self.pointer_to(&src);
 
@@ -607,7 +614,7 @@ impl Trace {
         let res = self.reindex(&src, &index, size);
 
         if let Some(res) = res {
-            let res = self.and(res, mask); // TODO: masking
+            let res = self.and(&res, &mask); // TODO: masking
             return res;
         }
 

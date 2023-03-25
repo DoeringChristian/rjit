@@ -864,7 +864,7 @@ mod test {
         let ir = Trace::new(&backend);
 
         let x = ir.buffer_f32(&[1.; 10]);
-        let y = ir.add(x.clone(), x);
+        let y = ir.add(&x, &x);
 
         ir.schedule(&[y.clone()]);
 
@@ -882,7 +882,7 @@ mod test {
 
         let x = ir.buffer_f32(&[1., 2., 3., 4., 5.]);
         let i = ir.buffer_u32(&[0, 1, 4]);
-        let y = ir.gather(x, i, None);
+        let y = ir.gather(&x, &i, None);
 
         ir.schedule(&[y.clone()]);
         ir.eval();
@@ -901,9 +901,9 @@ mod test {
 
         let i = ir.index(3);
         let c = ir.const_u32(2);
-        let i = ir.add(i, c);
+        let i = ir.add(&i, &c);
 
-        let y = ir.gather(x, i, None);
+        let y = ir.gather(&x, &i, None);
 
         ir.schedule(&[y.clone()]);
         ir.eval();
