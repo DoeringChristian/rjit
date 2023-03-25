@@ -925,6 +925,26 @@ mod test {
         assert_eq!(ir::to_vec_u32(&i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
     #[test]
+    fn gather_eval() {
+        // pretty_env_logger::init();
+        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
+        ir::set_backend(&backend);
+
+        let x = ir::index(3);
+        let y = ir::buffer_u32(&[1, 2, 3]);
+
+        let z = ir::add(&x, &y);
+
+        let r = ir::gather(&z, &ir::index(3), None);
+
+        jit::schedule(&[&r]);
+        jit::eval();
+
+        insta::assert_snapshot!(jit::kernel_debug());
+
+        assert_eq!(ir::to_vec_u32(&r), vec![1, 3, 5]);
+    }
+    #[test]
     fn paralell() {
         // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());

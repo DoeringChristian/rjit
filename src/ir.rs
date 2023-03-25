@@ -9,6 +9,7 @@ use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
 
 use crate::backend::{Backend, Buffer};
+use crate::jit;
 
 ///
 /// TODO: better param enum
@@ -573,6 +574,22 @@ pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
         return res;
     }
 
+    jit::schedule(&[src]);
+    jit::eval();
+
+    let res = pointer_to(&src);
+
+    if let Some(src) = res {
+        let ret = push_var(Var {
+            op: Op::Gather,
+            deps: smallvec![src.clone(), index.clone(), mask.clone()],
+            ty,
+            size,
+            ..Default::default()
+        });
+        return ret;
+    }
+
     unimplemented!();
 }
 
@@ -586,12 +603,26 @@ impl Ref {
     pub fn id(&self) -> DefaultKey {
         self.0
     }
+    pub fn is_data(&self) -> bool {
+        IR.with(|ir| {
+            let ir = ir.borrow();
+            let var = ir.var(self);
+            if var.buffer.is_some() {
+                assert_eq!(var.op, Op::Data);
+                true
+            } else {
+                assert_ne!(var.op, Op::Data);
+                false
+            }
+        })
+    }
 }
 
 impl Clone for Ref {
     fn clone(&self) -> Self {
         IR.with(|ir| {
-            ir.borrow_mut().var_mut(self).rc += 1;
+            // ir.borrow_mut().var_mut(self).rc += 1;
+            unsafe { (*ir.as_ptr()).vars[self.0].rc += 1 };
         });
         Self(self.0)
     }
@@ -599,25 +630,26 @@ impl Clone for Ref {
 
 impl Drop for Ref {
     fn drop(&mut self) {
-        let rc = IR.with(|ir| {
-            let mut ir = ir.borrow_mut();
-            let var = ir.var_mut(self);
-            var.rc -= 1;
-            var.rc
-        });
-        if rc == 0 {
-            IR.with(|ir| {
-                //
-                // SAFETY:
-                //
-                // If rc == 0 we know that we are the only one with access to this slot.
-                // Since SlotMap does not realloc the underlying vector when removing entries it is
-                // safe to remove the element without causing dangling pointers or simillar problems.
-                //
-                unsafe {
+        IR.with(|ir| {
+            //
+            // SAFETY:
+            //
+            // Since IR is threadlocal, we know that IR cannot be modified while we have a
+            // reference to it.
+            // Further, we index the slotmap and therefore know that the pointer to var is a valid
+            // pointer.
+            //
+            // If rc == 0 we know that we are the only one with access to this slot.
+            // Since SlotMap does not realloc the underlying vector when removing entries it is
+            // safe to remove the element without causing dangling pointers or simillar problems.
+            //
+            unsafe {
+                let mut var = (*ir.as_ptr()).var_mut(self);
+                var.rc -= 1;
+                if var.rc == 0 {
                     (*ir.as_ptr()).vars.remove(self.0);
                 }
-            })
-        }
+            }
+        });
     }
 }
