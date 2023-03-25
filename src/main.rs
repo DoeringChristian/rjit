@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
+use crate::trace::Trace;
 
 use self::jit::Jit;
 use self::trace::Ir;
@@ -16,16 +17,25 @@ fn main() {
 
     let mut jit = Jit::new(&backend);
 
-    let mut ir = Ir::new(&backend);
+    let mut t = Trace::new(&backend);
 
-    let x = ir.buffer_f32(&[1.; 10]);
-    let c = ir.const_f32(1.);
-    let d = ir.const_f32(2.);
-    let e = ir.add(x, d);
-    let y = ir.add(x, c);
+    let x = t.const_u32(1);
+    let y = t.buffer_f32(&[1., 2., 3.]);
 
-    ir.schedule(&[y]);
+    let z = t.add(x, y);
 
-    jit.eval(&mut ir);
-    dbg!(ir.to_vec_f32(y));
+    dbg!(&t);
+
+    drop(z);
+
+    // let x = ir.buffer_f32(&[1.; 10]);
+    // let c = ir.const_f32(1.);
+    // let d = ir.const_f32(2.);
+    // let e = ir.add(x, d);
+    // let y = ir.add(x, c);
+
+    // ir.schedule(&[y]);
+    //
+    // jit.eval(&mut ir);
+    // dbg!(ir.to_vec_f32(y));
 }

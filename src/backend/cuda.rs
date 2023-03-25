@@ -843,7 +843,7 @@ mod test {
 
     use crate::backend::Backend;
     use crate::jit::Jit;
-    use crate::trace::Ir;
+    use crate::trace::{Ir, Trace};
 
     use super::CUDABackend;
 
@@ -851,44 +851,44 @@ mod test {
     fn load_add_f32() {
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
         let mut jit = Jit::new(&backend);
-        let mut ir = Ir::new(&backend);
+        let mut ir = Trace::new(&backend);
 
         let x = ir.buffer_f32(&[1.; 10]);
-        let y = ir.add(x, x);
+        let y = ir.add(x.clone(), x);
 
-        ir.schedule(&[y]);
+        ir.schedule(&[y.clone()]);
 
-        jit.eval(&mut ir);
+        jit.eval(&mut ir.ir.write());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(ir.to_vec_f32(y), vec![2f32; 10]);
+        assert_eq!(ir.to_vec_f32(&y), vec![2f32; 10]);
     }
     #[test]
     fn load_gather_f32() {
         // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
         let mut jit = Jit::new(&backend);
-        let mut ir = Ir::new(&backend);
+        let mut ir = Trace::new(&backend);
 
         let x = ir.buffer_f32(&[1., 2., 3., 4., 5.]);
         let i = ir.buffer_u32(&[0, 1, 4]);
         let y = ir.gather(x, i, None);
 
-        ir.schedule(&[y]);
+        ir.schedule(&[y.clone()]);
 
-        jit.eval(&mut ir);
+        jit.eval(&mut ir.ir.write());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(ir.to_vec_f32(y), vec![1., 2., 5.]);
+        assert_eq!(ir.to_vec_f32(&y), vec![1., 2., 5.]);
     }
     #[test]
     fn reindex() {
         // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
         let mut jit = Jit::new(&backend);
-        let mut ir = Ir::new(&backend);
+        let mut ir = Trace::new(&backend);
 
         let x = ir.index(10);
 
@@ -896,31 +896,35 @@ mod test {
         let c = ir.const_u32(2);
         let i = ir.add(i, c);
 
+        dbg!();
+
         let y = ir.gather(x, i, None);
 
-        ir.schedule(&[y]);
+        dbg!();
 
-        jit.eval(&mut ir);
+        ir.schedule(&[y.clone()]);
+
+        jit.eval(&mut ir.ir.write());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(ir.to_vec_u32(y), vec![2, 3, 4]);
+        assert_eq!(ir.to_vec_u32(&y), vec![2, 3, 4]);
     }
     #[test]
     fn index() {
         // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
         let mut jit = Jit::new(&backend);
-        let mut ir = Ir::new(&backend);
+        let mut ir = Trace::new(&backend);
 
         let i = ir.index(10);
 
-        ir.schedule(&[i]);
+        ir.schedule(&[i.clone()]);
 
-        jit.eval(&mut ir);
+        jit.eval(&mut ir.ir.write());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(ir.to_vec_u32(i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(ir.to_vec_u32(&i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 }
