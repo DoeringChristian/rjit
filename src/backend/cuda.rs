@@ -3,8 +3,8 @@ use cust::prelude::{Context, DeviceBuffer, Module};
 use cust::stream::{Stream, StreamFlags};
 use cust::util::SliceExt;
 
+use crate::ir::*;
 use crate::schedule::{SVarId, ScheduleIr};
-use crate::trace::*;
 use std::fmt::{Debug, Write};
 
 use super::{Backend, Buffer, Kernel};
@@ -853,7 +853,6 @@ mod test {
     use std::sync::Arc;
 
     use crate::backend::Backend;
-    use crate::trace::Trace;
 
     use super::CUDABackend;
 

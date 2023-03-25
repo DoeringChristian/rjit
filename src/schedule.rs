@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use slotmap::DefaultKey;
 use smallvec::{smallvec, SmallVec};
 
 use crate::backend::Backend;
-use crate::trace::{Ir, Op, ParamType, VarId, VarType};
+use crate::ir::{self, Ir, Op, ParamType, Ref, VarId, VarType, IR};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SVarId(pub usize);
@@ -76,7 +77,7 @@ pub struct ScheduleIr {
     // The index into the hashmap consists of
     // the variable id and an optional index for
     // reindexing.
-    visited: HashMap<(VarId, Option<SVarId>), SVarId>,
+    visited: HashMap<DefaultKey, SVarId>,
     backend: Arc<dyn Backend>,
 }
 
@@ -144,20 +145,9 @@ impl ScheduleIr {
         self.params.push(param);
         idx
     }
-    pub fn collect_vars(&mut self, ir: &mut Ir, ids: &[VarId]) {
-        for id in ids {
-            self.collect(ir, *id, None);
-        }
-    }
-    fn is_trivial(ir: &Ir, id: VarId, is_trivial: bool) -> bool {
-        let var = ir.var(id);
-        if var.param_ty == ParamType::Input {
-            return false;
-        } else {
-            var.deps
-                .iter()
-                .map(|id| Self::is_trivial(ir, *id, is_trivial))
-                .fold(true, |a, b| a && b)
+    pub fn collect_vars(&mut self, refs: &[Ref]) {
+        for r in refs {
+            self.collect(r);
         }
     }
     ///
@@ -166,65 +156,58 @@ impl ScheduleIr {
     /// If a gather operation is encountered, that only depends on trivial operations we can
     /// reindex it using the parameter idx.
     ///
-    pub fn collect(&mut self, ir: &Ir, id: VarId, idx: Option<SVarId>) -> SVarId {
-        if self.visited.contains_key(&(id, idx)) {
-            return self.visited[&(id, idx)];
-        }
+    pub fn collect(&mut self, r: &Ref) -> SVarId {
+        IR.with(|ir| {
+            let ir = ir.borrow();
 
-        let var = ir.var(id);
-
-        // Apply reindexing if we encountered an Index and are reindexing.
-        // Input variables cannot be reindexed.
-        if idx.is_some() {
-            if var.param_ty == ParamType::Input {
-                panic!("We cannot reindex input variables");
+            if self.visited.contains_key(&r.id()) {
+                return self.visited[&r.id()];
             }
-            if var.op == Op::Idx {
-                return idx.unwrap();
-            }
-        }
 
-        let mut sv = ScheduleVar {
-            op: var.op,
-            ty: var.ty.clone(),
-            deps: smallvec![],
-            reg: self.next_reg(),
-            param_ty: var.param_ty,
-            param_offset: 0,
-            literal: var.literal,
-            size: var.size,
-        };
+            let var = ir.var(r);
 
-        // Collect dependencies
-        if var.stop_traversal {
-            sv.deps = smallvec![]
-        } else {
-            sv.deps = var
-                .deps
-                .iter()
-                .map(|id| self.collect(ir, *id, idx))
-                .collect::<SmallVec<[_; 4]>>();
-        };
-        match var.param_ty {
-            ParamType::Input => {
-                if var.is_literal() {
-                    sv.param_offset = self.push_param(var.literal);
+            let mut sv = ScheduleVar {
+                op: var.op,
+                ty: var.ty.clone(),
+                deps: smallvec![],
+                reg: self.next_reg(),
+                param_ty: var.param_ty,
+                param_offset: 0,
+                literal: var.literal,
+                size: var.size,
+            };
 
-                    // Literal is pushed via params => we can set it to zero so that snapshot
-                    // testing works.
-                    sv.literal = 0;
-                } else {
+            // Collect dependencies
+            if var.stop_traversal {
+                sv.deps = smallvec![]
+            } else {
+                sv.deps = var
+                    .deps
+                    .iter()
+                    .map(|id| self.collect(id))
+                    .collect::<SmallVec<[_; 4]>>();
+            };
+            match var.param_ty {
+                ParamType::Input => {
+                    if var.is_literal() {
+                        sv.param_offset = self.push_param(var.literal);
+
+                        // Literal is pushed via params => we can set it to zero so that snapshot
+                        // testing works.
+                        sv.literal = 0;
+                    } else {
+                        sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
+                    }
+                }
+                ParamType::Output => {
                     sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
                 }
+                ParamType::None => {}
             }
-            ParamType::Output => {
-                sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
-            }
-            ParamType::None => {}
-        }
 
-        let id = self.push_var(sv);
+            let id = self.push_var(sv);
 
-        id
+            id
+        })
     }
 }
