@@ -1,6 +1,8 @@
 use std::fmt::Write;
 use std::sync::Arc;
 
+use rayon::prelude::*;
+
 use crate::backend::{Backend, Kernel};
 use crate::schedule::ScheduleIr;
 use crate::trace::{Ir, Op, ParamType};
@@ -71,10 +73,11 @@ impl Jit {
         tmp.collect_vars(ir, &scheduled[cur..scheduled.len()]);
         self.schedules.push(tmp);
 
-        // TODO: this can be paralelized (rayon)
+        fn assert_send_sync<T: Send + Sync>() {}
+
         self.kernels = self
             .schedules
-            .iter_mut()
+            .par_iter()
             .map(|mut s| {
                 let mut kernel = self.backend.new_kernel();
                 kernel.assemble(&mut s);

@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use crate::schedule::ScheduleIr;
 
-pub trait Kernel: Debug {
+pub trait Kernel: Debug + Send + Sync {
     fn assemble(&mut self, ir: &ScheduleIr);
     fn compile(&mut self);
     fn execute_async(&mut self, ir: &mut ScheduleIr);
@@ -16,7 +16,7 @@ pub trait Buffer {
     fn as_vec(&self) -> Vec<u8>;
 }
 
-pub trait Backend: Debug {
+pub trait Backend: Debug + Send + Sync {
     // type Kernel: Kernel;
     // type Buffer: Buffer;
     fn new_kernel(&self) -> Box<dyn Kernel>;
