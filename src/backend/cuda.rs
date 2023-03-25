@@ -1,21 +1,25 @@
 use cust::module::{ModuleJitOption, OptLevel};
 use cust::prelude::{Context, DeviceBuffer, Module};
+use cust::stream::{Stream, StreamFlags};
 use cust::util::SliceExt;
 
 use crate::schedule::{SVarId, ScheduleIr};
 use crate::trace::*;
 use std::fmt::{Debug, Write};
+use std::mem::ManuallyDrop;
 
 use super::{Backend, Buffer, Kernel};
 
 #[derive(Debug)]
 pub struct CUDABackend {
     ctx: Context,
+    stream: Option<cust::stream::Stream>,
 }
 impl CUDABackend {
     pub fn new() -> Self {
         Self {
             ctx: cust::quick_init().unwrap(),
+            stream: Some(Stream::new(StreamFlags::NON_BLOCKING, None).unwrap()),
         }
     }
 }
@@ -38,6 +42,15 @@ impl Backend for CUDABackend {
         Box::new(CUDABuffer {
             buffer: slice.as_dbuf().unwrap(),
         })
+    }
+    fn synchronize(&self) {
+        self.stream.as_ref().unwrap().synchronize().unwrap();
+    }
+}
+
+impl Drop for CUDABackend {
+    fn drop(&mut self) {
+        self.stream.take();
     }
 }
 
@@ -259,7 +272,7 @@ impl Kernel for CUDAKernel {
             .unwrap(),
         );
     }
-    fn execute(&mut self, ir: &mut ScheduleIr) {
+    fn execute_async(&mut self, ir: &mut ScheduleIr) {
         let func = self
             .module
             .as_ref()
@@ -286,7 +299,7 @@ impl Kernel for CUDAKernel {
                 .unwrap();
         }
 
-        stream.synchronize().unwrap();
+        // stream.synchronize().unwrap();
     }
 
     fn assembly(&self) -> &str {

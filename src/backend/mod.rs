@@ -7,7 +7,7 @@ use crate::schedule::ScheduleIr;
 pub trait Kernel: Debug {
     fn assemble(&mut self, ir: &ScheduleIr);
     fn compile(&mut self);
-    fn execute(&mut self, ir: &mut ScheduleIr);
+    fn execute_async(&mut self, ir: &mut ScheduleIr);
     fn assembly(&self) -> &str;
 }
 
@@ -23,4 +23,5 @@ pub trait Backend: Debug {
     fn buffer_uninit(&self, size: usize) -> Box<dyn Buffer>;
     fn buffer_from_slice(&self, slice: &[u8]) -> Box<dyn Buffer>;
     fn first_register(&self) -> usize;
+    fn synchronize(&self);
 }

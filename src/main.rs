@@ -14,19 +14,16 @@ mod trace;
 
 fn main() {
     let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-
     let mut jit = Jit::new(&backend);
+    let mut ir = Trace::new(&backend);
 
-    let mut t = Trace::new(&backend);
+    let i = ir.index(10);
 
-    let x = t.const_u32(1);
-    let y = t.buffer_f32(&[1., 2., 3.]);
+    ir.schedule(&[i.clone()]);
 
-    let z = t.add(x, y);
+    jit.eval(&mut ir.ir.write());
 
-    dbg!(&t);
-
-    drop(z);
+    assert_eq!(ir.to_vec_u32(&i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     // let x = ir.buffer_f32(&[1.; 10]);
     // let c = ir.const_f32(1.);
