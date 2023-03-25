@@ -1,4 +1,4 @@
-use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
+use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -8,6 +8,7 @@ use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
 
 use crate::backend::{Backend, Buffer};
+use crate::jit::Jit;
 
 ///
 /// TODO: better param enum
@@ -247,7 +248,7 @@ impl std::ops::Deref for ParamId {
 pub struct Ir {
     vars: SlotMap<DefaultKey, Var>,
     pub scheduled: Vec<VarId>,
-    backend: Arc<dyn Backend>,
+    // backend: Arc<dyn Backend>,
 }
 impl Debug for Ir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -266,9 +267,8 @@ struct VarInfo {
 }
 
 impl Ir {
-    pub fn new(backend: &Arc<dyn Backend>) -> Self {
+    pub fn new() -> Self {
         Self {
-            backend: backend.clone(),
             vars: SlotMap::default(),
             scheduled: Vec::default(),
         }
@@ -319,6 +319,7 @@ impl Ir {
 pub struct Trace {
     pub ir: Arc<RwLock<Ir>>,
     backend: Arc<dyn Backend>,
+    jit: Mutex<Jit>,
 }
 ///
 /// Helper functions:
@@ -326,7 +327,8 @@ pub struct Trace {
 impl Trace {
     pub fn new(backend: &Arc<dyn Backend>) -> Self {
         Self {
-            ir: Arc::new(RwLock::new(Ir::new(backend))),
+            jit: Mutex::new(Jit::new(backend)),
+            ir: Arc::new(RwLock::new(Ir::new())),
             backend: backend.clone(),
         }
     }
@@ -415,6 +417,9 @@ impl Trace {
         })
     }
 }
+///
+/// To host functions.
+///
 impl Trace {
     pub fn to_vec_f32(&self, r: &Ref) -> Vec<f32> {
         let var = self.var(&r);
@@ -429,6 +434,9 @@ impl Trace {
         Vec::from(cast_slice(&v))
     }
 }
+///
+/// Unary operations:
+///
 impl Trace {
     pub fn cast(&self, src: Ref, ty: VarType) -> Ref {
         let v = self.var(&src);
@@ -445,12 +453,18 @@ impl Trace {
 /// Evaluation related functions:
 ///
 impl Trace {
-    pub fn schedule(&mut self, refs: &[Ref]) {
+    pub fn kernel_debug(&self) -> String {
+        self.jit.lock().kernel_debug()
+    }
+    pub fn schedule(&self, refs: &[Ref]) {
         let mut ir = self.ir.write();
         for r in refs {
             ir.inc_rc(r.id);
             ir.scheduled.push(r.id);
         }
+    }
+    pub fn eval(&self) {
+        self.jit.lock().eval(&mut self.ir.write());
     }
 }
 ///
@@ -482,7 +496,7 @@ impl Trace {
 /// Special operations such as Gather, Scatter etc.
 ///
 impl Trace {
-    pub fn index(&mut self, size: usize) -> Ref {
+    pub fn index(&self, size: usize) -> Ref {
         self.push_var(Var {
             op: Op::Idx,
             deps: smallvec![],
