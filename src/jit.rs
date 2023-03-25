@@ -110,7 +110,6 @@ impl Jit {
             var.op = Op::Data;
         }
         ir.clear_schedule();
-        // ir.clear_schedule();
     }
     ///
     /// Writes the kernel assemblies into a string which can then be checked by snapshot testing
