@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fmt::Debug;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use bytemuck::cast_slice;
@@ -461,25 +462,22 @@ pub fn index(size: usize) -> Ref {
     })
 }
 pub fn pointer_to(src: &Ref) -> Option<Ref> {
-    IR.with(|ir| {
-        let ir = ir.borrow();
-        // TODO: Eval var if needed.
-        let ptr = ir.var(&src).buffer.as_ref().map(|b| b.as_ptr());
-        if let Some(ptr) = ptr {
-            Some(push_var(Var {
-                op: Op::Literal,
-                param_ty: ParamType::Input,
-                deps: smallvec![src.clone()],
-                ty: VarType::Ptr,
-                literal: ptr,
-                size: 1,
-                stop_traversal: true,
-                ..Default::default()
-            }))
-        } else {
-            None
-        }
-    })
+    let ptr = IR.with(|ir| ir.borrow().var(&src).buffer.as_ref().map(|b| b.as_ptr()));
+    // TODO: Eval var if needed.
+    if let Some(ptr) = ptr {
+        Some(push_var(Var {
+            op: Op::Literal,
+            param_ty: ParamType::Input,
+            deps: smallvec![src.clone()],
+            ty: VarType::Ptr,
+            literal: ptr,
+            size: 1,
+            stop_traversal: true,
+            ..Default::default()
+        }))
+    } else {
+        None
+    }
 }
 /// Reindex a variable with a new index and size.
 /// (Normally size is the size of the index)
@@ -550,41 +548,32 @@ fn reindex(r: &Ref, new_idx: &Ref, size: usize) -> Option<Ref> {
 /// is not yet implemented).
 ///
 pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
-    IR.with(|ir| {
-        let mask: Ref = mask.map(|m| m.clone()).unwrap_or(const_bool(true));
+    let size = IR.with(|ir| ir.borrow().var(&index).size);
+    let ty = IR.with(|ir| ir.borrow().var(&src).ty.clone());
 
-        let ir = ir.borrow();
+    let mask: Ref = mask.map(|m| m.clone()).unwrap_or(const_bool(true));
 
-        let res = pointer_to(&src);
+    let res = pointer_to(&src);
 
-        // let var = self.var(&src);
-        let ty = ir.var(&src).ty.clone();
+    if let Some(src) = res {
+        let ret = push_var(Var {
+            op: Op::Gather,
+            deps: smallvec![src.clone(), index.clone(), mask.clone()],
+            ty,
+            size,
+            ..Default::default()
+        });
+        return ret;
+    }
 
-        if let Some(src) = res {
-            let size = ir.var(&index).size;
-            let ret = push_var(Var {
-                op: Op::Gather,
-                deps: smallvec![src.clone(), index.clone(), mask.clone()],
-                ty,
-                size,
-                ..Default::default()
-            });
-            return ret;
-        }
+    let res = reindex(&src, &index, size);
 
-        let size = ir.var(&index).size;
+    if let Some(res) = res {
+        let res = and(&res, &mask); // TODO: masking
+        return res;
+    }
 
-        drop(ir);
-
-        let res = reindex(&src, &index, size);
-
-        if let Some(res) = res {
-            let res = and(&res, &mask); // TODO: masking
-            return res;
-        }
-
-        unimplemented!();
-    })
+    unimplemented!();
 }
 
 ///
@@ -618,7 +607,16 @@ impl Drop for Ref {
         });
         if rc == 0 {
             IR.with(|ir| {
-                ir.borrow_mut().vars.remove(self.0);
+                //
+                // SAFETY:
+                //
+                // If rc == 0 we know that we are the only one with access to this slot.
+                // Since SlotMap does not realloc the underlying vector when removing entries it is
+                // safe to remove the element without causing dangling pointers or simillar problems.
+                //
+                unsafe {
+                    (*ir.as_ptr()).vars.remove(self.0);
+                }
             })
         }
     }

@@ -28,7 +28,7 @@ fn main() {
     // ir::schedule(&[&y]);
     // ir::eval();
 
-    jit::scedule(&[&y]);
+    jit::schedule(&[&y]);
     jit::eval();
 
     assert_eq!(ir::to_vec_u32(&y), vec![2, 3, 4]);

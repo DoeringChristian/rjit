@@ -131,31 +131,33 @@ pub fn eval() {
     })
 }
 
-pub fn scedule(refs: &[&Ref]) {
+pub fn schedule(refs: &[&Ref]) {
     JIT.with(|jit| {
         for r in refs {
             jit.borrow_mut().scheduled.push((*r).clone());
         }
     })
 }
-
-impl Jit {
-    pub fn schedule_kernel(&mut self, i: usize) -> (&mut Box<dyn Kernel>, &mut ScheduleIr) {
-        (&mut self.kernels[i], &mut self.schedules[i])
-    }
-    ///
-    /// Writes the kernel assemblies into a string which can then be checked by snapshot testing
-    /// tools such as insta.
-    ///
-    pub fn kernel_debug(&self) -> String {
+///
+/// Writes the kernel assemblies into a string which can then be checked by snapshot testing
+/// tools such as insta.
+///
+pub fn kernel_debug() -> String {
+    JIT.with(|jit| {
         let mut string = String::new();
-        for (i, k) in self.kernels.iter().enumerate() {
+        for (i, k) in jit.borrow().kernels.iter().enumerate() {
             writeln!(string, "===============================================").unwrap();
             writeln!(string, "Kernel {}:", i).unwrap();
             writeln!(string, "").unwrap();
             write!(string, "{}", k.assembly()).unwrap();
         }
         string
+    })
+}
+
+impl Jit {
+    pub fn schedule_kernel(&mut self, i: usize) -> (&mut Box<dyn Kernel>, &mut ScheduleIr) {
+        (&mut self.kernels[i], &mut self.schedules[i])
     }
 }
 

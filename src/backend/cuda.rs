@@ -853,99 +853,93 @@ mod test {
     use std::sync::Arc;
 
     use crate::backend::Backend;
+    use crate::{ir, jit};
 
     use super::CUDABackend;
 
     #[test]
     fn load_add_f32() {
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        let ir = Trace::new(&backend);
+        ir::set_backend(&backend);
 
-        let x = ir.buffer_f32(&[1.; 10]);
-        let y = ir.add(&x, &x);
+        let x = ir::buffer_f32(&[1.; 10]);
+        let y = ir::add(&x, &x);
 
-        ir.schedule(&[&y]);
+        jit::schedule(&[&y]);
+        jit::eval();
 
-        ir.eval();
+        insta::assert_snapshot!(jit::kernel_debug());
 
-        insta::assert_debug_snapshot!(y);
-        insta::assert_snapshot!(ir.kernel_debug());
-
-        assert_eq!(ir.to_vec_f32(&y), vec![2f32; 10]);
+        assert_eq!(ir::to_vec_f32(&y), vec![2f32; 10]);
     }
     #[test]
     fn load_gather_f32() {
-        // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        let ir = Trace::new(&backend);
+        ir::set_backend(&backend);
 
-        let x = ir.buffer_f32(&[1., 2., 3., 4., 5.]);
-        let i = ir.buffer_u32(&[0, 1, 4]);
-        let y = ir.gather(&x, &i, None);
+        let x = ir::buffer_f32(&[1., 2., 3., 4., 5.]);
+        let i = ir::buffer_u32(&[0, 1, 4]);
+        let y = ir::gather(&x, &i, None);
 
-        ir.schedule(&[&y]);
-        ir.eval();
+        jit::schedule(&[&y]);
+        jit::eval();
 
-        insta::assert_debug_snapshot!(y);
-        insta::assert_snapshot!(ir.kernel_debug());
+        insta::assert_snapshot!(jit::kernel_debug());
 
-        assert_eq!(ir.to_vec_f32(&y), vec![1., 2., 5.]);
+        assert_eq!(ir::to_vec_f32(&y), vec![1., 2., 5.]);
     }
     #[test]
     fn reindex() {
         // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        let ir = Trace::new(&backend);
+        ir::set_backend(&backend);
 
-        let x = ir.index(10);
+        let x = ir::index(10);
 
-        let i = ir.index(3);
-        let c = ir.const_u32(2);
-        let i = ir.add(&i, &c);
+        let i = ir::index(3);
+        let c = ir::const_u32(2);
+        let i = ir::add(&i, &c);
 
-        let y = ir.gather(&x, &i, None);
+        let y = ir::gather(&x, &i, None);
 
-        ir.schedule(&[&y]);
-        ir.eval();
+        jit::schedule(&[&y]);
+        jit::eval();
 
-        insta::assert_debug_snapshot!(y);
-        insta::assert_snapshot!(ir.kernel_debug());
+        insta::assert_snapshot!(jit::kernel_debug());
 
-        assert_eq!(ir.to_vec_u32(&y), vec![2, 3, 4]);
+        assert_eq!(ir::to_vec_u32(&y), vec![2, 3, 4]);
     }
     #[test]
     fn index() {
         // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        let ir = Trace::new(&backend);
+        ir::set_backend(&backend);
 
-        let i = ir.index(10);
+        let i = ir::index(10);
 
-        ir.schedule(&[&i]);
-        ir.eval();
+        jit::schedule(&[&i]);
+        jit::eval();
 
-        insta::assert_debug_snapshot!(i);
-        insta::assert_snapshot!(ir.kernel_debug());
+        insta::assert_snapshot!(jit::kernel_debug());
 
-        assert_eq!(ir.to_vec_u32(&i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(ir::to_vec_u32(&i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
     #[test]
     fn paralell() {
         // pretty_env_logger::init();
         let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        let ir = Trace::new(&backend);
+        ir::set_backend(&backend);
 
-        let x = ir.index(10);
+        let x = ir::index(10);
 
-        let y = ir.index(3);
+        let y = ir::index(3);
 
-        ir.schedule(&[&x, &y]);
-        ir.eval();
+        jit::schedule(&[&x, &y]);
+        jit::eval();
 
-        insta::assert_debug_snapshot!(y);
-        insta::assert_snapshot!(ir.kernel_debug());
+        insta::assert_snapshot!(jit::kernel_debug());
 
-        assert_eq!(ir.to_vec_u32(&x), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        assert_eq!(ir.to_vec_u32(&y), vec![0, 1, 2]);
+        assert_eq!(ir::to_vec_u32(&x), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(ir::to_vec_u32(&y), vec![0, 1, 2]);
     }
 }
