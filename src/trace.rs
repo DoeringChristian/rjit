@@ -460,7 +460,7 @@ impl Trace {
     pub fn kernel_debug(&self) -> String {
         self.jit.lock().kernel_debug()
     }
-    pub fn schedule(&self, refs: &[Ref]) {
+    pub fn schedule(&self, refs: &[&Ref]) {
         for r in refs {
             assert!(Arc::ptr_eq(&self.ir, &r.ir));
         }
@@ -629,6 +629,12 @@ impl Trace {
 pub struct Ref {
     id: VarId,
     ir: Arc<RwLock<Ir>>,
+}
+
+impl Ref {
+    pub fn id(&self) -> VarId {
+        self.id
+    }
 }
 
 impl Clone for Ref {

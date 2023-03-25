@@ -865,7 +865,7 @@ mod test {
         let x = ir.buffer_f32(&[1.; 10]);
         let y = ir.add(&x, &x);
 
-        ir.schedule(&[y.clone()]);
+        ir.schedule(&[&y]);
 
         ir.eval();
 
@@ -883,7 +883,7 @@ mod test {
         let i = ir.buffer_u32(&[0, 1, 4]);
         let y = ir.gather(&x, &i, None);
 
-        ir.schedule(&[y.clone()]);
+        ir.schedule(&[&y]);
         ir.eval();
 
         insta::assert_snapshot!(ir.kernel_debug());
@@ -904,7 +904,7 @@ mod test {
 
         let y = ir.gather(&x, &i, None);
 
-        ir.schedule(&[y.clone()]);
+        ir.schedule(&[&y]);
         ir.eval();
 
         insta::assert_snapshot!(ir.kernel_debug());
@@ -919,7 +919,7 @@ mod test {
 
         let i = ir.index(10);
 
-        ir.schedule(&[i.clone()]);
+        ir.schedule(&[&i]);
         ir.eval();
 
         insta::assert_snapshot!(ir.kernel_debug());

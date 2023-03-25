@@ -12,10 +12,10 @@ use crate::trace::{Ir, Op, ParamType};
 /// The Jit Compiler first generates schedules (Intermediate Representation) from a Trace.
 /// It then assembles and compiles a Kernel depending on the Backend.
 ///
-/// Trace (Ir) -> [Schedule; N] -> [Kernel; N]
+/// Ir -> [Schedule; N] -> [Kernel; N]
 ///
 /// Where N is the number of schedule groups.
-/// These are extracted from the scheduled variables in the Trace (Ir).
+/// These are extracted from the scheduled variables in the Ir.
 ///
 #[derive(Debug)]
 pub struct Jit {
@@ -36,7 +36,7 @@ impl Jit {
         }
     }
     ///
-    /// Compiles the computation graph of all scheduled variables in a Trace (Ir).
+    /// Compiles the computation graph of all scheduled variables in a Ir.
     ///
     /// First, all scheduled variables with the same size are grouped.
     /// Then, a Schedule Intermediate Representation is constructed from the groups.
@@ -85,7 +85,7 @@ impl Jit {
             .collect::<Vec<_>>();
     }
     ///
-    /// Evaluates a Trace by first constructing Schedules, which are then compiled and assembled
+    /// Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
     /// into kernels.
     ///
     /// A the end, all scheduled variables are overwritten with the calculated data.
@@ -98,15 +98,22 @@ impl Jit {
 
         self.backend.synchronize();
 
-        // After executing the kernels, the Trace (Ir) is cleaned up.
+        // After executing the kernels, the Ir is cleaned up.
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to
         // Data
         for id in ir.scheduled.clone() {
-            ir.dec_rc(id);
+            let var = ir.var(id);
+
+            for dep in var.deps.clone() {
+                ir.dec_rc(dep);
+            }
+
             let var = ir.var_mut(id);
-            var.param_ty = ParamType::Input;
+
             var.deps.clear();
+            var.param_ty = ParamType::Input;
             var.op = Op::Data;
+            ir.dec_rc(id);
         }
         ir.scheduled.clear();
         // ir.clear_schedule();
