@@ -96,6 +96,8 @@ impl Jit {
             self.kernels[i].execute(&mut self.schedules[i]);
         }
 
+        dbg!(&self.schedules);
+
         // After executing the kernels, the Trace (Ir) is cleaned up.
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to
         // Data

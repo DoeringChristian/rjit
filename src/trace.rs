@@ -334,6 +334,7 @@ impl Trace {
         RwLockReadGuard::map(self.ir.read(), |d| d.var(r.id))
     }
     fn push_var(&self, var: Var) -> Ref {
+        dbg!(self.ir.is_locked());
         let id = self.ir.write().push_var(var);
         Ref {
             id,
@@ -489,15 +490,17 @@ impl Trace {
         })
     }
     pub fn pointer_to(&self, src: &Ref) -> Option<Ref> {
+        dbg!(self.ir.is_locked());
         // TODO: Eval var if needed.
-        let src = self.var(&src);
-        if let Some(buffer) = src.buffer.as_ref() {
+        let ptr = self.var(&src).buffer.as_ref().map(|b| b.as_ptr());
+        dbg!(self.ir.is_locked());
+        if let Some(ptr) = ptr {
             Some(self.push_var(Var {
                 op: Op::Literal,
                 param_ty: ParamType::Input,
-                deps: smallvec![],
+                deps: smallvec![src.id],
                 ty: VarType::Ptr,
-                literal: buffer.as_ptr(),
+                literal: ptr,
                 size: 1,
                 stop_traversal: true,
                 ..Default::default()
@@ -525,7 +528,6 @@ impl Trace {
 
         let mut deps = smallvec![];
         if !var.is_literal() {
-            dbg!(self.ir.is_locked());
             for dep in var.deps.clone() {
                 dbg!(self.ir.is_locked());
                 let dep = Ref {
@@ -541,12 +543,13 @@ impl Trace {
             }
         }
 
-        let var = self.var(&r);
-
+        dbg!(self.ir.is_locked());
         if var.op == Op::Idx {
+            drop(var);
             // self.inc_rc(new_idx);
             return Some(new_idx.clone());
         } else {
+            dbg!(self.ir.is_locked());
             return Some(self.push_var(Var {
                 op: var.op,
                 deps,
@@ -575,25 +578,29 @@ impl Trace {
     ///
     pub fn gather(&self, src: Ref, index: Ref, mask: Option<Ref>) -> Ref {
         let mask = mask.unwrap_or(self.const_bool(true));
-        dbg!();
+        dbg!(self.ir.is_locked());
 
         let res = self.pointer_to(&src);
 
-        let var = self.var(&src);
+        dbg!(self.ir.is_locked());
 
-        dbg!();
+        // let var = self.var(&src);
+        let ty = self.var(&src).ty.clone();
+        dbg!(self.ir.is_locked());
 
         if let Some(src) = res {
-            return self.push_var(Var {
+            dbg!(self.ir.is_locked());
+            let size = self.var(&index).size;
+            let ret = self.push_var(Var {
                 op: Op::Gather,
                 deps: smallvec![src.id, index.id, mask.id],
-                ty: var.ty.clone(),
-                size: self.var(&index).size,
+                ty,
+                size,
                 ..Default::default()
             });
+            dbg!(self.ir.is_locked());
+            return ret;
         }
-
-        drop(var);
 
         dbg!(self.ir.is_locked());
 
@@ -625,6 +632,7 @@ pub struct Ref {
 
 impl Clone for Ref {
     fn clone(&self) -> Self {
+        dbg!(self.ir.is_locked());
         self.ir.write().inc_rc(self.id);
         Self {
             id: self.id.clone(),
@@ -635,6 +643,7 @@ impl Clone for Ref {
 
 impl Drop for Ref {
     fn drop(&mut self) {
+        dbg!(self.ir.is_locked());
         self.ir.write().dec_rc(self.id);
     }
 }

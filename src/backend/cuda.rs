@@ -875,9 +875,17 @@ mod test {
         let i = ir.buffer_u32(&[0, 1, 4]);
         let y = ir.gather(x, i, None);
 
+        dbg!(&ir);
+
         ir.schedule(&[y.clone()]);
 
+        dbg!(&ir);
+
         jit.eval(&mut ir.ir.write());
+
+        dbg!(&ir);
+
+        print!("{}", jit.kernel_debug());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
