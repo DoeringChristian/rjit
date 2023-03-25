@@ -87,6 +87,7 @@ fn compile() {
                 tmp.collect_vars(&scheduled[cur..scheduled.len()]);
                 jit.schedules.push(tmp);
 
+                // TODO: paralelize by populating kernels first.
                 jit.kernels = jit
                     .schedules
                     .iter()
