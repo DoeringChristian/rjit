@@ -79,10 +79,13 @@ impl Jit {
             .map(|mut s| {
                 let mut kernel = self.backend.new_kernel();
                 kernel.assemble(&mut s);
-                kernel.compile();
+                // kernel.compile();
                 kernel
             })
             .collect::<Vec<_>>();
+        for kernel in self.kernels.iter_mut() {
+            kernel.compile();
+        }
     }
     ///
     /// Evaluates a Ir by first constructing Schedules, which are then compiled and assembled

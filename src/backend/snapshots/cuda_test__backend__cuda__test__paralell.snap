@@ -1,0 +1,49 @@
+---
+source: src/backend/cuda.rs
+expression: y
+---
+Ref {
+    id: VarId(
+        DefaultKey(
+            2v1,
+        ),
+    ),
+    ir: RwLock {
+        data: Ir {
+            vars: SlotMap {
+                slots: [
+                    Slot {
+                        version: 0,
+                        next_free: 0,
+                    },
+                    Slot {
+                        version: 1,
+                        value: Var {
+                            op: Data,
+                            deps: [],
+                            ty: U32,
+                            size: 10,
+                            param_ty: Input,
+                            rc: 1,
+                        },
+                    },
+                    Slot {
+                        version: 1,
+                        value: Var {
+                            op: Data,
+                            deps: [],
+                            ty: U32,
+                            size: 3,
+                            param_ty: Input,
+                            rc: 1,
+                        },
+                    },
+                ],
+                free_head: 3,
+                num_elems: 2,
+                _k: PhantomData<fn(slotmap::DefaultKey) -> slotmap::DefaultKey>,
+            },
+            scheduled: [],
+        },
+    },
+}
