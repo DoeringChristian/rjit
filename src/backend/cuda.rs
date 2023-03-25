@@ -869,6 +869,7 @@ mod test {
 
         ir.eval();
 
+        insta::assert_debug_snapshot!(y);
         insta::assert_snapshot!(ir.kernel_debug());
 
         assert_eq!(ir.to_vec_f32(&y), vec![2f32; 10]);
@@ -886,6 +887,7 @@ mod test {
         ir.schedule(&[&y]);
         ir.eval();
 
+        insta::assert_debug_snapshot!(y);
         insta::assert_snapshot!(ir.kernel_debug());
 
         assert_eq!(ir.to_vec_f32(&y), vec![1., 2., 5.]);
@@ -907,6 +909,7 @@ mod test {
         ir.schedule(&[&y]);
         ir.eval();
 
+        insta::assert_debug_snapshot!(y);
         insta::assert_snapshot!(ir.kernel_debug());
 
         assert_eq!(ir.to_vec_u32(&y), vec![2, 3, 4]);
@@ -922,6 +925,7 @@ mod test {
         ir.schedule(&[&i]);
         ir.eval();
 
+        insta::assert_debug_snapshot!(i);
         insta::assert_snapshot!(ir.kernel_debug());
 
         assert_eq!(ir.to_vec_u32(&i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);

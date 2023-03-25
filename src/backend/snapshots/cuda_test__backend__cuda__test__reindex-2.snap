@@ -1,0 +1,67 @@
+---
+source: src/backend/cuda.rs
+expression: ir.kernel_debug()
+---
+===============================================
+Kernel 0:
+
+.version 8.0
+.target sm_86
+.address_size 64
+
+.entry cujit(
+	.param .align 8 .b8 params[16]) {
+
+	.reg.b8   %b <9>; .reg.b16 %w<9>; .reg.b32 %r<9>;
+	.reg.b64  %rd<9>; .reg.f32 %f<9>; .reg.f64 %d<9>;
+	.reg.pred %p <9>;
+
+	mov.u32 %r0, %ctaid.x;
+	mov.u32 %r1, %ntid.x;
+	mov.u32 %r2, %tid.x;
+	mad.lo.u32 %r0, %r0, %r1, %r2; // r0 <- Index
+
+	// Index Conditional (jump to done if Index >= Size).
+	ld.param.u32 %r2, [params]; // r2 <- params[0] (Size)
+	setp.ge.u32 %p0, %r0, %r2; // p0 <- r0 >= r2
+	@%p0 bra done; // if p0 => done
+	
+	mov.u32 %r3, %nctaid.x; // r3 <- nctaid.x
+	mul.lo.u32 %r1, %r3, %r1; // r1 <- r3 * r1
+	
+body: // sm_86
+
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 6, param_offset: 0, literal: 0, size: 3 } =>
+	mov.u32 %r6, %r0;
+
+
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 7, param_offset: 0, literal: 2, size: 0 } =>
+	mov.b32 %r7, 0x2;
+
+
+	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: None, reg: 5, param_offset: 0, literal: 0, size: 3 } =>
+	add.u32 %r5, %r6, %r7;
+
+	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 8, param_offset: 0, literal: 1, size: 0 } =>
+	mov.pred %p8, 0x1;
+
+
+	// [4]: ScheduleVar { op: And, deps: [SVarId(2), SVarId(3)], ty: U32, param_ty: Output, reg: 4, param_offset: 1, literal: 0, size: 3 } =>
+	selp.b32 %r4, %r5, 0, %p8;
+	// Store:
+	ld.param.u64 %rd0, [params + 8]; // rd0 <- params[offset]
+	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
+	st.global.cs.u32 [%rd0], %r4; // (Index * ty.size() + params[offset])[Index] <- var
+
+	//End of Kernel:
+
+	add.u32 %r0, %r0, %r1; // r0 <- r0 + r1
+	setp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2
+	@!%p0 bra body; // if p0 => body
+
+
+done:
+
+	ret;
+}
+
