@@ -11,7 +11,7 @@ cust = { git = "https://github.com/DoeringChristian/Rust-CUDA.git", branch = "ca
 itertools = "0.10.5"
 log = "0.4.17"
 once_cell = "1.17.1"
-parking_lot = "0.12.1"
+parking_lot = { version = "0.12.1", features = ["deadlock_detection"]}
 pretty_env_logger = "0.4.0"
 rayon = "1.7.0"
 slotmap = "1.0.6"
@@ -30,4 +30,4 @@ opt-level = 3
 
 
 [hooks]
-pre-commit = "cargo test"
+pre-commit = "cargo test -- --test-threads=1"
