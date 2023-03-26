@@ -77,7 +77,7 @@ pub struct ScheduleIr {
     // The index into the hashmap consists of
     // the variable id and an optional index for
     // reindexing.
-    visited: HashMap<DefaultKey, SVarId>,
+    visited: HashMap<VarId, SVarId>,
     backend: Arc<dyn Backend>,
 }
 
@@ -145,9 +145,9 @@ impl ScheduleIr {
         self.params.push(param);
         idx
     }
-    pub fn collect_vars(&mut self, refs: &[Ref]) {
-        for r in refs {
-            self.collect(r);
+    pub fn collect_vars(&mut self, ids: &[VarId]) {
+        for id in ids {
+            self.collect(*id);
         }
     }
     ///
@@ -156,58 +156,54 @@ impl ScheduleIr {
     /// If a gather operation is encountered, that only depends on trivial operations we can
     /// reindex it using the parameter idx.
     ///
-    pub fn collect(&mut self, r: &Ref) -> SVarId {
-        IR.with(|ir| {
-            let ir = ir.borrow();
+    pub fn collect(&mut self, id: VarId) -> SVarId {
+        if self.visited.contains_key(&id) {
+            return self.visited[&id];
+        }
 
-            if self.visited.contains_key(&r.id()) {
-                return self.visited[&r.id()];
-            }
+        let var = ir::var(&Ref::borrow(id));
 
-            let var = ir.var(r);
+        let mut sv = ScheduleVar {
+            op: var.op,
+            ty: var.ty.clone(),
+            deps: smallvec![],
+            reg: self.next_reg(),
+            param_ty: var.param_ty,
+            param_offset: 0,
+            literal: var.literal,
+            size: var.size,
+        };
 
-            let mut sv = ScheduleVar {
-                op: var.op,
-                ty: var.ty.clone(),
-                deps: smallvec![],
-                reg: self.next_reg(),
-                param_ty: var.param_ty,
-                param_offset: 0,
-                literal: var.literal,
-                size: var.size,
-            };
+        // Collect dependencies
+        if var.stop_traversal {
+            sv.deps = smallvec![]
+        } else {
+            sv.deps = var
+                .deps
+                .iter()
+                .map(|id| self.collect(*id))
+                .collect::<SmallVec<[_; 4]>>();
+        };
+        match var.param_ty {
+            ParamType::Input => {
+                if var.is_literal() {
+                    sv.param_offset = self.push_param(var.literal);
 
-            // Collect dependencies
-            if var.stop_traversal {
-                sv.deps = smallvec![]
-            } else {
-                sv.deps = var
-                    .deps
-                    .iter()
-                    .map(|id| self.collect(id))
-                    .collect::<SmallVec<[_; 4]>>();
-            };
-            match var.param_ty {
-                ParamType::Input => {
-                    if var.is_literal() {
-                        sv.param_offset = self.push_param(var.literal);
-
-                        // Literal is pushed via params => we can set it to zero so that snapshot
-                        // testing works.
-                        sv.literal = 0;
-                    } else {
-                        sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
-                    }
-                }
-                ParamType::Output => {
+                    // Literal is pushed via params => we can set it to zero so that snapshot
+                    // testing works.
+                    sv.literal = 0;
+                } else {
                     sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
                 }
-                ParamType::None => {}
             }
+            ParamType::Output => {
+                sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
+            }
+            ParamType::None => {}
+        }
 
-            let id = self.push_var(sv);
+        let id = self.push_var(sv);
 
-            id
-        })
+        id
     }
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use rayon::prelude::*;
 
 use crate::backend::{Backend, Kernel};
-use crate::ir::{self, Op, ParamType, Ref, BACKEND, IR};
+use crate::ir::{self, Op, ParamType, Ref, VarId, BACKEND, IR};
 use crate::schedule::ScheduleIr;
 
 thread_local! {pub static JIT: RefCell<Jit> = RefCell::new(Jit::default())}
@@ -25,7 +25,7 @@ thread_local! {pub static JIT: RefCell<Jit> = RefCell::new(Jit::default())}
 pub struct Jit {
     pub schedules: Vec<ScheduleIr>,
     pub kernels: Vec<Box<dyn Kernel>>,
-    pub scheduled: Vec<Ref>,
+    pub scheduled: Vec<VarId>,
 }
 
 ///
@@ -38,70 +38,66 @@ pub struct Jit {
 fn compile() {
     BACKEND.with(|backend| {
         JIT.with(|jit| {
-            IR.with(|ir| {
-                let mut jit = jit.borrow_mut();
+            let mut jit = jit.borrow_mut();
 
-                jit.schedules.clear();
-                jit.kernels.clear();
-                let mut scheduled = jit.scheduled.clone();
-                scheduled.sort_by(|r0, r1| ir.borrow().var(r0).size.cmp(&ir.borrow().var(r1).size));
+            jit.schedules.clear();
+            jit.kernels.clear();
+            let mut scheduled = jit.scheduled.clone();
+            scheduled.sort_by(|r0, r1| ir::var(r0).size.cmp(&ir::var(r1).size));
 
-                // For every scheduled variable (destination) we have to create a new buffer
-                for id in scheduled.iter() {
-                    let mut ir = ir.borrow_mut();
-                    let var = ir.var_mut(id);
-                    var.param_ty = ParamType::Output;
-                    var.buffer = Some(
-                        backend
-                            .borrow()
-                            .as_ref()
-                            .unwrap()
-                            .buffer_uninit(var.size * var.ty.size()),
-                    );
-                }
-
-                let cur = 0;
-                let mut size;
-                for i in 1..scheduled.len() {
-                    let ir = ir.borrow();
-                    let var0 = ir.var(&scheduled[i - 1]);
-                    let var1 = ir.var(&scheduled[i]);
-                    size = var0.size;
-                    if var0.size != var1.size {
-                        let mut tmp = ScheduleIr::new(
-                            &backend.borrow().as_ref().unwrap(),
-                            backend.borrow().as_ref().unwrap().first_register(),
-                            size,
-                        );
-                        tmp.collect_vars(&scheduled[cur..i]);
-                        jit.borrow_mut().schedules.push(tmp);
-                    }
-                }
-                size = ir.borrow().var(scheduled.last().unwrap()).size;
-                let mut tmp = ScheduleIr::new(
-                    &backend.borrow().as_ref().unwrap(),
-                    backend.borrow().as_ref().unwrap().first_register(),
-                    size,
+            // For every scheduled variable (destination) we have to create a new buffer
+            for id in scheduled.iter() {
+                let mut var = ir::var_mut(id);
+                var.param_ty = ParamType::Output;
+                var.buffer = Some(
+                    backend
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .buffer_uninit(var.size * var.ty.size()),
                 );
+            }
 
-                tmp.collect_vars(&scheduled[cur..scheduled.len()]);
-                jit.schedules.push(tmp);
-
-                // TODO: paralelize by populating kernels first.
-                jit.kernels = jit
-                    .schedules
-                    .iter()
-                    .map(|mut s| {
-                        let mut kernel = backend.borrow().as_ref().unwrap().new_kernel();
-                        kernel.assemble(&mut s);
-                        // kernel.compile();
-                        kernel
-                    })
-                    .collect::<Vec<_>>();
-                for kernel in jit.kernels.iter_mut() {
-                    kernel.compile();
+            let cur = 0;
+            let mut size;
+            for i in 1..scheduled.len() {
+                let var0 = ir::var(&scheduled[i - 1]);
+                let var1 = ir::var(&scheduled[i]);
+                size = var0.size;
+                if var0.size != var1.size {
+                    let mut tmp = ScheduleIr::new(
+                        &backend.borrow().as_ref().unwrap(),
+                        backend.borrow().as_ref().unwrap().first_register(),
+                        size,
+                    );
+                    tmp.collect_vars(&scheduled[cur..i]);
+                    jit.borrow_mut().schedules.push(tmp);
                 }
-            })
+            }
+            size = ir::var(scheduled.last().unwrap()).size;
+            let mut tmp = ScheduleIr::new(
+                &backend.borrow().as_ref().unwrap(),
+                backend.borrow().as_ref().unwrap().first_register(),
+                size,
+            );
+
+            tmp.collect_vars(&scheduled[cur..scheduled.len()]);
+            jit.schedules.push(tmp);
+
+            // TODO: paralelize by populating kernels first.
+            jit.kernels = jit
+                .schedules
+                .iter()
+                .map(|mut s| {
+                    let mut kernel = backend.borrow().as_ref().unwrap().new_kernel();
+                    kernel.assemble(&mut s);
+                    // kernel.compile();
+                    kernel
+                })
+                .collect::<Vec<_>>();
+            for kernel in jit.kernels.iter_mut() {
+                kernel.compile();
+            }
         })
     })
 }
