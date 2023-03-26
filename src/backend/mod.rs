@@ -11,7 +11,7 @@ pub trait Kernel: Debug + Send + Sync {
     fn assembly(&self) -> &str;
 }
 
-pub trait Buffer {
+pub trait Buffer: Send + Sync {
     fn as_ptr(&self) -> u64;
     fn as_vec(&self) -> Vec<u8>;
 }

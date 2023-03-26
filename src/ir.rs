@@ -5,9 +5,14 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use bytemuck::cast_slice;
+use once_cell::sync::{Lazy, OnceCell};
+use parking_lot::{
+    MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
 
+use crate::backend::cuda::CUDABackend;
 use crate::backend::{Backend, Buffer};
 use crate::jit;
 
@@ -193,7 +198,7 @@ impl VarType {
 #[derive(Default)]
 pub struct Var {
     pub op: Op, // Operation used to construct the variable
-    pub deps: SmallVec<[Ref; 4]>,
+    pub deps: SmallVec<[VarId; 4]>,
     pub ty: VarType,                     // Type of the variable
     pub buffer: Option<Box<dyn Buffer>>, // Optional buffer
     pub size: usize,                     // number of elements
@@ -246,17 +251,17 @@ impl std::ops::Deref for ParamId {
     }
 }
 
-thread_local! {pub static IR: RefCell<Ir> = RefCell::new(Ir::default())}
-thread_local! {pub static BACKEND: RefCell<Option<Arc<dyn Backend>>> = RefCell::new(None)}
+pub static IR: Lazy<RwLock<Ir>> = Lazy::new(|| RwLock::new(Ir::default()));
 
-pub fn set_backend(backend: &Arc<dyn Backend>) {
-    BACKEND.with(|b| {
-        if b.borrow_mut().is_some() {
-            panic!("Cannot change Backend!");
-        } else {
-            *b.borrow_mut() = Some(backend.clone());
-        }
-    })
+// thread_local! {pub static IR: RefCell<Ir> = RefCell::new(Ir::default())}
+// thread_local! {pub static BACKEND: RefCell<Option<Arc<dyn Backend>>> = RefCell::new(None)}
+pub static BACKEND: OnceCell<Mutex<Box<dyn Backend>>> = OnceCell::new();
+
+pub fn set_backend(backend: impl AsRef<str>) {
+    let backend = backend.as_ref();
+    if backend == "cuda" {
+        BACKEND.set(Mutex::new(Box::new(CUDABackend::new())));
+    }
 }
 
 #[derive(Default)]
@@ -281,20 +286,42 @@ struct VarInfo {
 }
 
 impl Ir {
-    pub fn var(&self, r: &Ref) -> &Var {
-        &self.vars[r.0]
+    pub fn var(&self, id: VarId) -> &Var {
+        &self.vars[id.0]
     }
-    pub fn var_mut(&mut self, r: &Ref) -> &mut Var {
-        &mut self.vars[r.0]
+    pub fn var_mut(&mut self, id: VarId) -> &mut Var {
+        &mut self.vars[id.0]
     }
+    pub fn inc_rc(&mut self, id: VarId) {
+        self.var_mut(id).rc += 1;
+    }
+    fn dec_rc(&mut self, id: VarId) {
+        let var = self.var_mut(id);
+        var.rc -= 1;
+        if var.rc == 0 {
+            for dep in var.deps.clone() {
+                self.dec_rc(dep);
+            }
+            self.vars.remove(id.0);
+        }
+    }
+}
+pub fn var(r: &Ref) -> MappedRwLockReadGuard<Var> {
+    RwLockReadGuard::map(IR.read(), |ir| &ir.vars[r.0 .0])
+}
+pub fn var_mut(r: &mut Ref) -> MappedRwLockWriteGuard<Var> {
+    RwLockWriteGuard::map(IR.write(), |ir| &mut ir.vars[r.0 .0])
 }
 
-pub fn push_var(mut var: Var) -> Ref {
-    var.rc = 1;
-    IR.with(|ir| Ref(ir.borrow_mut().vars.insert(var)))
+pub fn push_var(mut v: Var) -> Ref {
+    for id in v.deps.iter() {
+        IR.write().inc_rc(*id);
+    }
+    v.rc = 1;
+    Ref(VarId(IR.write().vars.insert(v)))
 }
 fn push_var_intermediate(op: Op, deps: &[&Ref], ty: VarType, size: usize) -> Ref {
-    let deps = deps.iter().map(|r| (*r).clone()).collect();
+    let deps = deps.iter().map(|r| r.0).collect();
     let ret = push_var(Var {
         op,
         deps,
@@ -309,122 +336,101 @@ fn push_var_intermediate(op: Op, deps: &[&Ref], ty: VarType, size: usize) -> Ref
     ret
 }
 fn var_info(ids: &[&Ref]) -> VarInfo {
-    IR.with(|ir| {
-        let ir = ir.borrow();
-        let ty = ir.var(*ids.first().unwrap()).ty.clone(); // TODO: Fix (first non void)
+    let ty = var(*ids.first().unwrap()).ty.clone(); // TODO: Fix (first non void)
 
-        let size = ids
-            .iter()
-            .map(|id| &ir.var(*id).size)
-            .reduce(|s0, s1| s0.max(s1))
-            .unwrap()
-            .clone();
-        VarInfo { ty, size }
-    })
+    let size = ids
+        .iter()
+        .map(|id| var(*id).size)
+        .reduce(|s0, s1| s0.max(s1))
+        .unwrap()
+        .clone();
+    VarInfo { ty, size }
 }
 
 pub fn const_f32(val: f32) -> Ref {
-    IR.with(|ir| {
-        push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::F32,
-            literal: bytemuck::cast::<_, u32>(val) as _,
-            ..Default::default()
-        })
+    push_var(Var {
+        op: Op::Literal,
+        deps: smallvec![],
+        ty: VarType::F32,
+        literal: bytemuck::cast::<_, u32>(val) as _,
+        ..Default::default()
     })
 }
 pub fn const_u32(val: u32) -> Ref {
-    IR.with(|ir| {
-        push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::U32,
-            literal: bytemuck::cast::<_, u32>(val) as _,
-            ..Default::default()
-        })
+    push_var(Var {
+        op: Op::Literal,
+        deps: smallvec![],
+        ty: VarType::U32,
+        literal: bytemuck::cast::<_, u32>(val) as _,
+        ..Default::default()
     })
 }
 pub fn const_bool(val: bool) -> Ref {
-    IR.with(|ir| {
-        push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::Bool,
-            literal: bytemuck::cast::<_, u8>(val) as _,
-            ..Default::default()
-        })
+    push_var(Var {
+        op: Op::Literal,
+        deps: smallvec![],
+        ty: VarType::Bool,
+        literal: bytemuck::cast::<_, u8>(val) as _,
+        ..Default::default()
     })
 }
 
 // Buffer initializers:
 pub fn buffer_f32(slice: &[f32]) -> Ref {
-    BACKEND.with(|backend| {
-        push_var(Var {
-            param_ty: ParamType::Input,
-            buffer: Some(
-                backend
-                    .borrow()
-                    .as_ref()
-                    .unwrap()
-                    .buffer_from_slice(cast_slice(slice)),
-            ),
-            size: slice.len(),
-            ty: VarType::F32,
-            op: Op::Data,
-            ..Default::default()
-        })
+    push_var(Var {
+        param_ty: ParamType::Input,
+        buffer: Some(
+            BACKEND
+                .get()
+                .unwrap()
+                .lock()
+                .borrow()
+                .buffer_from_slice(cast_slice(slice)),
+        ),
+        size: slice.len(),
+        ty: VarType::F32,
+        op: Op::Data,
+        ..Default::default()
     })
 }
 pub fn buffer_u32(slice: &[u32]) -> Ref {
-    BACKEND.with(|backend| {
-        push_var(Var {
-            param_ty: ParamType::Input,
-            buffer: Some(
-                backend
-                    .borrow()
-                    .as_ref()
-                    .unwrap()
-                    .buffer_from_slice(cast_slice(slice)),
-            ),
-            size: slice.len(),
-            ty: VarType::U32,
-            op: Op::Data,
-            ..Default::default()
-        })
+    push_var(Var {
+        param_ty: ParamType::Input,
+        buffer: Some(
+            BACKEND
+                .get()
+                .unwrap()
+                .lock()
+                .buffer_from_slice(cast_slice(slice)),
+        ),
+        size: slice.len(),
+        ty: VarType::U32,
+        op: Op::Data,
+        ..Default::default()
     })
 }
 // To Host functions:
 pub fn to_vec_f32(r: &Ref) -> Vec<f32> {
-    IR.with(|ir| {
-        let ir = ir.borrow();
-        let var = ir.var(r);
-        assert_eq!(var.ty, VarType::F32);
-        let v = var.buffer.as_ref().unwrap().as_vec();
-        Vec::from(cast_slice(&v))
-    })
+    let var = var(r);
+    assert_eq!(var.ty, VarType::F32);
+    let v = var.buffer.as_ref().unwrap().as_vec();
+    Vec::from(cast_slice(&v))
 }
 pub fn to_vec_u32(r: &Ref) -> Vec<u32> {
-    IR.with(|ir| {
-        let ir = ir.borrow();
-        let var = ir.var(r);
-        assert_eq!(var.ty, VarType::U32);
-        let v = var.buffer.as_ref().unwrap().as_vec();
-        Vec::from(cast_slice(&v))
-    })
+    let var = var(r);
+    assert_eq!(var.ty, VarType::U32);
+    let v = var.buffer.as_ref().unwrap().as_vec();
+    Vec::from(cast_slice(&v))
 }
 // Unarry operations:
 pub fn cast(src: &Ref, ty: VarType) -> Ref {
-    IR.with(|ir| {
-        let ir = ir.borrow();
-        let v = ir.var(src);
-        push_var(Var {
-            op: Op::Cast,
-            deps: smallvec![src.clone()],
-            ty,
-            size: v.size,
-            ..Default::default()
-        })
+    let v = var(src);
+    push_var(Var {
+        op: Op::Cast,
+        deps: smallvec![src.0],
+        ty,
+        size: v.size,
+        ..Default::default()
     })
 }
 // Binarry operations:
@@ -438,16 +444,14 @@ pub fn mul(lhs: &Ref, rhs: &Ref) -> Ref {
 }
 pub fn and(lhs: &Ref, rhs: &Ref) -> Ref {
     let info = var_info(&[&lhs, &rhs]);
-    IR.with(|ir| {
-        let ir = ir.borrow();
 
-        let ty_lhs = ir.var(&lhs).ty.clone();
-        let ty_rhs = ir.var(&rhs).ty.clone();
+    let ty_lhs = var(&lhs).ty.clone();
+    let ty_rhs = var(&rhs).ty.clone();
 
-        if info.size > 0 && ty_lhs != ty_rhs && !ty_rhs.is_bool() {
-            panic!("Invalid operands!");
-        }
-    });
+    if info.size > 0 && ty_lhs != ty_rhs && !ty_rhs.is_bool() {
+        panic!("Invalid operands!");
+    }
+
     let ret = push_var_intermediate(Op::And, &[&lhs, &rhs], info.ty, info.size);
     dbg!();
     ret
@@ -463,13 +467,13 @@ pub fn index(size: usize) -> Ref {
     })
 }
 pub fn pointer_to(src: &Ref) -> Option<Ref> {
-    let ptr = IR.with(|ir| ir.borrow().var(&src).buffer.as_ref().map(|b| b.as_ptr()));
+    let ptr = var(&src).buffer.as_ref().map(|b| b.as_ptr());
     // TODO: Eval var if needed.
     if let Some(ptr) = ptr {
         Some(push_var(Var {
             op: Op::Literal,
             param_ty: ParamType::Input,
-            deps: smallvec![src.clone()],
+            deps: smallvec![src.0],
             ty: VarType::Ptr,
             literal: ptr,
             size: 1,
@@ -487,53 +491,55 @@ pub fn pointer_to(src: &Ref) -> Option<Ref> {
 /// However, it should sometimes be possible to reuse the old ones.
 ///
 fn reindex(r: &Ref, new_idx: &Ref, size: usize) -> Option<Ref> {
-    IR.with(|ir| {
-        let ir = ir.borrow();
-        let var = ir.var(&r);
-        let is_literal = var.is_literal();
-        let is_data = var.is_data();
+    let v = var(&r);
+    let is_literal = v.is_literal();
+    let is_data = v.is_data();
+    let v_deps = v.deps.clone();
 
-        if is_data {
-            return None;
-        }
+    if is_data {
+        return None;
+    }
 
-        dbg!();
-        let mut deps = smallvec![];
-        if !is_literal {
-            for dep in var.deps.clone() {
-                if let Some(dep) = reindex(&dep, new_idx, size) {
-                    deps.push(dep);
-                } else {
-                    return None;
-                }
+    drop(v);
+
+    let mut deps = smallvec![];
+    if !is_literal {
+        for dep in v_deps {
+            let dep = Ref(dep);
+            if let Some(dep) = reindex(&dep, new_idx, size) {
+                deps.push(dep.0);
+            } else {
+                return None;
             }
         }
+        dbg!(IR.is_locked());
+    }
 
-        let op = var.op;
-        let ty = var.ty.clone();
-        let param_ty = var.param_ty;
-        let literal = var.literal;
-        let stop_traversal = var.stop_traversal;
+    let v = var(&r);
 
-        drop(ir);
+    let op = v.op;
+    let ty = v.ty.clone();
+    let param_ty = v.param_ty;
+    let literal = v.literal;
+    let stop_traversal = v.stop_traversal;
+    drop(v);
 
-        if op == Op::Idx {
-            // self.inc_rc(new_idx);
-            return Some(new_idx.clone());
-        } else {
-            return Some(push_var(Var {
-                op,
-                deps,
-                ty,
-                buffer: None,
-                size,
-                param_ty,
-                rc: 0,
-                literal,
-                stop_traversal,
-            }));
-        }
-    })
+    if op == Op::Idx {
+        // self.inc_rc(new_idx);
+        return Some(new_idx.clone());
+    } else {
+        return Some(push_var(Var {
+            op,
+            deps,
+            ty,
+            buffer: None,
+            size,
+            param_ty,
+            rc: 0,
+            literal,
+            stop_traversal,
+        }));
+    }
 }
 ///
 /// For gather operations there are three ways to resolve them:
@@ -549,8 +555,8 @@ fn reindex(r: &Ref, new_idx: &Ref, size: usize) -> Option<Ref> {
 /// is not yet implemented).
 ///
 pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
-    let size = IR.with(|ir| ir.borrow().var(&index).size);
-    let ty = IR.with(|ir| ir.borrow().var(&src).ty.clone());
+    let size = var(&index).size;
+    let ty = var(&src).ty.clone();
 
     let mask: Ref = mask.map(|m| m.clone()).unwrap_or(const_bool(true));
 
@@ -559,7 +565,7 @@ pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
     if let Some(src) = res {
         let ret = push_var(Var {
             op: Op::Gather,
-            deps: smallvec![src.clone(), index.clone(), mask.clone()],
+            deps: smallvec![src.0, index.0, mask.0],
             ty,
             size,
             ..Default::default()
@@ -569,8 +575,11 @@ pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
 
     let res = reindex(&src, &index, size);
 
+    dbg!(IR.is_locked());
     if let Some(res) = res {
+        dbg!(IR.is_locked());
         let res = and(&res, &mask); // TODO: masking
+        dbg!(IR.is_locked());
         return res;
     }
 
@@ -582,7 +591,7 @@ pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
     if let Some(src) = res {
         let ret = push_var(Var {
             op: Op::Gather,
-            deps: smallvec![src.clone(), index.clone(), mask.clone()],
+            deps: smallvec![src.0, index.0, mask.0],
             ty,
             size,
             ..Default::default()
@@ -597,59 +606,40 @@ pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
 /// Reference to a variable.
 ///
 #[derive(Debug)]
-pub struct Ref(DefaultKey);
+pub struct Ref(VarId);
 
 impl Ref {
-    pub fn id(&self) -> DefaultKey {
+    pub fn id(&self) -> VarId {
         self.0
     }
     pub fn is_data(&self) -> bool {
-        IR.with(|ir| {
-            let ir = ir.borrow();
-            let var = ir.var(self);
-            if var.buffer.is_some() {
-                assert_eq!(var.op, Op::Data);
-                true
-            } else {
-                assert_ne!(var.op, Op::Data);
-                false
-            }
-        })
+        let var = var(self);
+        if var.buffer.is_some() {
+            assert_eq!(var.op, Op::Data);
+            true
+        } else {
+            assert_ne!(var.op, Op::Data);
+            false
+        }
     }
 }
 
 impl Clone for Ref {
     fn clone(&self) -> Self {
-        IR.with(|ir| {
-            // ir.borrow_mut().var_mut(self).rc += 1;
-            unsafe { (*ir.as_ptr()).vars[self.0].rc += 1 };
-        });
+        IR.write().inc_rc(self.0);
+        // IR.try_write()
+        //     .expect("Cannot clone Reference because IR is locked!")
+        //     .inc_rc(self.0);
         Self(self.0)
     }
 }
 
 impl Drop for Ref {
     fn drop(&mut self) {
-        IR.with(|ir| {
-            //
-            // SAFETY:
-            //
-            // Since IR is threadlocal, we know that IR cannot be modified while we have a
-            // reference to it.
-            // Further, we index the slotmap and therefore know that the pointer to var is a valid
-            // pointer.
-            //
-            // If rc == 0 we know that we are the only one with access to this slot.
-            // Since SlotMap does not realloc the underlying vector when removing entries it is
-            // safe to remove the element without causing dangling pointers or simillar problems.
-            //
-            unsafe {
-                let mut var = (*ir.as_ptr()).var_mut(self);
-                var.rc -= 1;
-                if var.rc == 0 {
-                    (*ir.as_ptr()).vars.remove(self.0);
-                }
-            }
-        });
+        dbg!(&self);
+        IR.write().dec_rc(self.0);
+        // IR.try_write()
+        //     .expect("Cannot drop Reference because IR is locked!")
+        //     .dec_rc(self.0);
     }
 }

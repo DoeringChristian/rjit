@@ -850,17 +850,13 @@ impl CUDAKernel {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
-    use crate::backend::Backend;
+    use crate::ir::IR;
     use crate::{ir, jit};
-
-    use super::CUDABackend;
 
     #[test]
     fn load_add_f32() {
-        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        ir::set_backend(&backend);
+        dbg!();
+        ir::set_backend("cuda");
 
         let x = ir::buffer_f32(&[1.; 10]);
         let y = ir::add(&x, &x);
@@ -874,8 +870,8 @@ mod test {
     }
     #[test]
     fn load_gather_f32() {
-        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        ir::set_backend(&backend);
+        dbg!();
+        ir::set_backend("cuda");
 
         let x = ir::buffer_f32(&[1., 2., 3., 4., 5.]);
         let i = ir::buffer_u32(&[0, 1, 4]);
@@ -891,10 +887,10 @@ mod test {
     #[test]
     fn reindex() {
         // pretty_env_logger::init();
-        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        ir::set_backend(&backend);
+        ir::set_backend("cuda");
 
         let x = ir::index(10);
+        dbg!();
 
         let i = ir::index(3);
         let c = ir::const_u32(2);
@@ -911,31 +907,36 @@ mod test {
     }
     #[test]
     fn index() {
+        dbg!();
         // pretty_env_logger::init();
-        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        ir::set_backend(&backend);
+        ir::set_backend("cuda");
 
         let i = ir::index(10);
 
         jit::schedule(&[&i]);
+
         jit::eval();
 
         insta::assert_snapshot!(jit::kernel_debug());
-
         assert_eq!(ir::to_vec_u32(&i), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        dbg!(IR.is_locked());
     }
     #[test]
     fn gather_eval() {
+        dbg!();
         // pretty_env_logger::init();
-        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        ir::set_backend(&backend);
+        ir::set_backend("cuda");
 
-        let x = ir::index(3);
-        let y = ir::buffer_u32(&[1, 2, 3]);
+        let r = {
+            let x = ir::index(3);
+            let y = ir::buffer_u32(&[1, 2, 3]);
 
-        let z = ir::add(&x, &y);
+            let z = ir::add(&x, &y);
 
-        let r = ir::gather(&z, &ir::index(3), None);
+            let r = ir::gather(&z, &ir::index(3), None);
+            r
+        };
+        dbg!(&IR);
 
         jit::schedule(&[&r]);
         jit::eval();
@@ -943,12 +944,15 @@ mod test {
         insta::assert_snapshot!(jit::kernel_debug());
 
         assert_eq!(ir::to_vec_u32(&r), vec![1, 3, 5]);
+
+        dbg!(&IR);
+        dbg!(&r);
     }
     #[test]
     fn paralell() {
+        dbg!();
         // pretty_env_logger::init();
-        let backend: Arc<dyn Backend> = Arc::new(CUDABackend::new());
-        ir::set_backend(&backend);
+        ir::set_backend("cuda");
 
         let x = ir::index(10);
 
