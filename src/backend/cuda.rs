@@ -889,6 +889,7 @@ mod test {
         // pretty_env_logger::init();
         ir::set_backend("cuda");
 
+        dbg!();
         let x = ir::index(10);
         dbg!();
 

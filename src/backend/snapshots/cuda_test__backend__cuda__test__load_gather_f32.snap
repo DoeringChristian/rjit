@@ -10,11 +10,11 @@ Kernel 0:
 .address_size 64
 
 .entry cujit(
-	.param .align 8 .b8 params[16]) {
+	.param .align 8 .b8 params[32]) {
 
-	.reg.b8   %b <9>; .reg.b16 %w<9>; .reg.b32 %r<9>;
-	.reg.b64  %rd<9>; .reg.f32 %f<9>; .reg.f64 %d<9>;
-	.reg.pred %p <9>;
+	.reg.b8   %b <8>; .reg.b16 %w<8>; .reg.b32 %r<8>;
+	.reg.b64  %rd<8>; .reg.f32 %f<8>; .reg.f64 %d<8>;
+	.reg.pred %p <8>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -31,27 +31,26 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 6, param_offset: 0, literal: 0, size: 3 } =>
-	mov.u32 %r6, %r0;
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: Ptr, param_ty: Input, reg: 5, param_offset: 1, literal: 0, size: 1 } =>
+	ld.param.u64 %rd5, [params+8];
+
+	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 6, param_offset: 2, literal: 0, size: 3 } =>
+	ld.param.u64 %rd0, [params+16];
+	mad.wide.u32 %rd0, %r0, 4, %rd0;
+	ld.global.cs.u32 %r6, [%rd0];
+
+	// [2]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 7, param_offset: 0, literal: 1, size: 0 } =>
+	mov.pred %p7, 0x1;
 
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 7, param_offset: 0, literal: 2, size: 0 } =>
-	mov.b32 %r7, 0x2;
+	// [3]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: F32, param_ty: Output, reg: 4, param_offset: 3, literal: 0, size: 3 } =>
+	mad.wide.u32 %rd3, %r6, 4, %rd5;
 
-
-	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: None, reg: 5, param_offset: 0, literal: 0, size: 3 } =>
-	add.u32 %r5, %r6, %r7;
-
-	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 8, param_offset: 0, literal: 1, size: 0 } =>
-	mov.pred %p8, 0x1;
-
-
-	// [4]: ScheduleVar { op: And, deps: [SVarId(2), SVarId(3)], ty: U32, param_ty: Output, reg: 4, param_offset: 1, literal: 0, size: 3 } =>
-	selp.b32 %r4, %r5, 0, %p8;
+	ld.global.nc.f32 %f4, [%rd3];
 	// Store:
-	ld.param.u64 %rd0, [params + 8]; // rd0 <- params[offset]
+	ld.param.u64 %rd0, [params + 24]; // rd0 <- params[offset]
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
-	st.global.cs.u32 [%rd0], %r4; // (Index * ty.size() + params[offset])[Index] <- var
+	st.global.cs.f32 [%rd0], %f4; // (Index * ty.size() + params[offset])[Index] <- var
 
 	//End of Kernel:
 

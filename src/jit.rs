@@ -44,7 +44,7 @@ pub fn schedule(refs: &[&Ref]) {
     dbg!();
     let mut jit = JIT.lock();
     for r in refs {
-        IR.write().inc_rc(r.id());
+        IR.lock().inc_rc(r.id());
         jit.scheduled.push(r.id());
     }
 }
@@ -73,7 +73,7 @@ impl Jit {
     /// A the end, all scheduled variables are overwritten with the calculated data.
     ///
     pub fn eval(&mut self) {
-        self.compile(&mut IR.write());
+        self.compile(&mut IR.lock());
         let n_kernels = self.kernels.len();
         for i in 0..n_kernels {
             let (kernel, schedule) = self.schedule_kernel(i);

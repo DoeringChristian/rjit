@@ -7,7 +7,8 @@ use std::sync::Arc;
 use bytemuck::cast_slice;
 use once_cell::sync::{Lazy, OnceCell};
 use parking_lot::{
-    MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+    MappedMutexGuard, MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock,
+    RwLockReadGuard, RwLockWriteGuard,
 };
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
@@ -251,7 +252,7 @@ impl std::ops::Deref for ParamId {
     }
 }
 
-pub static IR: Lazy<RwLock<Ir>> = Lazy::new(|| RwLock::new(Ir::default()));
+pub static IR: Lazy<Mutex<Ir>> = Lazy::new(|| Mutex::new(Ir::default()));
 
 // thread_local! {pub static IR: RefCell<Ir> = RefCell::new(Ir::default())}
 // thread_local! {pub static BACKEND: RefCell<Option<Arc<dyn Backend>>> = RefCell::new(None)}
@@ -306,19 +307,19 @@ impl Ir {
         }
     }
 }
-pub fn var(r: &Ref) -> MappedRwLockReadGuard<Var> {
-    RwLockReadGuard::map(IR.read(), |ir| &ir.vars[r.0 .0])
+pub fn var(r: &Ref) -> MappedMutexGuard<Var> {
+    MutexGuard::map(IR.lock(), |ir| &mut ir.vars[r.0 .0])
 }
-pub fn var_mut(r: &mut Ref) -> MappedRwLockWriteGuard<Var> {
-    RwLockWriteGuard::map(IR.write(), |ir| &mut ir.vars[r.0 .0])
+pub fn var_mut(r: &mut Ref) -> MappedMutexGuard<Var> {
+    MutexGuard::map(IR.lock(), |ir| &mut ir.vars[r.0 .0])
 }
 
 pub fn push_var(mut v: Var) -> Ref {
     for id in v.deps.iter() {
-        IR.write().inc_rc(*id);
+        IR.lock().inc_rc(*id);
     }
     v.rc = 1;
-    Ref(VarId(IR.write().vars.insert(v)))
+    Ref(VarId(IR.lock().vars.insert(v)))
 }
 fn push_var_intermediate(op: Op, deps: &[&Ref], ty: VarType, size: usize) -> Ref {
     let deps = deps.iter().map(|r| r.0).collect();
@@ -626,7 +627,7 @@ impl Ref {
 
 impl Clone for Ref {
     fn clone(&self) -> Self {
-        IR.write().inc_rc(self.0);
+        IR.lock().inc_rc(self.0);
         // IR.try_write()
         //     .expect("Cannot clone Reference because IR is locked!")
         //     .inc_rc(self.0);
@@ -637,7 +638,7 @@ impl Clone for Ref {
 impl Drop for Ref {
     fn drop(&mut self) {
         dbg!(&self);
-        IR.write().dec_rc(self.0);
+        IR.lock().dec_rc(self.0);
         // IR.try_write()
         //     .expect("Cannot drop Reference because IR is locked!")
         //     .dec_rc(self.0);
