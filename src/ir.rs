@@ -324,36 +324,30 @@ fn var_info(ids: &[&Ref]) -> VarInfo {
 }
 
 pub fn const_f32(val: f32) -> Ref {
-    IR.with(|ir| {
-        push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::F32,
-            literal: bytemuck::cast::<_, u32>(val) as _,
-            ..Default::default()
-        })
+    push_var(Var {
+        op: Op::Literal,
+        deps: smallvec![],
+        ty: VarType::F32,
+        literal: bytemuck::cast::<_, u32>(val) as _,
+        ..Default::default()
     })
 }
 pub fn const_u32(val: u32) -> Ref {
-    IR.with(|ir| {
-        push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::U32,
-            literal: bytemuck::cast::<_, u32>(val) as _,
-            ..Default::default()
-        })
+    push_var(Var {
+        op: Op::Literal,
+        deps: smallvec![],
+        ty: VarType::U32,
+        literal: bytemuck::cast::<_, u32>(val) as _,
+        ..Default::default()
     })
 }
 pub fn const_bool(val: bool) -> Ref {
-    IR.with(|ir| {
-        push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::Bool,
-            literal: bytemuck::cast::<_, u8>(val) as _,
-            ..Default::default()
-        })
+    push_var(Var {
+        op: Op::Literal,
+        deps: smallvec![],
+        ty: VarType::Bool,
+        literal: bytemuck::cast::<_, u8>(val) as _,
+        ..Default::default()
     })
 }
 
