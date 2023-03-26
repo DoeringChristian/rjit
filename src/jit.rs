@@ -41,10 +41,10 @@ pub fn eval() {
 }
 
 pub fn schedule(refs: &[&Ref]) {
-    dbg!();
     let mut jit = JIT.lock();
+    let mut ir = IR.lock();
     for r in refs {
-        IR.lock().inc_rc(r.id());
+        ir.inc_rc(r.id());
         jit.scheduled.push(r.id());
     }
 }

@@ -454,7 +454,7 @@ pub fn and(lhs: &Ref, rhs: &Ref) -> Ref {
     }
 
     let ret = push_var_intermediate(Op::And, &[&lhs, &rhs], info.ty, info.size);
-    dbg!();
+    dbg!(IR.is_locked());
     ret
 }
 // Special operations:
@@ -637,7 +637,6 @@ impl Clone for Ref {
 
 impl Drop for Ref {
     fn drop(&mut self) {
-        dbg!(&self);
         IR.lock().dec_rc(self.0);
         // IR.try_write()
         //     .expect("Cannot drop Reference because IR is locked!")

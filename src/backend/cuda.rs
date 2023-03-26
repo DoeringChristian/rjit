@@ -855,10 +855,11 @@ mod test {
 
     #[test]
     fn load_add_f32() {
-        dbg!();
         ir::set_backend("cuda");
+        dbg!(IR.is_locked());
 
         let x = ir::buffer_f32(&[1.; 10]);
+        dbg!(IR.is_locked());
         let y = ir::add(&x, &x);
 
         jit::schedule(&[&y]);
@@ -870,10 +871,11 @@ mod test {
     }
     #[test]
     fn load_gather_f32() {
-        dbg!();
         ir::set_backend("cuda");
+        dbg!(IR.is_locked());
 
         let x = ir::buffer_f32(&[1., 2., 3., 4., 5.]);
+        dbg!(IR.is_locked());
         let i = ir::buffer_u32(&[0, 1, 4]);
         let y = ir::gather(&x, &i, None);
 
@@ -888,10 +890,10 @@ mod test {
     fn reindex() {
         // pretty_env_logger::init();
         ir::set_backend("cuda");
+        dbg!(IR.is_locked());
 
-        dbg!();
         let x = ir::index(10);
-        dbg!();
+        dbg!(IR.is_locked());
 
         let i = ir::index(3);
         let c = ir::const_u32(2);
@@ -908,9 +910,9 @@ mod test {
     }
     #[test]
     fn index() {
-        dbg!();
         // pretty_env_logger::init();
         ir::set_backend("cuda");
+        dbg!(IR.is_locked());
 
         let i = ir::index(10);
 
@@ -924,12 +926,13 @@ mod test {
     }
     #[test]
     fn gather_eval() {
-        dbg!();
         // pretty_env_logger::init();
         ir::set_backend("cuda");
+        dbg!(IR.is_locked());
 
         let r = {
             let x = ir::index(3);
+            dbg!(IR.is_locked());
             let y = ir::buffer_u32(&[1, 2, 3]);
 
             let z = ir::add(&x, &y);
@@ -951,11 +954,12 @@ mod test {
     }
     #[test]
     fn paralell() {
-        dbg!();
         // pretty_env_logger::init();
         ir::set_backend("cuda");
+        dbg!(IR.is_locked());
 
         let x = ir::index(10);
+        dbg!(IR.is_locked());
 
         let y = ir::index(3);
 
