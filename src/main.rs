@@ -33,7 +33,6 @@ fn main() {
     assert_eq!(ir::to_vec_u32(&r), vec![1, 3, 5]);
 
     // let x = ir.buffer_f32(&[1.; 10]);
-    //
     // let c = ir.const_f32(1.);
     // let d = ir.const_f32(2.);
     // let e = ir.add(x, d);
