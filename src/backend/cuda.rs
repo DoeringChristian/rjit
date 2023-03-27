@@ -1002,27 +1002,45 @@ mod test {
         // pretty_env_logger::init();
         ir::set_backend("cuda");
 
+        let tmp_x;
+        let tmp_y;
+        let tmp_z;
         let r = {
             let x = ir::index(3);
+            assert_eq!(ir::var(&x).rc, 1);
             let y = ir::buffer_u32(&[1, 2, 3]);
+            assert_eq!(ir::var(&y).rc, 1);
 
             let z = ir::add(&x, &y);
+            assert_eq!(ir::var(&x).rc, 2);
+            assert_eq!(ir::var(&y).rc, 2);
+            assert_eq!(ir::var(&z).rc, 1);
 
-            dbg!(ir::var(&x).rc);
             let r = ir::gather(&z, &ir::index(3), None);
-            dbg!(ir::var(&x).rc);
+            assert_eq!(ir::var(&x).rc, 1);
+            assert_eq!(ir::var(&y).rc, 1);
+            assert_eq!(ir::var(&z).rc, 2);
+            assert_eq!(ir::var(&r).rc, 1);
+            tmp_x = x.id();
+            tmp_y = y.id();
+            tmp_z = z.id();
             r
         };
-        dbg!(&IR);
+        assert_eq!(ir::var(&r).rc, 1);
+        assert!(IR.lock().get_var(tmp_x).is_none());
+        assert!(IR.lock().get_var(tmp_y).is_none());
+        assert_eq!(IR.lock().get_var(tmp_z).unwrap().rc, 1);
 
         let mut jit = Jit::default();
         jit.schedule(&[&r]);
         jit.eval(&mut IR.lock());
 
+        assert_eq!(ir::var(&r).rc, 1);
+        assert!(IR.lock().get_var(tmp_z).is_none());
+
         insta::assert_snapshot!(jit.kernel_debug());
 
-        dbg!(&IR);
-        dbg!(&r);
+        assert_eq!(ir::to_vec_u32(&r), vec![1, 3, 5]);
     }
     #[test]
     fn paralell() {

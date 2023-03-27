@@ -298,6 +298,9 @@ impl Ir {
     pub fn var_mut(&mut self, id: VarId) -> &mut Var {
         &mut self.vars[id.0]
     }
+    pub fn get_var(&mut self, id: VarId) -> Option<&Var> {
+        self.vars.get(id.0)
+    }
     pub fn inc_rc(&mut self, id: VarId) {
         self.var_mut(id).rc += 1;
     }
