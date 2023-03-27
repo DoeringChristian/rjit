@@ -256,18 +256,23 @@ pub static IR: Lazy<Mutex<Ir>> = Lazy::new(|| Mutex::new(Ir::default()));
 
 // thread_local! {pub static IR: RefCell<Ir> = RefCell::new(Ir::default())}
 // thread_local! {pub static BACKEND: RefCell<Option<Arc<dyn Backend>>> = RefCell::new(None)}
-pub static BACKEND: OnceCell<Mutex<Box<dyn Backend>>> = OnceCell::new();
+// pub static BACKEND: OnceCell<Mutex<Box<dyn Backend>>> = OnceCell::new();
 
 pub fn set_backend(backend: impl AsRef<str>) {
+    let mut ir = IR.lock();
+    if ir.backend.is_some() {
+        return;
+    }
     let backend = backend.as_ref();
     if backend == "cuda" {
-        BACKEND.set(Mutex::new(Box::new(CUDABackend::new())));
+        ir.backend = Some(Box::new(CUDABackend::new()));
     }
 }
 
 #[derive(Default)]
 pub struct Ir {
     vars: SlotMap<DefaultKey, Var>,
+    pub backend: Option<Box<dyn Backend>>,
     // pub scheduled: Vec<VarId>,
 }
 impl Debug for Ir {
@@ -378,16 +383,16 @@ pub fn const_bool(val: bool) -> Ref {
 
 // Buffer initializers:
 pub fn buffer_f32(slice: &[f32]) -> Ref {
+    let buffer = Some(
+        IR.lock()
+            .backend
+            .as_ref()
+            .unwrap()
+            .buffer_from_slice(cast_slice(slice)),
+    );
     push_var(Var {
         param_ty: ParamType::Input,
-        buffer: Some(
-            BACKEND
-                .get()
-                .unwrap()
-                .lock()
-                .borrow()
-                .buffer_from_slice(cast_slice(slice)),
-        ),
+        buffer,
         size: slice.len(),
         ty: VarType::F32,
         op: Op::Data,
@@ -395,15 +400,16 @@ pub fn buffer_f32(slice: &[f32]) -> Ref {
     })
 }
 pub fn buffer_u32(slice: &[u32]) -> Ref {
+    let buffer = Some(
+        IR.lock()
+            .backend
+            .as_ref()
+            .unwrap()
+            .buffer_from_slice(cast_slice(slice)),
+    );
     push_var(Var {
         param_ty: ParamType::Input,
-        buffer: Some(
-            BACKEND
-                .get()
-                .unwrap()
-                .lock()
-                .buffer_from_slice(cast_slice(slice)),
-        ),
+        buffer,
         size: slice.len(),
         ty: VarType::U32,
         op: Op::Data,

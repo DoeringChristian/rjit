@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use rayon::prelude::*;
 
 use crate::backend::{Backend, Kernel};
-use crate::ir::{self, Ir, Op, ParamType, Ref, VarId, BACKEND, IR};
+use crate::ir::{self, Ir, Op, ParamType, Ref, VarId, IR};
 use crate::schedule::ScheduleIr;
 
 pub static JIT: Lazy<Mutex<Jit>> = Lazy::new(|| Mutex::new(Jit::default()));
@@ -37,7 +37,9 @@ pub struct Jit {
 /// A the end, all scheduled variables are overwritten with the calculated data.
 ///
 pub fn eval() {
-    JIT.lock().eval();
+    let mut jit = JIT.lock();
+    let mut ir = IR.lock();
+    jit.eval(&mut ir);
 }
 
 pub fn schedule(refs: &[&Ref]) {
@@ -72,15 +74,15 @@ impl Jit {
     ///
     /// A the end, all scheduled variables are overwritten with the calculated data.
     ///
-    pub fn eval(&mut self) {
-        self.compile(&mut IR.lock());
+    pub fn eval(&mut self, ir: &mut Ir) {
+        self.compile(ir);
         let n_kernels = self.kernels.len();
         for i in 0..n_kernels {
             let (kernel, schedule) = self.schedule_kernel(i);
             kernel.execute_async(schedule);
         }
 
-        BACKEND.get().unwrap().lock().synchronize();
+        ir.backend.as_ref().unwrap().synchronize();
 
         // After executing the kernels, the Ir is cleaned up.
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to
@@ -95,6 +97,9 @@ impl Jit {
     /// In the end a set of Kernels is assembled and compiled.
     ///
     fn compile(&mut self, ir: &mut Ir) {
+        if self.scheduled.len() == 0 {
+            return;
+        }
         self.schedules.clear();
         self.kernels.clear();
         let mut scheduled = self.scheduled.clone();
@@ -102,17 +107,16 @@ impl Jit {
 
         // For every scheduled variable (destination) we have to create a new buffer
         for id in scheduled.iter_mut() {
+            let size = ir.var(*id).size;
+            let ty_size = ir.var(*id).ty.size();
+            let buffer = ir.backend.as_ref().unwrap().buffer_uninit(size * ty_size);
+
             let mut var = ir.var_mut(*id);
             var.param_ty = ParamType::Output;
-            var.buffer = Some(
-                BACKEND
-                    .get()
-                    .unwrap()
-                    .lock()
-                    .buffer_uninit(var.size * var.ty.size()),
-            );
+            var.buffer = Some(buffer);
         }
 
+        let first_register = ir.backend.as_ref().unwrap().first_register();
         let cur = 0;
         let mut size;
         for i in 1..scheduled.len() {
@@ -120,13 +124,13 @@ impl Jit {
             let var1 = ir.var(scheduled[i]);
             size = var0.size;
             if var0.size != var1.size {
-                let mut tmp = ScheduleIr::new(BACKEND.get().unwrap().lock().first_register(), size);
+                let mut tmp = ScheduleIr::new(first_register, size);
                 tmp.collect_vars(ir, &scheduled[cur..i]);
                 self.borrow_mut().schedules.push(tmp);
             }
         }
         size = ir.var(*scheduled.last().unwrap()).size;
-        let mut tmp = ScheduleIr::new(BACKEND.get().unwrap().lock().first_register(), size);
+        let mut tmp = ScheduleIr::new(first_register, size);
 
         tmp.collect_vars(ir, &scheduled[cur..scheduled.len()]);
         self.schedules.push(tmp);
@@ -136,7 +140,7 @@ impl Jit {
             .schedules
             .iter()
             .map(|mut s| {
-                let mut kernel = BACKEND.get().unwrap().lock().new_kernel();
+                let mut kernel = ir.backend.as_ref().unwrap().new_kernel();
                 kernel.assemble(&mut s);
                 // kernel.compile();
                 kernel
