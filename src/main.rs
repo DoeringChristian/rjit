@@ -14,31 +14,17 @@ mod schedule;
 fn main() {
     // pretty_env_logger::init();
     ir::set_backend("cuda");
+    dbg!(IR.is_locked());
 
-    let r = {
-        let x = ir::index(3);
-        let y = ir::buffer_u32(&[1, 2, 3]);
+    let x = ir::index(10);
+    dbg!(IR.is_locked());
 
-        let z = ir::add(&x, &y);
+    let y = ir::index(3);
 
-        let r = ir::gather(&z, &ir::index(3), None);
-        r
-    };
-    dbg!(&IR);
+    let mut jit = Jit::default();
+    jit.schedule(&[&y, &x]);
+    jit.eval(&mut IR.lock());
 
-    jit::schedule(&[&r]);
-    jit::eval();
-    dbg!();
-
-    assert_eq!(ir::to_vec_u32(&r), vec![1, 3, 5]);
-
-    // let x = ir.buffer_f32(&[1.; 10]);
-    // let c = ir.const_f32(1.);
-    // let d = ir.const_f32(2.);
-    // let e = ir.add(x, d);
-    // let y = ir.add(x, c);
-
-    // ir.schedule(&[y]);
-    //
-    // jit.eval(&mut ir);
+    assert_eq!(ir::to_vec_u32(&x), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    assert_eq!(ir::to_vec_u32(&y), vec![0, 1, 2]);
 }

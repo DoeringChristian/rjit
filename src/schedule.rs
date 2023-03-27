@@ -154,7 +154,6 @@ impl ScheduleIr {
     /// reindex it using the parameter idx.
     ///
     pub fn collect(&mut self, ir: &Ir, id: VarId) -> SVarId {
-        dbg!();
         if self.visited.contains_key(&id) {
             return self.visited[&id];
         }

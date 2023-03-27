@@ -301,7 +301,7 @@ impl Ir {
     pub fn inc_rc(&mut self, id: VarId) {
         self.var_mut(id).rc += 1;
     }
-    fn dec_rc(&mut self, id: VarId) {
+    pub fn dec_rc(&mut self, id: VarId) {
         let var = self.var_mut(id);
         var.rc -= 1;
         if var.rc == 0 {
@@ -320,11 +320,13 @@ pub fn var_mut(r: &mut Ref) -> MappedMutexGuard<Var> {
 }
 
 pub fn push_var(mut v: Var) -> Ref {
-    for id in v.deps.iter() {
-        IR.lock().inc_rc(*id);
+    let mut ir = IR.lock();
+    for dep in v.deps.iter() {
+        ir.inc_rc(*dep);
     }
     v.rc = 1;
-    Ref(VarId(IR.lock().vars.insert(v)))
+    let id = VarId(ir.vars.insert(v));
+    Ref(id)
 }
 fn push_var_intermediate(op: Op, deps: &[&Ref], ty: VarType, size: usize) -> Ref {
     let deps = deps.iter().map(|r| r.0).collect();
@@ -460,18 +462,18 @@ pub fn and(lhs: &Ref, rhs: &Ref) -> Ref {
     }
 
     let ret = push_var_intermediate(Op::And, &[&lhs, &rhs], info.ty, info.size);
-    dbg!(IR.is_locked());
     ret
 }
 // Special operations:
 pub fn index(size: usize) -> Ref {
-    push_var(Var {
+    let v = push_var(Var {
         op: Op::Idx,
         deps: smallvec![],
         ty: VarType::U32,
         size,
         ..Default::default()
-    })
+    });
+    v
 }
 pub fn pointer_to(src: &Ref) -> Option<Ref> {
     let ptr = var(&src).buffer.as_ref().map(|b| b.as_ptr());
@@ -512,14 +514,13 @@ fn reindex(r: &Ref, new_idx: &Ref, size: usize) -> Option<Ref> {
     let mut deps = smallvec![];
     if !is_literal {
         for dep in v_deps {
-            let dep = Ref(dep);
+            let dep = Ref::borrow(dep);
             if let Some(dep) = reindex(&dep, new_idx, size) {
                 deps.push(dep.0);
             } else {
                 return None;
             }
         }
-        dbg!(IR.is_locked());
     }
 
     let v = var(&r);
@@ -582,11 +583,8 @@ pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
 
     let res = reindex(&src, &index, size);
 
-    dbg!(IR.is_locked());
     if let Some(res) = res {
-        dbg!(IR.is_locked());
         let res = and(&res, &mask); // TODO: masking
-        dbg!(IR.is_locked());
         return res;
     }
 
@@ -618,6 +616,10 @@ pub struct Ref(VarId);
 impl Ref {
     pub fn id(&self) -> VarId {
         self.0
+    }
+    pub fn borrow(id: VarId) -> Self {
+        IR.lock().inc_rc(id);
+        Self(id)
     }
     pub fn is_data(&self) -> bool {
         let var = var(self);

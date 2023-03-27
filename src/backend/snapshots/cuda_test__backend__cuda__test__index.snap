@@ -1,6 +1,6 @@
 ---
 source: src/backend/cuda.rs
-expression: "jit::kernel_debug()"
+expression: jit.kernel_debug()
 ---
 ===============================================
 Kernel 0:

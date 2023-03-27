@@ -37,37 +37,28 @@ pub struct Jit {
 /// A the end, all scheduled variables are overwritten with the calculated data.
 ///
 pub fn eval() {
-    let mut jit = JIT.lock();
+    let mut jit = JIT.lock(); // always lock JIT before IR
     let mut ir = IR.lock();
     jit.eval(&mut ir);
 }
 
 pub fn schedule(refs: &[&Ref]) {
-    let mut jit = JIT.lock();
+    let mut jit = JIT.lock(); // always lock JIT before IR
     let mut ir = IR.lock();
     for r in refs {
         ir.inc_rc(r.id());
         jit.scheduled.push(r.id());
     }
 }
-///
-/// Writes the kernel assemblies into a string which can then be checked by snapshot testing
-/// tools such as insta.
-///
-pub fn kernel_debug() -> String {
-    let jit = JIT.lock();
-
-    let mut string = String::new();
-    for (i, k) in jit.borrow().kernels.iter().enumerate() {
-        writeln!(string, "===============================================").unwrap();
-        writeln!(string, "Kernel {}:", i).unwrap();
-        writeln!(string, "").unwrap();
-        write!(string, "{}", k.assembly()).unwrap();
-    }
-    string
-}
 
 impl Jit {
+    pub fn schedule(&mut self, refs: &[&Ref]) {
+        let mut ir = IR.lock(); // IR is always locked later.
+        for r in refs {
+            ir.inc_rc(r.id());
+            self.scheduled.push(r.id());
+        }
+    }
     ///
     /// Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
     /// into kernels.
@@ -87,6 +78,23 @@ impl Jit {
         // After executing the kernels, the Ir is cleaned up.
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to
         // Data
+        for id in self.scheduled.iter() {
+            let var = ir.var_mut(*id);
+
+            // Set op and type for next kernel:
+            var.param_ty = ParamType::Input;
+            var.op = Op::Data;
+
+            // Clear dependecies:
+            let deps = var.deps.clone();
+            var.deps.clear();
+
+            for dep in deps {
+                ir.dec_rc(dep);
+            }
+
+            ir.dec_rc(*id);
+        }
         self.scheduled.clear();
     }
     ///
@@ -152,6 +160,20 @@ impl Jit {
     }
     pub fn schedule_kernel(&mut self, i: usize) -> (&mut Box<dyn Kernel>, &mut ScheduleIr) {
         (&mut self.kernels[i], &mut self.schedules[i])
+    }
+    ///
+    /// Writes the kernel assemblies into a string which can then be checked by snapshot testing
+    /// tools such as insta.
+    ///
+    pub fn kernel_debug(&self) -> String {
+        let mut string = String::new();
+        for (i, k) in self.kernels.iter().enumerate() {
+            writeln!(string, "===============================================").unwrap();
+            writeln!(string, "Kernel {}:", i).unwrap();
+            writeln!(string, "").unwrap();
+            write!(string, "{}", k.assembly()).unwrap();
+        }
+        string
     }
 }
 
