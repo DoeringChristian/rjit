@@ -68,26 +68,12 @@ impl ScheduleVar {
 /// Intermediate representation for scheduled variables
 ///
 // #[derive(Default)]
+#[derive(Debug)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
     n_regs: usize,
-    // The index into the hashmap consists of
-    // the variable id and an optional index for
-    // reindexing.
     visited: HashMap<VarId, SVarId>,
-}
-
-impl Debug for ScheduleIr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ScheduleIr")
-            .field("vars", &self.vars)
-            .field("params", &self.params)
-            .field("n_regs", &self.n_regs)
-            .field("visited", &self.visited)
-            // .field("backend", &self.backend)
-            .finish()
-    }
 }
 
 impl ScheduleIr {
