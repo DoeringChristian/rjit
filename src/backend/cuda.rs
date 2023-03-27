@@ -787,6 +787,7 @@ impl CUDAKernel {
                 let unmasked = d2.is_literal() && d2.literal != 0;
                 let is_bool = var.ty.is_bool();
 
+                // TODO: better buffer loading ( dont use as_ptr and get ptr from src in here).
                 if !unmasked {
                     writeln!(self.asm, "\t@!{} bra l_{}_masked;", d2.reg(), var.reg_idx());
                 }
