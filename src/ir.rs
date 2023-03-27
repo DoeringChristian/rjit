@@ -252,6 +252,7 @@ impl std::ops::Deref for ParamId {
     }
 }
 
+// We have one global Intermediate Representation that tracks all operations.
 pub static IR: Lazy<Mutex<Ir>> = Lazy::new(|| Mutex::new(Ir::default()));
 
 // thread_local! {pub static IR: RefCell<Ir> = RefCell::new(Ir::default())}

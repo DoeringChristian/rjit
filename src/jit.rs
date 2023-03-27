@@ -11,6 +11,9 @@ use crate::backend::{Backend, Kernel};
 use crate::ir::{self, Ir, Op, ParamType, Ref, VarId, IR};
 use crate::schedule::ScheduleIr;
 
+///
+/// This is the default Just In Time Compiler (JIT).
+///
 pub static JIT: Lazy<Mutex<Jit>> = Lazy::new(|| Mutex::new(Jit::default()));
 
 // TODO: pooling for paralel exectution
