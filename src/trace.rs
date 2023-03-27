@@ -271,15 +271,15 @@ impl Deref for Trace {
 }
 
 impl Trace {
-    pub fn push_var(&self, mut v: Var) -> Ref {
+    pub fn push_var(&self, mut v: Var) -> VarRef {
         for dep in v.deps.iter() {
             self.lock().inc_rc(*dep);
         }
         v.rc = 1;
         let id = VarId(self.lock().vars.insert(v));
-        Ref::steal(&self, id)
+        VarRef::steal(&self, id)
     }
-    fn var_info(&self, refs: &[&Ref]) -> VarInfo {
+    fn var_info(&self, refs: &[&VarRef]) -> VarInfo {
         let ty = refs.first().unwrap().var().ty.clone(); // TODO: Fix (first non void)
 
         let size = refs
@@ -290,7 +290,7 @@ impl Trace {
             .clone();
         VarInfo { ty, size }
     }
-    fn push_var_intermediate(&self, op: Op, deps: &[&Ref], ty: VarType, size: usize) -> Ref {
+    fn push_var_intermediate(&self, op: Op, deps: &[&VarRef], ty: VarType, size: usize) -> VarRef {
         let deps = deps
             .iter()
             .map(|r| {
@@ -323,7 +323,7 @@ impl Trace {
 }
 impl Trace {
     // Constatns:
-    pub fn const_f32(&self, val: f32) -> Ref {
+    pub fn const_f32(&self, val: f32) -> VarRef {
         self.push_var(Var {
             op: Op::Literal,
             deps: smallvec![],
@@ -332,7 +332,7 @@ impl Trace {
             ..Default::default()
         })
     }
-    pub fn const_u32(&self, val: u32) -> Ref {
+    pub fn const_u32(&self, val: u32) -> VarRef {
         self.push_var(Var {
             op: Op::Literal,
             deps: smallvec![],
@@ -341,7 +341,7 @@ impl Trace {
             ..Default::default()
         })
     }
-    pub fn const_bool(&self, val: bool) -> Ref {
+    pub fn const_bool(&self, val: bool) -> VarRef {
         self.push_var(Var {
             op: Op::Literal,
             deps: smallvec![],
@@ -351,7 +351,7 @@ impl Trace {
         })
     }
     // Buffer initializers:
-    pub fn buffer_f32(&self, slice: &[f32]) -> Ref {
+    pub fn buffer_f32(&self, slice: &[f32]) -> VarRef {
         let buffer = Some(
             self.lock()
                 .backend
@@ -368,7 +368,7 @@ impl Trace {
             ..Default::default()
         })
     }
-    pub fn buffer_u32(&self, slice: &[u32]) -> Ref {
+    pub fn buffer_u32(&self, slice: &[u32]) -> VarRef {
         let buffer = Some(
             self.lock()
                 .backend
@@ -386,7 +386,7 @@ impl Trace {
         })
     }
     // Special operations:
-    pub fn index(&self, size: usize) -> Ref {
+    pub fn index(&self, size: usize) -> VarRef {
         let v = self.push_var(Var {
             op: Op::Idx,
             deps: smallvec![],
@@ -449,12 +449,12 @@ impl Ir {
 /// Reference to a variable.
 ///
 #[derive(Debug)]
-pub struct Ref {
+pub struct VarRef {
     id: VarId,
     ir: Trace,
 }
 
-impl Ref {
+impl VarRef {
     pub fn id(&self) -> VarId {
         self.id
     }
@@ -499,7 +499,7 @@ impl Ref {
         Vec::from(cast_slice(&v))
     }
     // Unarry operations:
-    pub fn cast(&self, ty: VarType) -> Ref {
+    pub fn cast(&self, ty: VarType) -> VarRef {
         let v = self.var();
         self.ir.push_var(Var {
             op: Op::Cast,
@@ -510,17 +510,17 @@ impl Ref {
         })
     }
     // Binarry operations:
-    pub fn add(&self, rhs: &Ref) -> Ref {
+    pub fn add(&self, rhs: &VarRef) -> VarRef {
         let info = self.ir.var_info(&[self, &rhs]);
         self.ir
             .push_var_intermediate(Op::Add, &[self, &rhs], info.ty, info.size)
     }
-    pub fn mul(&self, rhs: &Ref) -> Ref {
+    pub fn mul(&self, rhs: &VarRef) -> VarRef {
         let info = self.ir.var_info(&[self, &rhs]);
         self.ir
             .push_var_intermediate(Op::Mul, &[self, &rhs], info.ty, info.size)
     }
-    pub fn and(&self, rhs: &Ref) -> Ref {
+    pub fn and(&self, rhs: &VarRef) -> VarRef {
         assert!(Arc::ptr_eq(&self.ir, &rhs.ir));
         let info = self.ir.var_info(&[self, &rhs]);
 
@@ -536,7 +536,7 @@ impl Ref {
             .push_var_intermediate(Op::And, &[self, &rhs], info.ty, info.size);
         ret
     }
-    pub fn pointer_to(&self) -> Option<Ref> {
+    pub fn pointer_to(&self) -> Option<VarRef> {
         let ptr = self.var().buffer.as_ref().map(|b| b.as_ptr());
         // TODO: Eval var if needed.
         if let Some(ptr) = ptr {
@@ -560,7 +560,7 @@ impl Ref {
     /// For now we construct a separate set of variables in the Ir.
     /// However, it should sometimes be possible to reuse the old ones.
     ///
-    fn reindex(&self, new_idx: &Ref, size: usize) -> Option<Ref> {
+    fn reindex(&self, new_idx: &VarRef, size: usize) -> Option<VarRef> {
         assert!(Arc::ptr_eq(&self.ir, &new_idx.ir));
         // let mut ir = self.ir.lock();
 
@@ -578,7 +578,7 @@ impl Ref {
         let mut deps = smallvec![];
         if !is_literal {
             for dep in v_deps {
-                let dep = Ref::borrow(&self.ir, dep);
+                let dep = VarRef::borrow(&self.ir, dep);
                 if let Some(dep) = dep.reindex(new_idx, size) {
                     deps.push(dep.id());
                 } else {
@@ -626,13 +626,13 @@ impl Ref {
     /// Finally, if the variable depends on Inputs we need to launch multiple Kernels (this
     /// is not yet implemented).
     ///
-    pub fn gather(&self, index: &Ref, mask: Option<&Ref>) -> Ref {
+    pub fn gather(&self, index: &VarRef, mask: Option<&VarRef>) -> VarRef {
         assert!(Arc::ptr_eq(&self.ir, &index.ir));
 
         let size = index.var().size;
         let ty = self.var().ty.clone();
 
-        let mask: Ref = mask
+        let mask: VarRef = mask
             .map(|m| {
                 assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
@@ -679,7 +679,7 @@ impl Ref {
     }
 }
 
-impl Clone for Ref {
+impl Clone for VarRef {
     fn clone(&self) -> Self {
         self.ir.lock().inc_rc(self.id);
         Self {
@@ -689,7 +689,7 @@ impl Clone for Ref {
     }
 }
 
-impl Drop for Ref {
+impl Drop for VarRef {
     fn drop(&mut self) {
         self.ir.lock().dec_rc(self.id);
     }

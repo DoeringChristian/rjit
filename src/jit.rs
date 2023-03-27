@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use rayon::prelude::*;
 
 use crate::backend::{Backend, Kernel};
-use crate::trace::{self, Ir, Op, ParamType, Ref, VarId, IR};
+use crate::trace::{self, Ir, Op, ParamType, VarRef, VarId, IR};
 use crate::schedule::ScheduleIr;
 
 ///
@@ -45,7 +45,7 @@ pub fn eval() {
     jit.eval(&mut ir);
 }
 
-pub fn schedule(refs: &[&Ref]) {
+pub fn schedule(refs: &[&VarRef]) {
     let mut jit = JIT.lock(); // always lock JIT before IR
     let mut ir = IR.lock();
     for r in refs {
@@ -55,7 +55,7 @@ pub fn schedule(refs: &[&Ref]) {
 }
 
 impl Jit {
-    pub fn schedule(&mut self, refs: &[&Ref]) {
+    pub fn schedule(&mut self, refs: &[&VarRef]) {
         let mut ir = IR.lock(); // IR is always locked later.
         for r in refs {
             ir.inc_rc(r.id());
