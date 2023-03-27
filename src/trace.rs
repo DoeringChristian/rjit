@@ -31,7 +31,7 @@ impl Deref for Trace {
 }
 
 impl Trace {
-    pub fn push_var(&self, mut v: Var) -> VarRef {
+    fn push_var(&self, mut v: Var) -> VarRef {
         for dep in v.deps.iter() {
             self.lock().inc_rc(*dep);
         }
@@ -50,7 +50,7 @@ impl Trace {
             .clone();
         VarInfo { ty, size }
     }
-    fn push_var_intermediate(&self, op: Op, deps: &[&VarRef], ty: VarType, size: usize) -> VarRef {
+    fn push_var_op(&self, op: Op, deps: &[&VarRef], ty: VarType, size: usize) -> VarRef {
         let deps = deps
             .iter()
             .map(|r| {
@@ -267,12 +267,12 @@ impl VarRef {
     pub fn add(&self, rhs: &VarRef) -> VarRef {
         let info = self.ir.var_info(&[self, &rhs]);
         self.ir
-            .push_var_intermediate(Op::Add, &[self, &rhs], info.ty, info.size)
+            .push_var_op(Op::Add, &[self, &rhs], info.ty, info.size)
     }
     pub fn mul(&self, rhs: &VarRef) -> VarRef {
         let info = self.ir.var_info(&[self, &rhs]);
         self.ir
-            .push_var_intermediate(Op::Mul, &[self, &rhs], info.ty, info.size)
+            .push_var_op(Op::Mul, &[self, &rhs], info.ty, info.size)
     }
     pub fn and(&self, rhs: &VarRef) -> VarRef {
         assert!(Arc::ptr_eq(&self.ir, &rhs.ir));
@@ -287,10 +287,10 @@ impl VarRef {
 
         let ret = self
             .ir
-            .push_var_intermediate(Op::And, &[self, &rhs], info.ty, info.size);
+            .push_var_op(Op::And, &[self, &rhs], info.ty, info.size);
         ret
     }
-    pub fn pointer_to(&self) -> Option<VarRef> {
+    pub fn as_ptr(&self) -> Option<VarRef> {
         let ptr = self.var().buffer.as_ref().map(|b| b.as_ptr());
         // TODO: Eval var if needed.
         if let Some(ptr) = ptr {
@@ -393,7 +393,7 @@ impl VarRef {
             })
             .unwrap_or(self.ir.const_bool(true));
 
-        let res = self.pointer_to();
+        let res = self.as_ptr();
 
         if let Some(src) = res {
             let ret = self.ir.push_var(Var {
@@ -416,7 +416,7 @@ impl VarRef {
         jit::schedule(&[self]);
         jit::eval();
 
-        let res = self.pointer_to();
+        let res = self.as_ptr();
 
         if let Some(src) = res {
             let ret = self.ir.push_var(Var {
