@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 
 use crate::backend::Kernel;
 use crate::schedule::ScheduleIr;
-use crate::trace::{Ir, VarRef, IR};
+use crate::trace::{Internal, VarRef, IR};
 use crate::var::{Op, ParamType, VarId};
 
 ///
@@ -66,7 +66,7 @@ impl Jit {
     ///
     /// A the end, all scheduled variables are overwritten with the calculated data.
     ///
-    pub fn eval(&mut self, ir: &mut Ir) {
+    pub fn eval(&mut self, ir: &mut Internal) {
         self.compile(ir);
         let n_kernels = self.kernels.len();
         for i in 0..n_kernels {
@@ -105,7 +105,7 @@ impl Jit {
     /// Then, a Schedule Intermediate Representation is constructed from the groups.
     /// In the end a set of Kernels is assembled and compiled.
     ///
-    fn compile(&mut self, ir: &mut Ir) {
+    fn compile(&mut self, ir: &mut Internal) {
         if self.scheduled.len() == 0 {
             return;
         }

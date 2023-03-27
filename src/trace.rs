@@ -11,24 +11,7 @@ use smallvec::smallvec;
 use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
 use crate::jit;
-use crate::var::{Op, ParamType, Var, VarId, VarType};
-
-#[derive(Clone, Copy, Debug)]
-pub struct ParamId(usize);
-
-impl ParamId {
-    pub fn offset(self) -> usize {
-        self.0 * 8
-    }
-}
-
-impl std::ops::Deref for ParamId {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+use crate::var::{Op, ParamType, Var, VarId, VarInfo, VarType};
 
 // We have one global Intermediate Representation that tracks all operations.
 // However, Other Intermediate representations can also be constructed.
@@ -38,9 +21,9 @@ pub static IR: Lazy<Trace> = Lazy::new(|| Trace::default());
 /// A wrapper arrund an Intermediate Representation.
 ///
 #[derive(Clone, Debug, Default)]
-pub struct Trace(Arc<Mutex<Ir>>);
+pub struct Trace(Arc<Mutex<Internal>>);
 impl Deref for Trace {
-    type Target = Arc<Mutex<Ir>>;
+    type Target = Arc<Mutex<Internal>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -176,12 +159,12 @@ impl Trace {
 }
 
 #[derive(Default)]
-pub struct Ir {
+pub struct Internal {
     vars: SlotMap<DefaultKey, Var>,
     pub backend: Option<Box<dyn Backend>>,
     // pub scheduled: Vec<VarId>,
 }
-impl Debug for Ir {
+impl Debug for Internal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ir")
             .field("vars", &self.vars)
@@ -191,13 +174,7 @@ impl Debug for Ir {
     }
 }
 
-#[derive(Debug)]
-struct VarInfo {
-    ty: VarType,
-    size: usize,
-}
-
-impl Ir {
+impl Internal {
     pub fn var(&self, id: VarId) -> &Var {
         &self.vars[id.0]
     }

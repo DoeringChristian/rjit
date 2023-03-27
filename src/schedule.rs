@@ -3,7 +3,7 @@ use std::fmt::Debug;
 
 use smallvec::{smallvec, SmallVec};
 
-use crate::trace::Ir;
+use crate::trace::Internal;
 use crate::var::{Op, ParamType, VarId, VarType};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -141,7 +141,7 @@ impl ScheduleIr {
         self.params.push(param);
         idx
     }
-    pub fn collect_vars(&mut self, ir: &Ir, ids: &[VarId]) {
+    pub fn collect_vars(&mut self, ir: &Internal, ids: &[VarId]) {
         for id in ids {
             self.collect(ir, *id);
         }
@@ -152,7 +152,7 @@ impl ScheduleIr {
     /// If a gather operation is encountered, that only depends on trivial operations we can
     /// reindex it using the parameter idx.
     ///
-    pub fn collect(&mut self, ir: &Ir, id: VarId) -> SVarId {
+    pub fn collect(&mut self, ir: &Internal, id: VarId) -> SVarId {
         if self.visited.contains_key(&id) {
             return self.visited[&id];
         }

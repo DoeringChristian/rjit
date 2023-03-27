@@ -221,3 +221,9 @@ impl Var {
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct VarId(pub DefaultKey);
+
+#[derive(Debug)]
+pub struct VarInfo {
+    pub ty: VarType,
+    pub size: usize,
+}
