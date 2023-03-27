@@ -67,8 +67,7 @@ impl ScheduleVar {
 ///
 /// Intermediate representation for scheduled variables
 ///
-// #[derive(Default)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
@@ -81,8 +80,7 @@ impl ScheduleIr {
         Self {
             n_regs: first_register,
             params: vec![size as _],
-            vars: Default::default(),
-            visited: Default::default(),
+            ..Default::default()
         }
     }
     pub fn ids(&self) -> impl Iterator<Item = SVarId> {
