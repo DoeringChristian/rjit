@@ -73,8 +73,8 @@ impl ScheduleVar {
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
-    literals: Vec<u64>,
-    buffers: Vec<Arc<dyn Buffer>>,
+    literals: Vec<u64>,            // Literals (directly passed to the kernel)
+    buffers: Vec<Arc<dyn Buffer>>, // Buffers referenced in the kernel
     n_regs: usize,
     visited: HashMap<VarId, SVarId>,
 }
