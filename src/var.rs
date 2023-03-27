@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use slotmap::DefaultKey;
 use smallvec::SmallVec;
@@ -188,7 +189,7 @@ pub struct Var {
     pub op: Op, // Operation used to construct the variable
     pub deps: SmallVec<[VarId; 4]>,
     pub ty: VarType,                     // Type of the variable
-    pub buffer: Option<Box<dyn Buffer>>, // Optional buffer
+    pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer
     pub size: usize,                     // number of elements
     pub param_ty: ParamType,             // Parameter type
     pub rc: usize,

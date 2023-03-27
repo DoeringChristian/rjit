@@ -36,16 +36,16 @@ impl Backend for CUDABackend {
         CUDAKernel::FIRST_REGISTER
     }
 
-    fn buffer_uninit(&self, size: usize) -> Box<dyn super::Buffer> {
+    fn buffer_uninit(&self, size: usize) -> Arc<dyn super::Buffer> {
         unsafe { cust::sys::cuCtxSetCurrent(self.ctx.as_raw()) };
-        Box::new(CUDABuffer {
+        Arc::new(CUDABuffer {
             buffer: vec![0u8; size].as_slice().as_dbuf().unwrap(),
         })
     }
 
-    fn buffer_from_slice(&self, slice: &[u8]) -> Box<dyn super::Buffer> {
+    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn super::Buffer> {
         unsafe { cust::sys::cuCtxSetCurrent(self.ctx.as_raw()) };
-        Box::new(CUDABuffer {
+        Arc::new(CUDABuffer {
             buffer: slice.as_dbuf().unwrap(),
         })
     }

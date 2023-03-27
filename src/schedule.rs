@@ -71,6 +71,7 @@ impl ScheduleVar {
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
+    literals: Vec<u64>,
     n_regs: usize,
     visited: HashMap<VarId, SVarId>,
 }
