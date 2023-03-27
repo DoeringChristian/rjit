@@ -61,6 +61,7 @@ impl Drop for CUDABackend {
     }
 }
 
+#[derive(Debug)]
 pub struct CUDABuffer {
     buffer: DeviceBuffer<u8>,
 }

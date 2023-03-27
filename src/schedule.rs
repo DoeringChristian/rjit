@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use smallvec::{smallvec, SmallVec};
 
+use crate::backend::Buffer;
 use crate::trace::Internal;
 use crate::var::{Op, ParamType, VarId, VarType};
 
@@ -72,6 +74,7 @@ pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     params: Vec<u64>,
     literals: Vec<u64>,
+    buffers: Vec<Arc<dyn Buffer>>,
     n_regs: usize,
     visited: HashMap<VarId, SVarId>,
 }
