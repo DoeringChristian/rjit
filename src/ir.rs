@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -253,11 +254,150 @@ impl std::ops::Deref for ParamId {
 }
 
 // We have one global Intermediate Representation that tracks all operations.
-pub static IR: Lazy<Arc<Mutex<Ir>>> = Lazy::new(|| Arc::new(Mutex::new(Ir::default())));
+pub static IR: Lazy<Trace> = Lazy::new(|| Trace::default());
 
 // thread_local! {pub static IR: RefCell<Ir> = RefCell::new(Ir::default())}
 // thread_local! {pub static BACKEND: RefCell<Option<Arc<dyn Backend>>> = RefCell::new(None)}
 // pub static BACKEND: OnceCell<Mutex<Box<dyn Backend>>> = OnceCell::new();
+
+#[derive(Clone, Debug, Default)]
+pub struct Trace {
+    ir: Arc<Mutex<Ir>>,
+}
+impl Deref for Trace {
+    type Target = Arc<Mutex<Ir>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ir
+    }
+}
+
+impl Trace {
+    pub fn push_var(&self, mut v: Var) -> Ref {
+        for dep in v.deps.iter() {
+            self.ir.lock().inc_rc(*dep);
+        }
+        v.rc = 1;
+        let id = VarId(self.ir.lock().vars.insert(v));
+        Ref::steal(&self, id)
+    }
+    // pub fn var(&self, r: &Ref) -> MappedMutexGuard<Var> {
+    //     MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[r.id().0])
+    // }
+    // pub fn var_mut(&self, r: &mut Ref) -> MappedMutexGuard<Var> {
+    //     MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[r.id().0])
+    // }
+    fn var_info(&self, refs: &[&Ref]) -> VarInfo {
+        let ty = refs.first().unwrap().var().ty.clone(); // TODO: Fix (first non void)
+
+        let size = refs
+            .iter()
+            .map(|id| id.var().size)
+            .reduce(|s0, s1| s0.max(s1))
+            .unwrap()
+            .clone();
+        VarInfo { ty, size }
+    }
+    fn push_var_intermediate(&self, op: Op, deps: &[&Ref], ty: VarType, size: usize) -> Ref {
+        let deps = deps
+            .iter()
+            .map(|r| {
+                assert!(Arc::ptr_eq(&self.ir, &r.ir));
+                r.id()
+            })
+            .collect();
+        let ret = self.push_var(Var {
+            op,
+            deps,
+            ty,
+            param_ty: ParamType::None,
+            buffer: None,
+            size,
+            rc: 0,
+            literal: 0,
+            stop_traversal: false,
+        });
+        ret
+    }
+}
+impl Trace {
+    // Constatns:
+    pub fn const_f32(&self, val: f32) -> Ref {
+        self.push_var(Var {
+            op: Op::Literal,
+            deps: smallvec![],
+            ty: VarType::F32,
+            literal: bytemuck::cast::<_, u32>(val) as _,
+            ..Default::default()
+        })
+    }
+    pub fn const_u32(&self, val: u32) -> Ref {
+        self.push_var(Var {
+            op: Op::Literal,
+            deps: smallvec![],
+            ty: VarType::U32,
+            literal: bytemuck::cast::<_, u32>(val) as _,
+            ..Default::default()
+        })
+    }
+    pub fn const_bool(&self, val: bool) -> Ref {
+        self.push_var(Var {
+            op: Op::Literal,
+            deps: smallvec![],
+            ty: VarType::Bool,
+            literal: bytemuck::cast::<_, u8>(val) as _,
+            ..Default::default()
+        })
+    }
+    // Buffer initializers:
+    pub fn buffer_f32(&self, slice: &[f32]) -> Ref {
+        let buffer = Some(
+            self.ir
+                .lock()
+                .backend
+                .as_ref()
+                .unwrap()
+                .buffer_from_slice(cast_slice(slice)),
+        );
+        self.push_var(Var {
+            param_ty: ParamType::Input,
+            buffer,
+            size: slice.len(),
+            ty: VarType::F32,
+            op: Op::Data,
+            ..Default::default()
+        })
+    }
+    pub fn buffer_u32(&self, slice: &[u32]) -> Ref {
+        let buffer = Some(
+            self.ir
+                .lock()
+                .backend
+                .as_ref()
+                .unwrap()
+                .buffer_from_slice(cast_slice(slice)),
+        );
+        self.push_var(Var {
+            param_ty: ParamType::Input,
+            buffer,
+            size: slice.len(),
+            ty: VarType::U32,
+            op: Op::Data,
+            ..Default::default()
+        })
+    }
+    // Special operations:
+    pub fn index(&self, size: usize) -> Ref {
+        let v = self.push_var(Var {
+            op: Op::Idx,
+            deps: smallvec![],
+            ty: VarType::U32,
+            size,
+            ..Default::default()
+        });
+        v
+    }
+}
 
 pub fn set_backend(backend: impl AsRef<str>) {
     let mut ir = IR.lock();
@@ -316,317 +456,39 @@ impl Ir {
         }
     }
 }
-pub fn var(r: &Ref) -> MappedMutexGuard<Var> {
-    MutexGuard::map(IR.lock(), |ir| &mut ir.vars[r.0 .0])
-}
-pub fn var_mut(r: &mut Ref) -> MappedMutexGuard<Var> {
-    MutexGuard::map(IR.lock(), |ir| &mut ir.vars[r.0 .0])
-}
-
-pub fn push_var(mut v: Var) -> Ref {
-    let mut ir = IR.lock();
-    for dep in v.deps.iter() {
-        ir.inc_rc(*dep);
-    }
-    v.rc = 1;
-    let id = VarId(ir.vars.insert(v));
-    Ref(id)
-}
-fn push_var_intermediate(op: Op, deps: &[&Ref], ty: VarType, size: usize) -> Ref {
-    let deps = deps.iter().map(|r| r.0).collect();
-    let ret = push_var(Var {
-        op,
-        deps,
-        ty,
-        param_ty: ParamType::None,
-        buffer: None,
-        size,
-        rc: 0,
-        literal: 0,
-        stop_traversal: false,
-    });
-    ret
-}
-fn var_info(ids: &[&Ref]) -> VarInfo {
-    let ty = var(*ids.first().unwrap()).ty.clone(); // TODO: Fix (first non void)
-
-    let size = ids
-        .iter()
-        .map(|id| var(*id).size)
-        .reduce(|s0, s1| s0.max(s1))
-        .unwrap()
-        .clone();
-    VarInfo { ty, size }
-}
-
-pub fn const_f32(val: f32) -> Ref {
-    push_var(Var {
-        op: Op::Literal,
-        deps: smallvec![],
-        ty: VarType::F32,
-        literal: bytemuck::cast::<_, u32>(val) as _,
-        ..Default::default()
-    })
-}
-pub fn const_u32(val: u32) -> Ref {
-    push_var(Var {
-        op: Op::Literal,
-        deps: smallvec![],
-        ty: VarType::U32,
-        literal: bytemuck::cast::<_, u32>(val) as _,
-        ..Default::default()
-    })
-}
-pub fn const_bool(val: bool) -> Ref {
-    push_var(Var {
-        op: Op::Literal,
-        deps: smallvec![],
-        ty: VarType::Bool,
-        literal: bytemuck::cast::<_, u8>(val) as _,
-        ..Default::default()
-    })
-}
-
-// Buffer initializers:
-pub fn buffer_f32(slice: &[f32]) -> Ref {
-    let buffer = Some(
-        IR.lock()
-            .backend
-            .as_ref()
-            .unwrap()
-            .buffer_from_slice(cast_slice(slice)),
-    );
-    push_var(Var {
-        param_ty: ParamType::Input,
-        buffer,
-        size: slice.len(),
-        ty: VarType::F32,
-        op: Op::Data,
-        ..Default::default()
-    })
-}
-pub fn buffer_u32(slice: &[u32]) -> Ref {
-    let buffer = Some(
-        IR.lock()
-            .backend
-            .as_ref()
-            .unwrap()
-            .buffer_from_slice(cast_slice(slice)),
-    );
-    push_var(Var {
-        param_ty: ParamType::Input,
-        buffer,
-        size: slice.len(),
-        ty: VarType::U32,
-        op: Op::Data,
-        ..Default::default()
-    })
-}
-// To Host functions:
-pub fn to_vec_f32(r: &Ref) -> Vec<f32> {
-    let var = var(r);
-    assert_eq!(var.ty, VarType::F32);
-    let v = var.buffer.as_ref().unwrap().as_vec();
-    Vec::from(cast_slice(&v))
-}
-pub fn to_vec_u32(r: &Ref) -> Vec<u32> {
-    let var = var(r);
-    assert_eq!(var.ty, VarType::U32);
-    let v = var.buffer.as_ref().unwrap().as_vec();
-    Vec::from(cast_slice(&v))
-}
-// Unarry operations:
-pub fn cast(src: &Ref, ty: VarType) -> Ref {
-    let v = var(src);
-    push_var(Var {
-        op: Op::Cast,
-        deps: smallvec![src.0],
-        ty,
-        size: v.size,
-        ..Default::default()
-    })
-}
-// Binarry operations:
-pub fn add(lhs: &Ref, rhs: &Ref) -> Ref {
-    let info = var_info(&[&lhs, &rhs]);
-    push_var_intermediate(Op::Add, &[&lhs, &rhs], info.ty, info.size)
-}
-pub fn mul(lhs: &Ref, rhs: &Ref) -> Ref {
-    let info = var_info(&[&lhs, &rhs]);
-    push_var_intermediate(Op::Mul, &[&lhs, &rhs], info.ty, info.size)
-}
-pub fn and(lhs: &Ref, rhs: &Ref) -> Ref {
-    let info = var_info(&[&lhs, &rhs]);
-
-    let ty_lhs = var(&lhs).ty.clone();
-    let ty_rhs = var(&rhs).ty.clone();
-
-    if info.size > 0 && ty_lhs != ty_rhs && !ty_rhs.is_bool() {
-        panic!("Invalid operands!");
-    }
-
-    let ret = push_var_intermediate(Op::And, &[&lhs, &rhs], info.ty, info.size);
-    ret
-}
-// Special operations:
-pub fn index(size: usize) -> Ref {
-    let v = push_var(Var {
-        op: Op::Idx,
-        deps: smallvec![],
-        ty: VarType::U32,
-        size,
-        ..Default::default()
-    });
-    v
-}
-pub fn pointer_to(src: &Ref) -> Option<Ref> {
-    let ptr = var(&src).buffer.as_ref().map(|b| b.as_ptr());
-    // TODO: Eval var if needed.
-    if let Some(ptr) = ptr {
-        Some(push_var(Var {
-            op: Op::Literal,
-            param_ty: ParamType::Input,
-            deps: smallvec![src.0],
-            ty: VarType::Ptr,
-            literal: ptr,
-            size: 1,
-            stop_traversal: true,
-            ..Default::default()
-        }))
-    } else {
-        None
-    }
-}
-/// Reindex a variable with a new index and size.
-/// (Normally size is the size of the index)
-///
-/// For now we construct a separate set of variables in the Ir.
-/// However, it should sometimes be possible to reuse the old ones.
-///
-fn reindex(r: &Ref, new_idx: &Ref, size: usize) -> Option<Ref> {
-    let v = var(&r);
-    let is_literal = v.is_literal();
-    let is_data = v.is_data();
-    let v_deps = v.deps.clone();
-
-    if is_data {
-        return None;
-    }
-
-    drop(v);
-
-    let mut deps = smallvec![];
-    if !is_literal {
-        for dep in v_deps {
-            let dep = Ref::borrow(dep);
-            if let Some(dep) = reindex(&dep, new_idx, size) {
-                deps.push(dep.0);
-            } else {
-                return None;
-            }
-        }
-    }
-
-    let v = var(&r);
-
-    let op = v.op;
-    let ty = v.ty.clone();
-    let param_ty = v.param_ty;
-    let literal = v.literal;
-    let stop_traversal = v.stop_traversal;
-    drop(v);
-
-    if op == Op::Idx {
-        // self.inc_rc(new_idx);
-        return Some(new_idx.clone());
-    } else {
-        return Some(push_var(Var {
-            op,
-            deps,
-            ty,
-            buffer: None,
-            size,
-            param_ty,
-            rc: 0,
-            literal,
-            stop_traversal,
-        }));
-    }
-}
-///
-/// For gather operations there are three ways to resolve them:
-///
-/// If the source is a Pointer (i.e. VarType::Ptr) we can simply gather from that
-/// pointer.
-///
-/// If the source is trivial (i.e. there are no dependencies on Input variablse
-/// ParamType::Input) we can
-/// reindex the variable.
-///
-/// Finally, if the variable depends on Inputs we need to launch multiple Kernels (this
-/// is not yet implemented).
-///
-pub fn gather(src: &Ref, index: &Ref, mask: Option<&Ref>) -> Ref {
-    let size = var(&index).size;
-    let ty = var(&src).ty.clone();
-
-    let mask: Ref = mask.map(|m| m.clone()).unwrap_or(const_bool(true));
-
-    let res = pointer_to(&src);
-
-    if let Some(src) = res {
-        let ret = push_var(Var {
-            op: Op::Gather,
-            deps: smallvec![src.0, index.0, mask.0],
-            ty,
-            size,
-            ..Default::default()
-        });
-        return ret;
-    }
-
-    let res = reindex(&src, &index, size);
-
-    if let Some(res) = res {
-        let res = and(&res, &mask); // TODO: masking
-        return res;
-    }
-
-    jit::schedule(&[src]);
-    jit::eval();
-
-    let res = pointer_to(&src);
-
-    if let Some(src) = res {
-        let ret = push_var(Var {
-            op: Op::Gather,
-            deps: smallvec![src.0, index.0, mask.0],
-            ty,
-            size,
-            ..Default::default()
-        });
-        return ret;
-    }
-
-    unimplemented!();
-}
 
 ///
 /// Reference to a variable.
 ///
 #[derive(Debug)]
-pub struct Ref(VarId);
+pub struct Ref {
+    id: VarId,
+    ir: Trace,
+}
 
 impl Ref {
     pub fn id(&self) -> VarId {
-        self.0
+        self.id
     }
-    pub fn borrow(id: VarId) -> Self {
-        IR.lock().inc_rc(id);
-        Self(id)
+    pub fn borrow(trace: &Trace, id: VarId) -> Self {
+        trace.lock().inc_rc(id);
+
+        Self {
+            id,
+            ir: trace.clone(),
+        }
+    }
+    pub fn steal(trace: &Trace, id: VarId) -> Self {
+        Self {
+            id,
+            ir: trace.clone(),
+        }
+    }
+    pub fn var(&self) -> MappedMutexGuard<Var> {
+        MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
     }
     pub fn is_data(&self) -> bool {
-        let var = var(self);
+        let var = self.var();
         if var.buffer.is_some() {
             assert_eq!(var.op, Op::Data);
             true
@@ -635,23 +497,212 @@ impl Ref {
             false
         }
     }
+    // To Host functions:
+    pub fn to_vec_f32(&self) -> Vec<f32> {
+        let var = self.var();
+        assert_eq!(var.ty, VarType::F32);
+        let v = var.buffer.as_ref().unwrap().as_vec();
+        Vec::from(cast_slice(&v))
+    }
+    pub fn to_vec_u32(&self) -> Vec<u32> {
+        let var = self.var();
+        assert_eq!(var.ty, VarType::U32);
+        let v = var.buffer.as_ref().unwrap().as_vec();
+        Vec::from(cast_slice(&v))
+    }
+    // Unarry operations:
+    pub fn cast(&self, ty: VarType) -> Ref {
+        let v = self.var();
+        self.ir.push_var(Var {
+            op: Op::Cast,
+            deps: smallvec![self.id()],
+            ty,
+            size: v.size,
+            ..Default::default()
+        })
+    }
+    // Binarry operations:
+    pub fn add(&self, rhs: &Ref) -> Ref {
+        let info = self.ir.var_info(&[self, &rhs]);
+        self.ir
+            .push_var_intermediate(Op::Add, &[self, &rhs], info.ty, info.size)
+    }
+    pub fn mul(&self, rhs: &Ref) -> Ref {
+        let info = self.ir.var_info(&[self, &rhs]);
+        self.ir
+            .push_var_intermediate(Op::Mul, &[self, &rhs], info.ty, info.size)
+    }
+    pub fn and(&self, rhs: &Ref) -> Ref {
+        assert!(Arc::ptr_eq(&self.ir, &rhs.ir));
+        let info = self.ir.var_info(&[self, &rhs]);
+
+        let ty_lhs = self.var().ty.clone();
+        let ty_rhs = rhs.var().ty.clone();
+
+        if info.size > 0 && ty_lhs != ty_rhs && !ty_rhs.is_bool() {
+            panic!("Invalid operands!");
+        }
+
+        let ret = self
+            .ir
+            .push_var_intermediate(Op::And, &[self, &rhs], info.ty, info.size);
+        ret
+    }
+    pub fn pointer_to(&self) -> Option<Ref> {
+        let ptr = self.var().buffer.as_ref().map(|b| b.as_ptr());
+        // TODO: Eval var if needed.
+        if let Some(ptr) = ptr {
+            Some(self.ir.push_var(Var {
+                op: Op::Literal,
+                param_ty: ParamType::Input,
+                deps: smallvec![self.id()],
+                ty: VarType::Ptr,
+                literal: ptr,
+                size: 1,
+                stop_traversal: true,
+                ..Default::default()
+            }))
+        } else {
+            None
+        }
+    }
+    /// Reindex a variable with a new index and size.
+    /// (Normally size is the size of the index)
+    ///
+    /// For now we construct a separate set of variables in the Ir.
+    /// However, it should sometimes be possible to reuse the old ones.
+    ///
+    fn reindex(&self, new_idx: &Ref, size: usize) -> Option<Ref> {
+        assert!(Arc::ptr_eq(&self.ir, &new_idx.ir));
+        // let mut ir = self.ir.lock();
+
+        let v = self.var();
+        let is_literal = v.is_literal();
+        let is_data = v.is_data();
+        let v_deps = v.deps.clone();
+
+        if is_data {
+            return None;
+        }
+
+        drop(v);
+
+        let mut deps = smallvec![];
+        if !is_literal {
+            for dep in v_deps {
+                let dep = Ref::borrow(&self.ir, dep);
+                if let Some(dep) = dep.reindex(new_idx, size) {
+                    deps.push(dep.id());
+                } else {
+                    return None;
+                }
+            }
+        }
+
+        let v = self.var();
+
+        let op = v.op;
+        let ty = v.ty.clone();
+        let param_ty = v.param_ty;
+        let literal = v.literal;
+        let stop_traversal = v.stop_traversal;
+        drop(v);
+
+        if op == Op::Idx {
+            // self.inc_rc(new_idx);
+            return Some(new_idx.clone());
+        } else {
+            return Some(self.ir.push_var(Var {
+                op,
+                deps,
+                ty,
+                buffer: None,
+                size,
+                param_ty,
+                rc: 0,
+                literal,
+                stop_traversal,
+            }));
+        }
+    }
+    ///
+    /// For gather operations there are three ways to resolve them:
+    ///
+    /// If the source is a Pointer (i.e. VarType::Ptr) we can simply gather from that
+    /// pointer.
+    ///
+    /// If the source is trivial (i.e. there are no dependencies on Input variablse
+    /// ParamType::Input) we can
+    /// reindex the variable.
+    ///
+    /// Finally, if the variable depends on Inputs we need to launch multiple Kernels (this
+    /// is not yet implemented).
+    ///
+    pub fn gather(&self, index: &Ref, mask: Option<&Ref>) -> Ref {
+        assert!(Arc::ptr_eq(&self.ir, &index.ir));
+
+        let size = index.var().size;
+        let ty = self.var().ty.clone();
+
+        let mask: Ref = mask
+            .map(|m| {
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
+                m.clone()
+            })
+            .unwrap_or(self.ir.const_bool(true));
+
+        let res = self.pointer_to();
+
+        if let Some(src) = res {
+            let ret = self.ir.push_var(Var {
+                op: Op::Gather,
+                deps: smallvec![src.id(), index.id(), mask.id()],
+                ty,
+                size,
+                ..Default::default()
+            });
+            return ret;
+        }
+
+        let res = self.reindex(&index, size);
+
+        if let Some(res) = res {
+            let res = res.and(&mask); // TODO: masking
+            return res;
+        }
+
+        jit::schedule(&[self]);
+        jit::eval();
+
+        let res = self.pointer_to();
+
+        if let Some(src) = res {
+            let ret = self.ir.push_var(Var {
+                op: Op::Gather,
+                deps: smallvec![src.id(), index.id(), mask.id()],
+                ty,
+                size,
+                ..Default::default()
+            });
+            return ret;
+        }
+
+        unimplemented!();
+    }
 }
 
 impl Clone for Ref {
     fn clone(&self) -> Self {
-        IR.lock().inc_rc(self.0);
-        // IR.try_write()
-        //     .expect("Cannot clone Reference because IR is locked!")
-        //     .inc_rc(self.0);
-        Self(self.0)
+        self.ir.lock().inc_rc(self.id);
+        Self {
+            ir: self.ir.clone(),
+            id: self.id,
+        }
     }
 }
 
 impl Drop for Ref {
     fn drop(&mut self) {
-        IR.lock().dec_rc(self.0);
-        // IR.try_write()
-        //     .expect("Cannot drop Reference because IR is locked!")
-        //     .dec_rc(self.0);
+        self.ir.lock().dec_rc(self.id);
     }
 }
