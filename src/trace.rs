@@ -254,31 +254,29 @@ impl std::ops::Deref for ParamId {
 }
 
 // We have one global Intermediate Representation that tracks all operations.
+// However, Other Intermediate representations can also be constructed.
 pub static IR: Lazy<Trace> = Lazy::new(|| Trace::default());
 
-// thread_local! {pub static IR: RefCell<Ir> = RefCell::new(Ir::default())}
-// thread_local! {pub static BACKEND: RefCell<Option<Arc<dyn Backend>>> = RefCell::new(None)}
-// pub static BACKEND: OnceCell<Mutex<Box<dyn Backend>>> = OnceCell::new();
-
+///
+/// A wrapper arrund an Intermediate Representation.
+///
 #[derive(Clone, Debug, Default)]
-pub struct Trace {
-    ir: Arc<Mutex<Ir>>,
-}
+pub struct Trace(Arc<Mutex<Ir>>);
 impl Deref for Trace {
     type Target = Arc<Mutex<Ir>>;
 
     fn deref(&self) -> &Self::Target {
-        &self.ir
+        &self.0
     }
 }
 
 impl Trace {
     pub fn push_var(&self, mut v: Var) -> Ref {
         for dep in v.deps.iter() {
-            self.ir.lock().inc_rc(*dep);
+            self.lock().inc_rc(*dep);
         }
         v.rc = 1;
-        let id = VarId(self.ir.lock().vars.insert(v));
+        let id = VarId(self.lock().vars.insert(v));
         Ref::steal(&self, id)
     }
     fn var_info(&self, refs: &[&Ref]) -> VarInfo {
@@ -296,7 +294,7 @@ impl Trace {
         let deps = deps
             .iter()
             .map(|r| {
-                assert!(Arc::ptr_eq(&self.ir, &r.ir));
+                assert!(Arc::ptr_eq(&self.0, &r.ir));
                 r.id()
             })
             .collect();
@@ -314,12 +312,12 @@ impl Trace {
         ret
     }
     pub fn set_backend(&self, backend: impl AsRef<str>) {
-        if self.ir.lock().backend.is_some() {
+        if self.lock().backend.is_some() {
             return;
         }
         let backend = backend.as_ref();
         if backend == "cuda" {
-            self.ir.lock().backend = Some(Box::new(CUDABackend::new()));
+            self.lock().backend = Some(Box::new(CUDABackend::new()));
         }
     }
 }
@@ -355,8 +353,7 @@ impl Trace {
     // Buffer initializers:
     pub fn buffer_f32(&self, slice: &[f32]) -> Ref {
         let buffer = Some(
-            self.ir
-                .lock()
+            self.lock()
                 .backend
                 .as_ref()
                 .unwrap()
@@ -373,8 +370,7 @@ impl Trace {
     }
     pub fn buffer_u32(&self, slice: &[u32]) -> Ref {
         let buffer = Some(
-            self.ir
-                .lock()
+            self.lock()
                 .backend
                 .as_ref()
                 .unwrap()
