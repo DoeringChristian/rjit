@@ -10,6 +10,7 @@ mod backend;
 mod jit;
 mod schedule;
 mod trace;
+mod var;
 
 fn main() {
     // pretty_env_logger::init();

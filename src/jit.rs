@@ -1,15 +1,13 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
+use std::borrow::BorrowMut;
 use std::fmt::Write;
-use std::sync::Arc;
 
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use rayon::prelude::*;
 
-use crate::backend::{Backend, Kernel};
-use crate::trace::{self, Ir, Op, ParamType, VarRef, VarId, IR};
+use crate::backend::Kernel;
 use crate::schedule::ScheduleIr;
+use crate::trace::{Ir, VarRef, IR};
+use crate::var::{Op, ParamType, VarId};
 
 ///
 /// This is the default Just In Time Compiler (JIT).

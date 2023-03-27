@@ -4,7 +4,7 @@ use cust::stream::{Stream, StreamFlags};
 use cust::util::SliceExt;
 
 use crate::schedule::{SVarId, ScheduleIr};
-use crate::trace::*;
+use crate::var::*;
 use std::fmt::{Debug, Write};
 use std::sync::Arc;
 

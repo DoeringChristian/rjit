@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::Arc;
 
-use slotmap::DefaultKey;
 use smallvec::{smallvec, SmallVec};
 
-use crate::trace::{self, Ir, Op, ParamType, VarRef, VarId, VarType, IR};
+use crate::trace::Ir;
+use crate::var::{Op, ParamType, VarId, VarType};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SVarId(pub usize);
