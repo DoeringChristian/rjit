@@ -5,7 +5,7 @@ use std::sync::Arc;
 use slotmap::DefaultKey;
 use smallvec::{smallvec, SmallVec};
 
-use crate::ir::{self, Ir, Op, ParamType, Ref, VarId, VarType, IR};
+use crate::trace::{self, Ir, Op, ParamType, Ref, VarId, VarType, IR};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SVarId(pub usize);

@@ -281,12 +281,6 @@ impl Trace {
         let id = VarId(self.ir.lock().vars.insert(v));
         Ref::steal(&self, id)
     }
-    // pub fn var(&self, r: &Ref) -> MappedMutexGuard<Var> {
-    //     MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[r.id().0])
-    // }
-    // pub fn var_mut(&self, r: &mut Ref) -> MappedMutexGuard<Var> {
-    //     MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[r.id().0])
-    // }
     fn var_info(&self, refs: &[&Ref]) -> VarInfo {
         let ty = refs.first().unwrap().var().ty.clone(); // TODO: Fix (first non void)
 
@@ -318,6 +312,15 @@ impl Trace {
             stop_traversal: false,
         });
         ret
+    }
+    pub fn set_backend(&self, backend: impl AsRef<str>) {
+        if self.ir.lock().backend.is_some() {
+            return;
+        }
+        let backend = backend.as_ref();
+        if backend == "cuda" {
+            self.ir.lock().backend = Some(Box::new(CUDABackend::new()));
+        }
     }
 }
 impl Trace {
@@ -396,17 +399,6 @@ impl Trace {
             ..Default::default()
         });
         v
-    }
-}
-
-pub fn set_backend(backend: impl AsRef<str>) {
-    let mut ir = IR.lock();
-    if ir.backend.is_some() {
-        return;
-    }
-    let backend = backend.as_ref();
-    if backend == "cuda" {
-        ir.backend = Some(Box::new(CUDABackend::new()));
     }
 }
 

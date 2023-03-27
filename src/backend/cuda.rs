@@ -3,8 +3,8 @@ use cust::prelude::{Context, DeviceBuffer, Module};
 use cust::stream::{Stream, StreamFlags};
 use cust::util::SliceExt;
 
-use crate::ir::*;
 use crate::schedule::{SVarId, ScheduleIr};
+use crate::trace::*;
 use std::fmt::{Debug, Write};
 use std::sync::Arc;
 
@@ -860,16 +860,16 @@ impl CUDAKernel {
 
 #[cfg(test)]
 mod test {
-    use crate::ir::IR;
     use crate::jit::Jit;
-    use crate::{ir, jit};
+    use crate::trace::IR;
+    use crate::{jit, trace};
 
     #[test]
     fn refcounting() {
-        ir::set_backend("cuda");
+        IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
-        let x = ir::IR.buffer_f32(&[1.; 10]);
+        let x = IR.buffer_f32(&[1.; 10]);
         assert_eq!(x.var().rc, 1, "rc of x should be 1 (in x)");
         dbg!(IR.is_locked());
         let y = x.add(&x);
@@ -911,10 +911,10 @@ mod test {
     }
     #[test]
     fn load_add_f32() {
-        ir::set_backend("cuda");
+        IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
-        let x = ir::IR.buffer_f32(&[1.; 10]);
+        let x = IR.buffer_f32(&[1.; 10]);
         dbg!(IR.is_locked());
         // let y = ir::add(&x, &x);
         let y = x.add(&x);
@@ -929,10 +929,10 @@ mod test {
     }
     #[test]
     fn global_jit() {
-        ir::set_backend("cuda");
+        IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
-        let x = ir::IR.buffer_f32(&[1.; 10]);
+        let x = IR.buffer_f32(&[1.; 10]);
         dbg!(IR.is_locked());
         // let y = ir::add(&x, &x);
         let y = x.add(&x);
@@ -944,12 +944,12 @@ mod test {
     }
     #[test]
     fn load_gather_f32() {
-        ir::set_backend("cuda");
+        IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
-        let x = ir::IR.buffer_f32(&[1., 2., 3., 4., 5.]);
+        let x = IR.buffer_f32(&[1., 2., 3., 4., 5.]);
         dbg!(IR.is_locked());
-        let i = ir::IR.buffer_u32(&[0, 1, 4]);
+        let i = IR.buffer_u32(&[0, 1, 4]);
         let y = x.gather(&i, None);
 
         let mut jit = Jit::default();
@@ -963,14 +963,14 @@ mod test {
     #[test]
     fn reindex() {
         // pretty_env_logger::init();
-        ir::set_backend("cuda");
+        IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
-        let x = ir::IR.index(10);
+        let x = IR.index(10);
         dbg!(IR.is_locked());
 
-        let i = ir::IR.index(3);
-        let c = ir::IR.const_u32(2);
+        let i = IR.index(3);
+        let c = IR.const_u32(2);
         let i = i.add(&c);
 
         let y = x.gather(&i, None);
@@ -986,10 +986,10 @@ mod test {
     #[test]
     fn index() {
         // pretty_env_logger::init();
-        ir::set_backend("cuda");
+        IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
-        let i = ir::IR.index(10);
+        let i = trace::IR.index(10);
 
         let mut jit = Jit::default();
         jit.schedule(&[&i]);
@@ -1003,7 +1003,7 @@ mod test {
     #[test]
     fn gather_eval() {
         // pretty_env_logger::init();
-        ir::set_backend("cuda");
+        IR.set_backend("cuda");
 
         let tmp_x;
         let tmp_y;
@@ -1023,7 +1023,7 @@ mod test {
             assert_eq!(y.var().rc, 2);
             assert_eq!(z.var().rc, 1);
 
-            let r = z.gather(&ir::IR.index(3), None);
+            let r = z.gather(&IR.index(3), None);
             dbg!();
             assert_eq!(x.var().rc, 1);
             assert_eq!(y.var().rc, 1);
@@ -1053,7 +1053,7 @@ mod test {
     #[test]
     fn paralell() {
         // pretty_env_logger::init();
-        ir::set_backend("cuda");
+        IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
         let x = IR.index(10);

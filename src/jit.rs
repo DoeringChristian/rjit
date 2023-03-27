@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use rayon::prelude::*;
 
 use crate::backend::{Backend, Kernel};
-use crate::ir::{self, Ir, Op, ParamType, Ref, VarId, IR};
+use crate::trace::{self, Ir, Op, ParamType, Ref, VarId, IR};
 use crate::schedule::ScheduleIr;
 
 ///

@@ -2,18 +2,18 @@ use std::sync::Arc;
 
 use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
-use crate::ir::IR;
+use crate::trace::IR;
 
 use self::jit::Jit;
 
 mod backend;
-mod ir;
 mod jit;
 mod schedule;
+mod trace;
 
 fn main() {
     // pretty_env_logger::init();
-    ir::set_backend("cuda");
+    IR.set_backend("cuda");
     dbg!(IR.is_locked());
 
     let x = IR.index(10);
