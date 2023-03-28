@@ -252,7 +252,7 @@ impl Kernel for CUDAKernel {
                     // let offset = param_idx * 8;
                     write!(
                         self.asm,
-                        "\t// Store:\n\
+                        "\n\t// Store:\n\
                         \tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
                             \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
                             params[offset]\n",
@@ -804,7 +804,7 @@ impl CUDAKernel {
                 } else {
                     writeln!(
                         self.asm,
-                        "\tmad.wide.{} %rd3, {}, {}, {};\n",
+                        "\tmad.wide.{} %rd3, {}, {}, {};",
                         d1.ty.name_cuda(),
                         d1.reg(),
                         var.ty.size(),

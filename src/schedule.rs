@@ -93,6 +93,9 @@ impl ScheduleIr {
     pub fn var(&self, id: SVarId) -> &ScheduleVar {
         &self.vars[id.0]
     }
+    pub fn var_mut(&mut self, id: SVarId) -> &mut ScheduleVar {
+        &mut self.vars[id.0]
+    }
     pub fn reg(&self, id: SVarId) -> Reg {
         self.var(id).reg()
     }
@@ -129,9 +132,18 @@ impl ScheduleIr {
         self.params.push(param);
         idx
     }
-    pub fn collect_vars(&mut self, ir: &Internal, ids: &[VarId]) {
-        for id in ids {
-            self.collect(ir, *id);
+    pub fn collect_vars(&mut self, ir: &Internal, schedule: &[VarId]) {
+        for id in schedule {
+            let sv_id = self.collect(ir, *id);
+
+            let var = ir.var(*id);
+            let buffer_ref = var.buffer.as_ref().unwrap().as_ptr();
+            let param_offset = self.push_param(buffer_ref);
+
+            let mut sv = self.var_mut(sv_id);
+
+            sv.param_ty = ParamType::Output;
+            sv.param_offset = param_offset;
         }
     }
     ///
@@ -152,38 +164,55 @@ impl ScheduleIr {
             ty: var.ty.clone(),
             deps: smallvec![],
             reg: self.next_reg(),
-            param_ty: var.param_ty,
+            param_ty: ParamType::None,
             param_offset: 0,
             literal: var.literal,
             size: var.size,
         };
 
         // Collect dependencies
-        if var.stop_traversal {
-            sv.deps = smallvec![]
-        } else {
-            sv.deps = var
-                .deps
-                .iter()
-                .map(|id| self.collect(ir, *id))
-                .collect::<SmallVec<[_; 4]>>();
-        };
-        match var.param_ty {
-            ParamType::Input => {
-                if var.is_literal() {
-                    sv.param_offset = self.push_param(var.literal);
 
-                    // Literal is pushed via params => we can set it to zero so that snapshot
-                    // testing works.
-                    sv.literal = 0;
-                } else {
-                    sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
-                }
-            }
-            ParamType::Output => {
+        match var.op {
+            Op::Data => {
                 sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
+                sv.param_ty = ParamType::Input;
             }
-            ParamType::None => {}
+            Op::Literal => {
+                // sv.param_offset = self.push_param(var.literal);
+                sv.literal = var.literal;
+            }
+            Op::Gather => {
+                // Fisrt: push source ptr literal.
+                let d0 = ir.var(var.deps[0]);
+                assert_eq!(d0.op, Op::Data);
+
+                let param_offset = self.push_param(d0.buffer.as_ref().unwrap().as_ptr());
+                let reg = self.next_reg();
+
+                let d0 = self.push_var(ScheduleVar {
+                    op: Op::Literal,
+                    ty: VarType::U64,
+                    deps: smallvec![],
+                    reg,
+                    param_ty: ParamType::Input,
+                    literal: 0,
+                    param_offset,
+                    size: var.size,
+                });
+                // Then: collect index and mask.
+                sv.deps = smallvec![
+                    d0,
+                    self.collect(ir, var.deps[1]),
+                    self.collect(ir, var.deps[2])
+                ];
+            }
+            _ => {
+                sv.deps = var
+                    .deps
+                    .iter()
+                    .map(|id| self.collect(ir, *id))
+                    .collect::<SmallVec<[_; 4]>>();
+            }
         }
 
         let id = self.push_var(sv);

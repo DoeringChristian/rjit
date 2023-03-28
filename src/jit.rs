@@ -83,7 +83,7 @@ impl Jit {
             let var = ir.var_mut(*id);
 
             // Set op and type for next kernel:
-            var.param_ty = ParamType::Input;
+            // var.param_ty = ParamType::Input;
             var.op = Op::Data;
 
             // Clear dependecies:
@@ -121,7 +121,7 @@ impl Jit {
             let buffer = ir.backend.as_ref().unwrap().buffer_uninit(size * ty_size);
 
             let mut var = ir.var_mut(*id);
-            var.param_ty = ParamType::Output;
+            // var.param_ty = ParamType::Output;
             var.buffer = Some(buffer);
         }
 

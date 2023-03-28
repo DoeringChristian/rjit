@@ -34,6 +34,7 @@ body: // sm_86
 	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param_offset: 1, literal: 0, size: 3 } =>
 	mov.u32 %r4, %r0;
 
+
 	// Store:
 	ld.param.u64 %rd0, [params + 8]; // rd0 <- params[offset]
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
@@ -82,6 +83,7 @@ body: // sm_86
 	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param_offset: 1, literal: 0, size: 3 } =>
 	mov.u32 %r4, %r0;
 
+
 	// Store:
 	ld.param.u64 %rd0, [params + 8]; // rd0 <- params[offset]
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
@@ -89,6 +91,7 @@ body: // sm_86
 
 	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 5, param_offset: 2, literal: 0, size: 10 } =>
 	mov.u32 %r5, %r0;
+
 
 	// Store:
 	ld.param.u64 %rd0, [params + 16]; // rd0 <- params[offset]

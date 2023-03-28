@@ -62,7 +62,7 @@ impl Trace {
             op,
             deps,
             ty,
-            param_ty: ParamType::None,
+            // param_ty: ParamType::None,
             buffer: None,
             size,
             rc: 0,
@@ -120,7 +120,7 @@ impl Trace {
                 .buffer_from_slice(cast_slice(slice)),
         );
         self.push_var(Var {
-            param_ty: ParamType::Input,
+            // param_ty: ParamType::Input,
             buffer,
             size: slice.len(),
             ty: VarType::F32,
@@ -137,7 +137,7 @@ impl Trace {
                 .buffer_from_slice(cast_slice(slice)),
         );
         self.push_var(Var {
-            param_ty: ParamType::Input,
+            // param_ty: ParamType::Input,
             buffer,
             size: slice.len(),
             ty: VarType::U32,
@@ -290,24 +290,24 @@ impl VarRef {
             .push_var_op(Op::And, &[self, &rhs], info.ty, info.size);
         ret
     }
-    pub fn as_ptr(&self) -> Option<VarRef> {
-        let ptr = self.var().buffer.as_ref().map(|b| b.as_ptr());
-        // TODO: Eval var if needed.
-        if let Some(ptr) = ptr {
-            Some(self.ir.push_var(Var {
-                op: Op::Literal,
-                param_ty: ParamType::Input,
-                deps: smallvec![self.id()],
-                ty: VarType::Ptr,
-                literal: ptr,
-                size: 1,
-                stop_traversal: true,
-                ..Default::default()
-            }))
-        } else {
-            None
-        }
-    }
+    // pub fn as_ptr(&self) -> Option<VarRef> {
+    //     let ptr = self.var().buffer.as_ref().map(|b| b.as_ptr());
+    //     // TODO: Eval var if needed.
+    //     if let Some(ptr) = ptr {
+    //         Some(self.ir.push_var(Var {
+    //             op: Op::Literal,
+    //             // param_ty: ParamType::Input,
+    //             deps: smallvec![self.id()],
+    //             ty: VarType::Ptr,
+    //             literal: ptr,
+    //             size: 1,
+    //             stop_traversal: true,
+    //             ..Default::default()
+    //         }))
+    //     } else {
+    //         None
+    //     }
+    // }
     /// Reindex a variable with a new index and size.
     /// (Normally size is the size of the index)
     ///
@@ -345,7 +345,7 @@ impl VarRef {
 
         let op = v.op;
         let ty = v.ty.clone();
-        let param_ty = v.param_ty;
+        // let param_ty = v.param_ty;
         let literal = v.literal;
         let stop_traversal = v.stop_traversal;
         drop(v);
@@ -360,7 +360,7 @@ impl VarRef {
                 ty,
                 buffer: None,
                 size,
-                param_ty,
+                // param_ty,
                 rc: 0,
                 literal,
                 stop_traversal,
@@ -393,12 +393,12 @@ impl VarRef {
             })
             .unwrap_or(self.ir.const_bool(true));
 
-        let res = self.as_ptr();
+        // let res = self.as_ptr();
 
-        if let Some(src) = res {
+        if self.var().buffer.is_some() {
             let ret = self.ir.push_var(Var {
                 op: Op::Gather,
-                deps: smallvec![src.id(), index.id(), mask.id()],
+                deps: smallvec![self.id(), index.id(), mask.id()],
                 ty,
                 size,
                 ..Default::default()
@@ -416,12 +416,10 @@ impl VarRef {
         jit::schedule(&[self]);
         jit::eval();
 
-        let res = self.as_ptr();
-
-        if let Some(src) = res {
+        if self.var().buffer.is_some() {
             let ret = self.ir.push_var(Var {
                 op: Op::Gather,
-                deps: smallvec![src.id(), index.id(), mask.id()],
+                deps: smallvec![self.id(), index.id(), mask.id()],
                 ty,
                 size,
                 ..Default::default()

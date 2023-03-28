@@ -1,6 +1,6 @@
 ---
 source: src/backend/cuda.rs
-expression: "jit::kernel_debug()"
+expression: jit.kernel_debug()
 ---
 ===============================================
 Kernel 0:
@@ -31,7 +31,7 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: Ptr, param_ty: Input, reg: 5, param_offset: 1, literal: 0, size: 1 } =>
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: U64, param_ty: Input, reg: 5, param_offset: 1, literal: 0, size: 3 } =>
 	ld.param.u64 %rd5, [params+8];
 
 	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 6, param_offset: 2, literal: 0, size: 3 } =>
@@ -45,8 +45,8 @@ body: // sm_86
 
 	// [3]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: F32, param_ty: Output, reg: 4, param_offset: 3, literal: 0, size: 3 } =>
 	mad.wide.u32 %rd3, %r6, 4, %rd5;
-
 	ld.global.nc.f32 %f4, [%rd3];
+
 	// Store:
 	ld.param.u64 %rd0, [params + 24]; // rd0 <- params[offset]
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]

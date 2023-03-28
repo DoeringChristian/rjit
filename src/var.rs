@@ -184,31 +184,18 @@ impl VarType {
 ///
 ///
 ///
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Var {
     pub op: Op, // Operation used to construct the variable
     pub deps: SmallVec<[VarId; 4]>,
     pub ty: VarType,                     // Type of the variable
     pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer
     pub size: usize,                     // number of elements
-    pub param_ty: ParamType,             // Parameter type
+    // pub param_ty: ParamType,             // Parameter type
     pub rc: usize,
     pub literal: u64,
     pub stop_traversal: bool, // Tells the scheduling routine to stop traversing at this variable even
                               // though it has dependencies.
-}
-impl Debug for Var {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Var")
-            .field("op", &self.op)
-            .field("deps", &self.deps)
-            .field("ty", &self.ty)
-            // .field("buffer", &self.buffer)
-            .field("size", &self.size)
-            .field("param_ty", &self.param_ty)
-            .field("rc", &self.rc)
-            .finish()
-    }
 }
 
 impl Var {
