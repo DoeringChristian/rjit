@@ -73,8 +73,8 @@ impl ScheduleVar {
 #[derive(Debug, Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
-    params: Vec<u64>, // TODO: directly use buffers
-
+    params: Vec<u64>, // TODO: directly use buffers also implement Backend param iterator (vulkan
+    // compat)
     literals: Vec<u64>,            // Literals (directly passed to the kernel)
     buffers: Vec<Arc<dyn Buffer>>, // Buffers referenced in the kernel
     n_regs: usize,
