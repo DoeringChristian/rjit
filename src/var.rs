@@ -194,8 +194,6 @@ pub struct Var {
     // pub param_ty: ParamType,             // Parameter type
     pub rc: usize,
     pub literal: u64,
-    pub stop_traversal: bool, // Tells the scheduling routine to stop traversing at this variable even
-                              // though it has dependencies.
 }
 
 impl Var {

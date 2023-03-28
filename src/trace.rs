@@ -67,7 +67,6 @@ impl Trace {
             size,
             rc: 0,
             literal: 0,
-            stop_traversal: false,
         });
         ret
     }
@@ -347,7 +346,6 @@ impl VarRef {
         let ty = v.ty.clone();
         // let param_ty = v.param_ty;
         let literal = v.literal;
-        let stop_traversal = v.stop_traversal;
         drop(v);
 
         if op == Op::Idx {
@@ -363,7 +361,6 @@ impl VarRef {
                 // param_ty,
                 rc: 0,
                 literal,
-                stop_traversal,
             }));
         }
     }
