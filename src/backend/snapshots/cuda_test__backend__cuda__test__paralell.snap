@@ -31,7 +31,7 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param_offset: 1, literal: 0, size: 3 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param_offset: 1, gather_poffset: 0, literal: 0, size: 3 } =>
 	mov.u32 %r4, %r0;
 
 
@@ -80,7 +80,7 @@ Kernel 1:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param_offset: 1, literal: 0, size: 3 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param_offset: 1, gather_poffset: 0, literal: 0, size: 3 } =>
 	mov.u32 %r4, %r0;
 
 
@@ -89,7 +89,7 @@ body: // sm_86
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
 	st.global.cs.u32 [%rd0], %r4; // (Index * ty.size() + params[offset])[Index] <- var
 
-	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 5, param_offset: 2, literal: 0, size: 10 } =>
+	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 5, param_offset: 2, gather_poffset: 0, literal: 0, size: 10 } =>
 	mov.u32 %r5, %r0;
 
 

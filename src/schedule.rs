@@ -29,7 +29,8 @@ pub struct ScheduleVar {
     pub ty: VarType,
     pub param_ty: ParamType,
     pub reg: usize,
-    pub param_offset: usize,
+    pub param_offset: usize,   // Parameter offset for input/output
+    pub gather_poffset: usize, // Parameter offset for gather operation
     pub literal: u64,
     pub size: usize,
 }
@@ -72,7 +73,8 @@ impl ScheduleVar {
 #[derive(Debug, Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
-    params: Vec<u64>,
+    params: Vec<u64>, // TODO: directly use buffers
+
     literals: Vec<u64>,            // Literals (directly passed to the kernel)
     buffers: Vec<Arc<dyn Buffer>>, // Buffers referenced in the kernel
     n_regs: usize,
@@ -166,6 +168,7 @@ impl ScheduleIr {
             reg: self.next_reg(),
             param_ty: ParamType::None,
             param_offset: 0,
+            gather_poffset: 0,
             literal: var.literal,
             size: var.size,
         };
@@ -182,26 +185,14 @@ impl ScheduleIr {
                 sv.literal = var.literal;
             }
             Op::Gather => {
-                // Fisrt: push source ptr literal.
                 let d0 = ir.var(var.deps[0]);
                 assert_eq!(d0.op, Op::Data);
 
-                let param_offset = self.push_param(d0.buffer.as_ref().unwrap().as_ptr());
-                let reg = self.next_reg();
+                sv.gather_poffset = self.push_param(d0.buffer.as_ref().unwrap().as_ptr());
 
-                let d0 = self.push_var(ScheduleVar {
-                    op: Op::Literal,
-                    ty: VarType::U64,
-                    deps: smallvec![],
-                    reg,
-                    param_ty: ParamType::Input,
-                    literal: 0,
-                    param_offset,
-                    size: var.size,
-                });
                 // Then: collect index and mask.
                 sv.deps = smallvec![
-                    d0,
+                    // d0,
                     self.collect(ir, var.deps[1]),
                     self.collect(ir, var.deps[2])
                 ];

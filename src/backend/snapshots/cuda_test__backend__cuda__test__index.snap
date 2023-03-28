@@ -31,7 +31,7 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param_offset: 1, literal: 0, size: 10 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param_offset: 1, gather_poffset: 0, literal: 0, size: 10 } =>
 	mov.u32 %r4, %r0;
 
 

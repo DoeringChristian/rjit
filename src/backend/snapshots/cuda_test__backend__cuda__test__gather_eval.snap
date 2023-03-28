@@ -12,9 +12,9 @@ Kernel 0:
 .entry cujit(
 	.param .align 8 .b8 params[24]) {
 
-	.reg.b8   %b <8>; .reg.b16 %w<8>; .reg.b32 %r<8>;
-	.reg.b64  %rd<8>; .reg.f32 %f<8>; .reg.f64 %d<8>;
-	.reg.pred %p <8>;
+	.reg.b8   %b <7>; .reg.b16 %w<7>; .reg.b32 %r<7>;
+	.reg.b64  %rd<7>; .reg.f32 %f<7>; .reg.f64 %d<7>;
+	.reg.pred %p <7>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -31,19 +31,17 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: U64, param_ty: Input, reg: 5, param_offset: 1, literal: 0, size: 3 } =>
-	ld.param.u64 %rd5, [params+8];
-
-	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 6, param_offset: 0, literal: 0, size: 3 } =>
-	mov.u32 %r6, %r0;
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 5, param_offset: 0, gather_poffset: 0, literal: 0, size: 3 } =>
+	mov.u32 %r5, %r0;
 
 
-	// [2]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 7, param_offset: 0, literal: 1, size: 0 } =>
-	mov.pred %p7, 0x1;
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 6, param_offset: 0, gather_poffset: 0, literal: 1, size: 0 } =>
+	mov.pred %p6, 0x1;
 
 
-	// [3]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: U32, param_ty: Output, reg: 4, param_offset: 2, literal: 0, size: 3 } =>
-	mad.wide.u32 %rd3, %r6, 4, %rd5;
+	// [2]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: Output, reg: 4, param_offset: 2, gather_poffset: 1, literal: 0, size: 3 } =>
+	ld.param.u64 %rd0, [params+8];
+	mad.wide.u32 %rd3, %r5, 4, %rd0;
 	ld.global.nc.u32 %r4, [%rd3];
 
 	// Store:

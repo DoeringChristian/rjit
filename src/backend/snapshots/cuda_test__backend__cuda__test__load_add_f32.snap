@@ -31,17 +31,17 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 5, param_offset: 1, literal: 0, size: 10 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 5, param_offset: 1, gather_poffset: 0, literal: 0, size: 10 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.f32 %f5, [%rd0];
 
-	// [1]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 6, param_offset: 2, literal: 0, size: 10 } =>
+	// [1]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 6, param_offset: 2, gather_poffset: 0, literal: 0, size: 10 } =>
 	ld.param.u64 %rd0, [params+16];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.f32 %f6, [%rd0];
 
-	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: F32, param_ty: Output, reg: 4, param_offset: 3, literal: 0, size: 10 } =>
+	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: F32, param_ty: Output, reg: 4, param_offset: 3, gather_poffset: 0, literal: 0, size: 10 } =>
 	add.f32 %f4, %f5, %f6;
 
 	// Store:

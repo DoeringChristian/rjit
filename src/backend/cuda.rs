@@ -781,9 +781,9 @@ impl CUDAKernel {
                 // d0: src
                 // d1: index
                 // d2: mask
-                let d0 = ir.var(var.deps[0]);
-                let d1 = ir.var(var.deps[1]);
-                let d2 = ir.var(var.deps[2]);
+                // let d0 = ir.var(var.deps[0]);
+                let d1 = ir.var(var.deps[0]);
+                let d2 = ir.var(var.deps[1]);
                 let unmasked = d2.is_literal() && d2.literal != 0;
                 let is_bool = var.ty.is_bool();
 
@@ -792,23 +792,33 @@ impl CUDAKernel {
                     writeln!(self.asm, "\t@!{} bra l_{}_masked;", d2.reg(), var.reg_idx());
                 }
 
+                // Load buffer ptr:
+
+                writeln!(
+                    self.asm,
+                    "\tld.param.u64 %rd0, [params+{}];",
+                    var.gather_poffset * 8,
+                );
+
+                // Perform actual gather:
+
                 if var.ty.size() == 1 {
                     write!(
                         self.asm,
                         "\tcvt.u64.{} %rd3, {};\n\
-                        \tadd.u64 %rd3, %rd3, {};\n",
+                        \tadd.u64 %rd3, %rd3, %rd0;\n",
                         d1.ty.name_cuda(),
                         d1.reg(),
-                        d0.reg()
+                        // d0.reg()
                     );
                 } else {
                     writeln!(
                         self.asm,
-                        "\tmad.wide.{} %rd3, {}, {}, {};",
+                        "\tmad.wide.{} %rd3, {}, {}, %rd0;",
                         d1.ty.name_cuda(),
                         d1.reg(),
                         var.ty.size(),
-                        d0.reg()
+                        // d0.reg()
                     );
                 }
                 if is_bool {
