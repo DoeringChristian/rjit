@@ -195,8 +195,10 @@ impl ScheduleIr {
             }
         }
 
-        let id = self.push_var(sv);
+        let svid = self.push_var(sv);
 
-        id
+        self.visited.insert(id, svid);
+
+        svid
     }
 }
