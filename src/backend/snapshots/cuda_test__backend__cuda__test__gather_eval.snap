@@ -31,15 +31,15 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 5, param_offset: 0, gather_poffset: 0, literal: 0, size: 3 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 5, param: 0, gather_param: 0, literal: 0, size: 3 } =>
 	mov.u32 %r5, %r0;
 
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 6, param_offset: 0, gather_poffset: 0, literal: 1, size: 0 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 6, param: 0, gather_param: 0, literal: 1, size: 0 } =>
 	mov.pred %p6, 0x1;
 
 
-	// [2]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: Output, reg: 4, param_offset: 2, gather_poffset: 1, literal: 0, size: 3 } =>
+	// [2]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: Output, reg: 4, param: 1, gather_param: 0, literal: 0, size: 3 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r5, 4, %rd0;
 	ld.global.nc.u32 %r4, [%rd3];

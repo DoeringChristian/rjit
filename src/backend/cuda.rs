@@ -106,6 +106,9 @@ impl Kernel for CUDAKernel {
         let stream =
             cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
 
+        let mut params = vec![ir.size() as u64];
+        params.extend_from_slice(ir.params());
+
         unsafe {
             stream
                 .launch(
@@ -113,7 +116,7 @@ impl Kernel for CUDAKernel {
                     grid_size,
                     block_size,
                     0,
-                    &[ir.params_mut().as_mut_ptr() as *mut std::ffi::c_void],
+                    &[params.as_mut_ptr() as *mut std::ffi::c_void],
                 )
                 .unwrap();
         }
@@ -147,7 +150,7 @@ impl Kernel for CUDAKernel {
         writeln!(
             self.asm,
             "\t.param .align 8 .b8 params[{}]) {{",
-            (n_params * std::mem::size_of::<u64>())
+            ((n_params + 1) * std::mem::size_of::<u64>())
         );
         writeln!(self.asm, "");
 
@@ -197,17 +200,8 @@ impl Kernel for CUDAKernel {
             let var = ir.var(id);
             match var.param_ty {
                 ParamType::None => self.assemble_var(ir, id),
-                // ParamType::Literal => {
-                //     // let offset = param_idx * 8;
-                //     writeln!(
-                //         self.asm,
-                //         "\tld.param.{} {}, [params+{}];",
-                //         var.ty.name_cuda(),
-                //         var.reg(),
-                //         var.param_offset * 8,
-                //     );
-                // }
                 ParamType::Input => {
+                    let param_offset = (var.param + 1) * 8;
                     // Load from params
                     writeln!(self.asm, "");
                     writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);
@@ -217,15 +211,11 @@ impl Kernel for CUDAKernel {
                             "\tld.param.{} {}, [params+{}];",
                             var.ty.name_cuda(),
                             var.reg(),
-                            var.param_offset * 8,
+                            param_offset
                         );
                         continue;
                     } else {
-                        writeln!(
-                            self.asm,
-                            "\tld.param.u64 %rd0, [params+{}];",
-                            var.param_offset * 8
-                        );
+                        writeln!(self.asm, "\tld.param.u64 %rd0, [params+{}];", param_offset);
                     }
                     if var.size > 1 {
                         writeln!(
@@ -248,6 +238,7 @@ impl Kernel for CUDAKernel {
                     }
                 }
                 ParamType::Output => {
+                    let param_offst = (var.param + 1) * 8;
                     self.assemble_var(ir, id);
                     // let offset = param_idx * 8;
                     write!(
@@ -256,7 +247,7 @@ impl Kernel for CUDAKernel {
                         \tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
                             \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
                             params[offset]\n",
-                        var.param_offset * 8,
+                        param_offst,
                         var.ty.size(),
                     );
 
@@ -793,12 +784,9 @@ impl CUDAKernel {
                 }
 
                 // Load buffer ptr:
+                let param_offset = (var.gather_param + 1) * 8;
 
-                writeln!(
-                    self.asm,
-                    "\tld.param.u64 %rd0, [params+{}];",
-                    var.gather_poffset * 8,
-                );
+                writeln!(self.asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
                 // Perform actual gather:
 

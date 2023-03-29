@@ -29,8 +29,8 @@ pub struct ScheduleVar {
     pub ty: VarType,
     pub param_ty: ParamType,
     pub reg: usize,
-    pub param_offset: usize,   // Parameter offset for input/output
-    pub gather_poffset: usize, // Parameter offset for gather operation
+    pub param: usize,        // Parameter offset for input/output
+    pub gather_param: usize, // Parameter offset for gather operation
     pub literal: u64,
     pub size: usize,
 }
@@ -73,6 +73,7 @@ impl ScheduleVar {
 #[derive(Debug, Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
+    size: usize,
     params: Vec<u64>, // TODO: directly use buffers also implement Backend param iterator (vulkan
     // compat)
     literals: Vec<u64>,            // Literals (directly passed to the kernel)
@@ -85,7 +86,8 @@ impl ScheduleIr {
     pub fn new(first_register: usize, size: usize) -> Self {
         Self {
             n_regs: first_register,
-            params: vec![size as _],
+            params: vec![],
+            size,
             ..Default::default()
         }
     }
@@ -116,7 +118,7 @@ impl ScheduleIr {
         reg
     }
     pub fn size(&self) -> usize {
-        self.params[0] as usize
+        self.size
     }
     pub fn params(&self) -> &[u64] {
         &self.params
@@ -145,7 +147,7 @@ impl ScheduleIr {
             let mut sv = self.var_mut(sv_id);
 
             sv.param_ty = ParamType::Output;
-            sv.param_offset = param_offset;
+            sv.param = param_offset;
         }
     }
     ///
@@ -167,8 +169,8 @@ impl ScheduleIr {
             deps: smallvec![],
             reg: self.next_reg(),
             param_ty: ParamType::None,
-            param_offset: 0,
-            gather_poffset: 0,
+            param: 0,
+            gather_param: 0,
             literal: var.literal,
             size: var.size,
         };
@@ -177,7 +179,7 @@ impl ScheduleIr {
 
         match var.op {
             Op::Data => {
-                sv.param_offset = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
+                sv.param = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
@@ -188,7 +190,7 @@ impl ScheduleIr {
                 let d0 = ir.var(var.deps[0]);
                 assert_eq!(d0.op, Op::Data);
 
-                sv.gather_poffset = self.push_param(d0.buffer.as_ref().unwrap().as_ptr());
+                sv.gather_param = self.push_param(d0.buffer.as_ref().unwrap().as_ptr());
 
                 // Then: collect index and mask.
                 sv.deps = smallvec![
