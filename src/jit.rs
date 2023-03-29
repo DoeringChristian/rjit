@@ -28,7 +28,7 @@ pub static JIT: Lazy<Mutex<Jit>> = Lazy::new(|| Mutex::new(Jit::default()));
 pub struct Jit {
     pub schedules: Vec<ScheduleIr>,
     pub kernels: Vec<Box<dyn Kernel>>,
-    pub scheduled: Vec<VarId>,
+    // pub scheduled: Vec<VarId>,
 }
 
 ///
@@ -43,23 +43,23 @@ pub fn eval() {
     jit.eval(&mut ir);
 }
 
-pub fn schedule(refs: &[&VarRef]) {
-    let mut jit = JIT.lock(); // always lock JIT before IR
-    let mut ir = IR.lock();
-    for r in refs {
-        ir.inc_rc(r.id());
-        jit.scheduled.push(r.id());
-    }
-}
+// pub fn schedule(refs: &[&VarRef]) {
+//     let mut jit = JIT.lock(); // always lock JIT before IR
+//     for r in refs {
+//         let ir = r.ir();
+//         ir.lock().inc_rc(r.id());
+//         jit.scheduled.push(r.id());
+//     }
+// }
 
 impl Jit {
-    pub fn schedule(&mut self, refs: &[&VarRef]) {
-        let mut ir = IR.lock(); // IR is always locked later.
-        for r in refs {
-            ir.inc_rc(r.id());
-            self.scheduled.push(r.id());
-        }
-    }
+    // pub fn schedule(&mut self, refs: &[&VarRef]) {
+    //     let mut ir = IR.lock(); // IR is always locked later.
+    //     for r in refs {
+    //         ir.inc_rc(r.id());
+    //         self.scheduled.push(r.id());
+    //     }
+    // }
     ///
     /// Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
     /// into kernels.
@@ -79,8 +79,8 @@ impl Jit {
         // After executing the kernels, the Ir is cleaned up.
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to
         // Data
-        for id in self.scheduled.iter() {
-            let var = ir.var_mut(*id);
+        for id in ir.scheduled.clone() {
+            let var = ir.var_mut(id);
 
             // Set op and type for next kernel:
             // var.param_ty = ParamType::Input;
@@ -94,9 +94,10 @@ impl Jit {
                 ir.dec_rc(dep);
             }
 
-            ir.dec_rc(*id);
+            // ir.dec_rc(*id);
         }
-        self.scheduled.clear();
+        // ir.scheduled.clear();
+        ir.clear_schedule();
     }
     ///
     /// Compiles the computation graph of all scheduled variables in a Ir.
@@ -106,12 +107,12 @@ impl Jit {
     /// In the end a set of Kernels is assembled and compiled.
     ///
     fn compile(&mut self, ir: &mut Internal) {
-        if self.scheduled.len() == 0 {
+        if ir.scheduled.len() == 0 {
             return;
         }
         self.schedules.clear();
         self.kernels.clear();
-        let mut scheduled = self.scheduled.clone();
+        let mut scheduled = ir.scheduled.clone();
         scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
 
         // For every scheduled variable (destination) we have to create a new buffer

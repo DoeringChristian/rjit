@@ -883,8 +883,8 @@ mod test {
 
         assert_eq!(y.var().rc, 1, "rc of y should be 1 (in y)");
 
+        IR.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&y]);
 
         assert_eq!(
             y.var().rc,
@@ -919,8 +919,8 @@ mod test {
         // let y = ir::add(&x, &x);
         let y = x.add(&x);
 
+        IR.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&y]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());
@@ -937,7 +937,7 @@ mod test {
         // let y = ir::add(&x, &x);
         let y = x.add(&x);
 
-        jit::schedule(&[&y]);
+        IR.schedule(&[&y]);
         jit::eval();
 
         assert_eq!(y.to_vec_f32(), vec![2f32; 10]);
@@ -952,8 +952,8 @@ mod test {
         let i = IR.buffer_u32(&[0, 1, 4]);
         let y = x.gather(&i, None);
 
+        IR.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&y]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());
@@ -975,8 +975,8 @@ mod test {
 
         let y = x.gather(&i, None);
 
+        IR.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&y]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());
@@ -991,8 +991,8 @@ mod test {
 
         let i = trace::IR.index(10);
 
+        IR.schedule(&[&i]);
         let mut jit = Jit::default();
-        jit.schedule(&[&i]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());
@@ -1039,8 +1039,8 @@ mod test {
         assert!(IR.lock().get_var(tmp_y).is_none());
         assert_eq!(IR.lock().get_var(tmp_z).unwrap().rc, 1);
 
+        IR.schedule(&[&r]);
         let mut jit = Jit::default();
-        jit.schedule(&[&r]);
         jit.eval(&mut IR.lock());
 
         assert_eq!(r.var().rc, 1);
@@ -1061,8 +1061,9 @@ mod test {
 
         let y = IR.index(3);
 
+        IR.schedule(&[&x, &y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&x, &y]);
+        // jit.schedule(&[&x, &y]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());

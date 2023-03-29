@@ -79,6 +79,10 @@ impl Trace {
             self.lock().backend = Some(Box::new(CUDABackend::new()));
         }
     }
+    pub fn schedule(&self, refs: &[&VarRef]) {
+        let ids = refs.iter().map(|r| r.id()).collect::<Vec<_>>();
+        self.lock().schedule(&ids);
+    }
 }
 impl Trace {
     // Constatns:
@@ -161,7 +165,7 @@ impl Trace {
 pub struct Internal {
     vars: SlotMap<DefaultKey, Var>,
     pub backend: Option<Box<dyn Backend>>,
-    // pub scheduled: Vec<VarId>,
+    pub scheduled: Vec<VarId>,
 }
 impl Debug for Internal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -196,6 +200,18 @@ impl Internal {
             self.vars.remove(id.0);
         }
     }
+    pub fn schedule(&mut self, ids: &[VarId]) {
+        for id in ids {
+            self.inc_rc(*id);
+            self.scheduled.push(*id);
+        }
+    }
+    pub fn clear_schedule(&mut self) {
+        for id in self.scheduled.clone() {
+            self.dec_rc(id);
+        }
+        self.scheduled.clear();
+    }
 }
 
 ///
@@ -210,6 +226,9 @@ pub struct VarRef {
 impl VarRef {
     pub fn id(&self) -> VarId {
         self.id
+    }
+    pub fn ir(&self) -> &Trace {
+        &self.ir
     }
     pub fn borrow(trace: &Trace, id: VarId) -> Self {
         trace.lock().inc_rc(id);
@@ -237,6 +256,9 @@ impl VarRef {
             assert_ne!(var.op, Op::Data);
             false
         }
+    }
+    pub fn schedule(&self) {
+        self.ir.schedule(&[self]);
     }
     // To Host functions:
     pub fn to_vec_f32(&self) -> Vec<f32> {
@@ -410,7 +432,7 @@ impl VarRef {
             return res;
         }
 
-        jit::schedule(&[self]);
+        self.schedule();
         jit::eval();
 
         if self.var().buffer.is_some() {
