@@ -406,7 +406,7 @@ impl VarRef {
         let res = self.reindex(&index, size);
 
         if let Some(res) = res {
-            let res = res.and(&mask); // TODO: masking
+            let res = res.and(&mask);
             return res;
         }
 
