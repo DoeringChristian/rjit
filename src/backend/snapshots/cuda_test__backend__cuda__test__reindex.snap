@@ -10,7 +10,7 @@ Kernel 0:
 .address_size 64
 
 .entry cujit(
-	.param .align 8 .b8 params[16]) {
+	.param .align 8 .b8 params[24]) {
 
 	.reg.b8   %b <9>; .reg.b16 %w<9>; .reg.b32 %r<9>;
 	.reg.b64  %rd<9>; .reg.f32 %f<9>; .reg.f64 %d<9>;

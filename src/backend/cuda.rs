@@ -107,7 +107,7 @@ impl Kernel for CUDAKernel {
             cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
 
         let mut params = vec![ir.size() as u64];
-        params.extend_from_slice(ir.params());
+        params.extend(ir.buffers().iter().map(|b| b.as_ptr()));
 
         unsafe {
             stream
@@ -126,7 +126,7 @@ impl Kernel for CUDAKernel {
     #[allow(unused_must_use)]
     fn assemble(&mut self, ir: &ScheduleIr) {
         self.asm.clear();
-        let n_params = ir.n_params();
+        let n_params = 1 + ir.buffers().len(); // Add 1 for size
         let n_regs = ir.n_regs();
 
         /* Special registers:

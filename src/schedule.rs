@@ -29,7 +29,7 @@ pub struct ScheduleVar {
     pub ty: VarType,
     pub param_ty: ParamType,
     pub reg: usize,
-    pub param: usize,        // Parameter offset for input/output
+    pub param: usize,        // Index into literal/buffer/texture vec
     pub gather_param: usize, // Parameter offset for gather operation
     pub literal: u64,
     pub size: usize,
@@ -74,7 +74,7 @@ impl ScheduleVar {
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     size: usize,
-    params: Vec<u64>, // TODO: directly use buffers also implement Backend param iterator (vulkan
+    // params: Vec<u64>, // TODO: directly use buffers also implement Backend param iterator (vulkan
     // compat)
     literals: Vec<u64>,            // Literals (directly passed to the kernel)
     buffers: Vec<Arc<dyn Buffer>>, // Buffers referenced in the kernel
@@ -86,7 +86,6 @@ impl ScheduleIr {
     pub fn new(first_register: usize, size: usize) -> Self {
         Self {
             n_regs: first_register,
-            params: vec![],
             size,
             ..Default::default()
         }
@@ -103,11 +102,8 @@ impl ScheduleIr {
     pub fn reg(&self, id: SVarId) -> Reg {
         self.var(id).reg()
     }
-    // pub fn lit(&self, id: SVarId) -> Literal {
-    //     self.var(id).lit()
-    // }
-    pub fn n_params(&self) -> usize {
-        self.params.len()
+    pub fn buffers(&self) -> &[Arc<dyn Buffer>] {
+        &self.buffers
     }
     pub fn n_regs(&self) -> usize {
         self.n_regs
@@ -120,20 +116,14 @@ impl ScheduleIr {
     pub fn size(&self) -> usize {
         self.size
     }
-    pub fn params(&self) -> &[u64] {
-        &self.params
-    }
-    pub fn params_mut(&mut self) -> &mut [u64] {
-        &mut self.params
-    }
     fn push_var(&mut self, var: ScheduleVar) -> SVarId {
         let id = SVarId(self.vars.len());
         self.vars.push(var);
         id
     }
-    fn push_param(&mut self, param: u64) -> usize {
-        let idx = self.params.len();
-        self.params.push(param);
+    fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
+        let idx = self.buffers.len();
+        self.buffers.push(buf.clone());
         idx
     }
     pub fn collect_vars(&mut self, ir: &Internal, schedule: &[VarId]) {
@@ -141,13 +131,12 @@ impl ScheduleIr {
             let sv_id = self.collect(ir, *id);
 
             let var = ir.var(*id);
-            let buffer_ref = var.buffer.as_ref().unwrap().as_ptr();
-            let param_offset = self.push_param(buffer_ref);
+            let param = self.push_buffer(var.buffer.as_ref().unwrap());
 
             let mut sv = self.var_mut(sv_id);
 
             sv.param_ty = ParamType::Output;
-            sv.param = param_offset;
+            sv.param = param;
         }
     }
     ///
@@ -179,7 +168,7 @@ impl ScheduleIr {
 
         match var.op {
             Op::Data => {
-                sv.param = self.push_param(var.buffer.as_ref().unwrap().as_ptr());
+                sv.param = self.push_buffer(var.buffer.as_ref().unwrap());
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
@@ -190,7 +179,7 @@ impl ScheduleIr {
                 let d0 = ir.var(var.deps[0]);
                 assert_eq!(d0.op, Op::Data);
 
-                sv.gather_param = self.push_param(d0.buffer.as_ref().unwrap().as_ptr());
+                sv.gather_param = self.push_buffer(d0.buffer.as_ref().unwrap());
 
                 // Then: collect index and mask.
                 sv.deps = smallvec![
