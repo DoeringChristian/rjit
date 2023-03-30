@@ -853,11 +853,12 @@ impl CUDAKernel {
 #[cfg(test)]
 mod test {
     use crate::jit::Jit;
-    use crate::trace::IR;
+    use crate::trace::Trace;
     use crate::{jit, trace};
 
     #[test]
     fn refcounting() {
+        let IR = Trace::default();
         IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
@@ -875,8 +876,8 @@ mod test {
 
         assert_eq!(y.var().rc, 1, "rc of y should be 1 (in y)");
 
+        IR.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&y]);
 
         assert_eq!(
             y.var().rc,
@@ -903,6 +904,7 @@ mod test {
     }
     #[test]
     fn load_add_f32() {
+        let IR = Trace::default();
         IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
@@ -911,8 +913,8 @@ mod test {
         // let y = ir::add(&x, &x);
         let y = x.add(&x);
 
+        IR.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&y]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());
@@ -921,6 +923,7 @@ mod test {
     }
     #[test]
     fn global_jit() {
+        use crate::trace::IR;
         IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
@@ -929,13 +932,14 @@ mod test {
         // let y = ir::add(&x, &x);
         let y = x.add(&x);
 
-        jit::schedule(&[&y]);
+        IR.schedule(&[&y]);
         jit::eval();
 
         assert_eq!(y.to_vec_f32(), vec![2f32; 10]);
     }
     #[test]
     fn load_gather_f32() {
+        let IR = Trace::default();
         IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
@@ -944,8 +948,8 @@ mod test {
         let i = IR.buffer_u32(&[0, 1, 4]);
         let y = x.gather(&i, None);
 
+        IR.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&y]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());
@@ -954,7 +958,7 @@ mod test {
     }
     #[test]
     fn reindex() {
-        // pretty_env_logger::init();
+        let IR = Trace::default();
         IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
@@ -967,8 +971,8 @@ mod test {
 
         let y = x.gather(&i, None);
 
+        IR.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&y]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());
@@ -977,14 +981,14 @@ mod test {
     }
     #[test]
     fn index() {
-        // pretty_env_logger::init();
+        let IR = Trace::default();
         IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
-        let i = trace::IR.index(10);
+        let i = IR.index(10);
 
+        IR.schedule(&[&i]);
         let mut jit = Jit::default();
-        jit.schedule(&[&i]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());
@@ -994,7 +998,7 @@ mod test {
     }
     #[test]
     fn gather_eval() {
-        // pretty_env_logger::init();
+        let IR = Trace::default();
         IR.set_backend("cuda");
 
         let tmp_x;
@@ -1031,8 +1035,8 @@ mod test {
         assert!(IR.lock().get_var(tmp_y).is_none());
         assert_eq!(IR.lock().get_var(tmp_z).unwrap().rc, 1);
 
+        IR.schedule(&[&r]);
         let mut jit = Jit::default();
-        jit.schedule(&[&r]);
         jit.eval(&mut IR.lock());
 
         assert_eq!(r.var().rc, 1);
@@ -1044,7 +1048,7 @@ mod test {
     }
     #[test]
     fn paralell() {
-        // pretty_env_logger::init();
+        let IR = Trace::default();
         IR.set_backend("cuda");
         dbg!(IR.is_locked());
 
@@ -1053,8 +1057,8 @@ mod test {
 
         let y = IR.index(3);
 
+        IR.schedule(&[&x, &y]);
         let mut jit = Jit::default();
-        jit.schedule(&[&x, &y]);
         jit.eval(&mut IR.lock());
 
         insta::assert_snapshot!(jit.kernel_debug());

@@ -23,8 +23,8 @@ fn main() {
 
     let y = IR.index(3);
 
+    IR.schedule(&[&y, &x]);
     let mut jit = Jit::default();
-    jit.schedule(&[&y, &x]);
     jit.eval(&mut IR.lock());
 
     assert_eq!(x.to_vec_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);

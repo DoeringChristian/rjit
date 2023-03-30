@@ -10,7 +10,7 @@ use smallvec::smallvec;
 
 use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
-use crate::jit;
+use crate::jit::{self, Jit};
 use crate::var::{Op, Var, VarId, VarInfo, VarType};
 
 // We have one global Intermediate Representation that tracks all operations.
@@ -77,6 +77,12 @@ impl Trace {
         let backend = backend.as_ref();
         if backend == "cuda" {
             self.lock().backend = Some(Box::new(CUDABackend::new()));
+        }
+    }
+    pub fn schedule(&self, refs: &[&VarRef]) {
+        for r in refs {
+            assert!(Arc::ptr_eq(&r.ir, &self.0));
+            self.lock().schedule(&[r.id()])
         }
     }
 }
@@ -157,21 +163,12 @@ impl Trace {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Internal {
     vars: SlotMap<DefaultKey, Var>,
     pub backend: Option<Box<dyn Backend>>,
     pub functions: Vec<VarId>,
-    // pub scheduled: Vec<VarId>,
-}
-impl Debug for Internal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Ir")
-            .field("vars", &self.vars)
-            // .field("scheduled", &self.scheduled)
-            // .field("backend", &self.backend)
-            .finish()
-    }
+    pub scheduled: Vec<VarId>,
 }
 
 impl Internal {
@@ -195,6 +192,12 @@ impl Internal {
                 self.dec_rc(dep);
             }
             self.vars.remove(id.0);
+        }
+    }
+    pub fn schedule(&mut self, ids: &[VarId]) {
+        for id in ids {
+            self.inc_rc(*id);
+            self.scheduled.push(*id);
         }
     }
 }
@@ -238,6 +241,9 @@ impl VarRef {
             assert_ne!(var.op, Op::Data);
             false
         }
+    }
+    pub fn schedule(&self) {
+        self.ir.lock().schedule(&[self.id()])
     }
     // To Host functions:
     pub fn to_vec_f32(&self) -> Vec<f32> {
@@ -411,8 +417,9 @@ impl VarRef {
             return res;
         }
 
-        jit::schedule(&[self]);
-        jit::eval();
+        self.schedule();
+        let mut jit = Jit::default();
+        jit.eval(&mut self.ir.lock());
 
         if self.var().buffer.is_some() {
             let ret = self.ir.push_var(Var {
