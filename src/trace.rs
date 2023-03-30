@@ -417,7 +417,7 @@ impl VarRef {
             return res;
         }
 
-        self.schedule();
+        self.schedule(); // TODO: instead of evaluation, use dependency scheduling
         let mut jit = Jit::default();
         jit.eval(&mut self.ir.lock());
 
