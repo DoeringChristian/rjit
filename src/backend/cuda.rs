@@ -845,15 +845,7 @@ impl CUDAKernel {
                     var.ty.name_cuda(),
                     var.reg()
                 );
-            } // Op::ConstF32(val) => {
-              //     writeln!(
-              //         self.asm,
-              //         "\tmov.{} {}, 0F{:08x};",
-              //         var.ty.name_cuda(),
-              //         var.reg(),
-              //         unsafe { *(&val as *const _ as *const u32) }
-              //     );
-              // }
+            }
         }
     }
 }

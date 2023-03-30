@@ -67,8 +67,6 @@ pub enum Op {
     Gather, // Gather operation (gathering directly from buffer).
     Scatter,
     Idx,
-    // ConstF32(f32), // Set a constant value
-    // ConstU32(u32), // Set a constant value
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]

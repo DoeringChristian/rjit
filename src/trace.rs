@@ -11,7 +11,7 @@ use smallvec::smallvec;
 use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
 use crate::jit;
-use crate::var::{Op, ParamType, Var, VarId, VarInfo, VarType};
+use crate::var::{Op, Var, VarId, VarInfo, VarType};
 
 // We have one global Intermediate Representation that tracks all operations.
 // However, Other Intermediate representations can also be constructed.
@@ -161,6 +161,7 @@ impl Trace {
 pub struct Internal {
     vars: SlotMap<DefaultKey, Var>,
     pub backend: Option<Box<dyn Backend>>,
+    pub functions: Vec<VarId>,
     // pub scheduled: Vec<VarId>,
 }
 impl Debug for Internal {
