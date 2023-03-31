@@ -6,8 +6,8 @@ use parking_lot::Mutex;
 
 use crate::backend::Kernel;
 use crate::schedule::ScheduleIr;
-use crate::trace::{Internal, VarRef, IR};
-use crate::var::{Op, ParamType, VarId};
+use crate::trace::{Internal, IR};
+use crate::var::Op;
 
 ///
 /// This is the default Just In Time Compiler (JIT).

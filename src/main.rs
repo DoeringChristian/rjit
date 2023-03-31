@@ -1,7 +1,3 @@
-use std::sync::Arc;
-
-use crate::backend::cuda::CUDABackend;
-use crate::backend::Backend;
 use crate::trace::IR;
 
 use self::jit::Jit;

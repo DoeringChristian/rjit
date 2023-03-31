@@ -10,7 +10,7 @@ use smallvec::smallvec;
 
 use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
-use crate::jit::{self, Jit};
+use crate::jit::Jit;
 use crate::var::{Op, Var, VarId, VarInfo, VarType};
 
 // We have one global Intermediate Representation that tracks all operations.
