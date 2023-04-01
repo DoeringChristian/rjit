@@ -66,7 +66,7 @@ impl Jit {
             let buffer = ir.backend.as_ref().unwrap().buffer_uninit(size * ty_size);
 
             let mut var = ir.var_mut(id);
-            // var.param_ty = ParamType::Output;
+            assert!(var.buffer.is_none());
             var.buffer = Some(buffer);
         }
 

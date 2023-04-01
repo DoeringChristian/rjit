@@ -196,6 +196,11 @@ impl Internal {
     }
     pub fn schedule(&mut self, ids: &[VarId]) {
         for id in ids {
+            // Don't schedule data
+            if self.var(*id).op == Op::Data {
+                dbg!();
+                continue;
+            }
             self.inc_rc(*id);
             self.scheduled.push(*id);
         }
