@@ -1,0 +1,5 @@
+---
+source: src/backend/cuda.rs
+expression: jit.kernel_debug()
+---
+

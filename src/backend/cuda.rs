@@ -1066,4 +1066,20 @@ mod test {
         assert_eq!(x.to_vec_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         assert_eq!(y.to_vec_u32(), vec![0, 1, 2]);
     }
+    #[test]
+    fn load_gather() {
+        let IR = Trace::default();
+        IR.set_backend("cuda");
+
+        let x = IR.buffer_f32(&[1., 2., 3.]);
+
+        IR.schedule(&[&x]);
+
+        let mut jit = Jit::default();
+        jit.eval(&mut IR.lock());
+
+        insta::assert_snapshot!(jit.kernel_debug());
+
+        assert_eq!(x.to_vec_f32(), vec![1., 2., 3.]);
+    }
 }
