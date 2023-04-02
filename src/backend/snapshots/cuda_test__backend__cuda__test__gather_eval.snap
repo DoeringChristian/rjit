@@ -35,7 +35,7 @@ body: // sm_86
 	mov.u32 %r5, %r0;
 
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 6, param: 0, gather_param: 0, literal: 1, size: 0 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 6, param: 0, gather_param: 0, literal: 1, size: 1 } =>
 	mov.pred %p6, 0x1;
 
 

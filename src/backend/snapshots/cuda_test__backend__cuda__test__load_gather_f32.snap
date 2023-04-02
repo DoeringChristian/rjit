@@ -36,7 +36,7 @@ body: // sm_86
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.u32 %r5, [%rd0];
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 6, param: 0, gather_param: 0, literal: 1, size: 0 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 6, param: 0, gather_param: 0, literal: 1, size: 1 } =>
 	mov.pred %p6, 0x1;
 
 

@@ -94,6 +94,7 @@ impl Trace {
             deps: smallvec![],
             ty: VarType::F32,
             literal: bytemuck::cast::<_, u32>(val) as _,
+            size: 1,
             ..Default::default()
         })
     }
@@ -103,6 +104,7 @@ impl Trace {
             deps: smallvec![],
             ty: VarType::U32,
             literal: bytemuck::cast::<_, u32>(val) as _,
+            size: 1,
             ..Default::default()
         })
     }
@@ -112,6 +114,7 @@ impl Trace {
             deps: smallvec![],
             ty: VarType::Bool,
             literal: bytemuck::cast::<_, u8>(val) as _,
+            size: 1,
             ..Default::default()
         })
     }
