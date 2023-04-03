@@ -166,8 +166,6 @@ impl Jit {
 
         let passses = self.passes(&ir);
 
-        let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
-
         let mut scheduled = ir.scheduled.clone();
         scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
 
