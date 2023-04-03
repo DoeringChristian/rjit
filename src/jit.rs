@@ -1,4 +1,5 @@
 use std::borrow::BorrowMut;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use once_cell::sync::Lazy;
@@ -7,7 +8,7 @@ use parking_lot::Mutex;
 use crate::backend::Kernel;
 use crate::schedule::ScheduleIr;
 use crate::trace::{Internal, IR};
-use crate::var::Op;
+use crate::var::{Op, VarId};
 
 ///
 /// This is the default Just In Time Compiler (JIT).
@@ -28,7 +29,6 @@ pub static JIT: Lazy<Mutex<Jit>> = Lazy::new(|| Mutex::new(Jit::default()));
 pub struct Jit {
     pub schedules: Vec<ScheduleIr>,
     pub kernels: Vec<Box<dyn Kernel>>,
-    // pub scheduled: Vec<VarId>,
 }
 
 ///
@@ -44,13 +44,6 @@ pub fn eval() {
 }
 
 impl Jit {
-    // pub fn schedule(&mut self, refs: &[&VarRef]) {
-    //     let mut ir = IR.lock(); // IR is always locked later.
-    //     for r in refs {
-    //         ir.inc_rc(r.id());
-    //         self.scheduled.push(r.id());
-    //     }
-    // }
     ///
     /// Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
     /// into kernels.
@@ -59,7 +52,8 @@ impl Jit {
     ///
     pub fn eval(&mut self, ir: &mut Internal) {
         dbg!(&ir.scheduled);
-        // For every scheduled variable (destination) we have to create a new buffer
+        // For every scheduled variable (destination) we have to create a new buffer (except if it
+        // is void)
         for id in ir.scheduled.clone() {
             let size = ir.var(id).size;
             let ty_size = ir.var(id).ty.size();
@@ -114,6 +108,29 @@ impl Jit {
         }
         self.schedules.clear();
         self.kernels.clear();
+
+        let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
+
+        pub enum Access {
+            Read,
+            Write,
+            ReadWrite,
+        }
+
+        struct Pass {
+            pub ids: HashMap<VarId, Access>,
+            pub deps: Vec<usize>,
+        }
+
+        let mut passes = ir
+            .scheduled
+            .iter()
+            .map(|id| Pass {
+                ids: HashMap::from([(*id, Access::Write)]),
+                deps: vec![],
+            })
+            .collect::<Vec<_>>();
+
         let mut scheduled = ir.scheduled.clone();
         scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
 

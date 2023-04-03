@@ -71,7 +71,7 @@ pub enum Op {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub enum VarType {
-    // Void,
+    Void,
     #[default]
     Bool,
     I8,
@@ -91,6 +91,7 @@ impl VarType {
     // Returns the register prefix for this variable
     pub fn prefix(&self) -> &'static str {
         match self {
+            Self::Void => "???",
             Self::Bool => "%p",
             Self::I8 => "%b",
             Self::U8 => "%b",
@@ -109,6 +110,7 @@ impl VarType {
     // Retuns the cuda/ptx Representation for this type
     pub fn name_cuda(&self) -> &'static str {
         match self {
+            Self::Void => "???",
             Self::Bool => "pred",
             Self::I8 => "s8",
             Self::U8 => "u8",
@@ -126,6 +128,7 @@ impl VarType {
     }
     pub fn name_cuda_bin(&self) -> &'static str {
         match self {
+            Self::Void => "???",
             Self::Bool => "pred",
             Self::I8 => "b8",
             Self::U8 => "b8",
@@ -144,6 +147,7 @@ impl VarType {
     // Returns the size/stride of this variable
     pub fn size(&self) -> usize {
         match self {
+            Self::Void => 0,
             Self::Bool => 1,
             Self::I8 => 1,
             Self::U8 => 1,
@@ -189,7 +193,6 @@ pub struct Var {
     pub ty: VarType,                     // Type of the variable
     pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer
     pub size: usize,                     // number of elements
-    // pub param_ty: ParamType,             // Parameter type
     pub rc: usize,
     pub literal: u64,
 }
