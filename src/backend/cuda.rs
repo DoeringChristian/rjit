@@ -890,7 +890,7 @@ mod test {
         assert_eq!(
             x.var().rc,
             1,
-            "rc of x should be 1 (dependecies of y shuld be cleaned)"
+            "rc of x should be 1 (dependencies of y shuld be cleaned)"
         );
         assert_eq!(
             y.var().rc,

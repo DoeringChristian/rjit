@@ -31,6 +31,27 @@ pub struct Jit {
     pub kernels: Vec<Box<dyn Kernel>>,
 }
 
+struct Pass {
+    ids: Vec<VarId>,
+    access: HashMap<VarId, Access>,
+    size: usize,
+}
+
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    struct Access: u8 {
+        const Read = 0b00000001;
+        const Write = 0b00000010;
+        const ReadWrite = Self::Read.bits() | Self::Write.bits();
+    }
+}
+
+// pub enum Access {
+//     Read,
+//     Write,
+//     ReadWrite,
+// }
+
 ///
 ///  Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
 ///  into kernels.
@@ -83,7 +104,7 @@ impl Jit {
             // var.param_ty = ParamType::Input;
             var.op = Op::Data;
 
-            // Clear dependecies:
+            // Clear dependencies:
             let deps = var.deps.clone();
             var.deps.clear();
 
@@ -94,6 +115,40 @@ impl Jit {
             ir.dec_rc(id);
         }
         ir.scheduled.clear();
+    }
+    pub fn passes(&self, ir: &Internal) -> Vec<Pass> {
+        fn get_accessed(ir: &Internal, id: VarId, map: &mut HashMap<VarId, Access>) {
+            let var = ir.var(id);
+
+            match var.op {
+                Op::Data => {
+                    *map.entry(id).or_insert(Access::Read) |= Access::Read;
+                }
+                _ => {
+                    for dep in var.deps.iter() {
+                        get_accessed(ir, *dep, map);
+                    }
+                }
+            }
+        }
+        let passes = ir
+            .scheduled
+            .iter()
+            .map(|id| {
+                let mut access = HashMap::default();
+                get_accessed(ir, *id, &mut access);
+                access.insert(*id, Access::Write).and_then(|_| {
+                    unreachable!("Variables can never depend on themselves");
+                    Some(())
+                });
+                Pass {
+                    ids: vec![*id],
+                    access,
+                    size: ir.var(*id).size,
+                }
+            })
+            .collect::<Vec<_>>();
+        passes
     }
     ///
     /// Compiles the computation graph of all scheduled variables in a Ir.
@@ -109,27 +164,9 @@ impl Jit {
         self.schedules.clear();
         self.kernels.clear();
 
+        let passses = self.passes(&ir);
+
         let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
-
-        pub enum Access {
-            Read,
-            Write,
-            ReadWrite,
-        }
-
-        struct Pass {
-            pub ids: HashMap<VarId, Access>,
-            pub deps: Vec<usize>,
-        }
-
-        let mut passes = ir
-            .scheduled
-            .iter()
-            .map(|id| Pass {
-                ids: HashMap::from([(*id, Access::Write)]),
-                deps: vec![],
-            })
-            .collect::<Vec<_>>();
 
         let mut scheduled = ir.scheduled.clone();
         scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
