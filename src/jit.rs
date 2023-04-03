@@ -76,13 +76,16 @@ impl Jit {
         // For every scheduled variable (destination) we have to create a new buffer (except if it
         // is void)
         for id in ir.scheduled.clone() {
-            let size = ir.var(id).size;
-            let ty_size = ir.var(id).ty.size();
-            let buffer = ir.backend.as_ref().unwrap().buffer_uninit(size * ty_size);
+            let var = ir.var(id);
+            // Do not reallocate on scheduled variables (don't yet know if this is right)
+            if var.buffer.is_none() {
+                let size = ir.var(id).size;
+                let ty_size = ir.var(id).ty.size();
+                let buffer = ir.backend.as_ref().unwrap().buffer_uninit(size * ty_size);
 
-            let mut var = ir.var_mut(id);
-            assert!(var.buffer.is_none());
-            var.buffer = Some(buffer);
+                let mut var = ir.var_mut(id);
+                var.buffer = Some(buffer);
+            }
         }
 
         self.compile(ir);
