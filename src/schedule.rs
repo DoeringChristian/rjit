@@ -29,8 +29,8 @@ pub struct ScheduleVar {
     pub ty: VarType,
     pub param_ty: ParamType,
     pub reg: usize,
-    pub param: usize,        // Index into literal/buffer/texture vec
-    pub gather_param: usize, // Parameter offset for gather operation
+    pub param: usize,    // Index into literal/buffer/texture vec
+    pub gs_param: usize, // Parameter offset for gather/scatter operation
     pub literal: u64,
     pub size: usize,
 }
@@ -119,6 +119,7 @@ impl ScheduleIr {
         self.vars.push(var);
         id
     }
+    /// TODO: optimization to not push buffer twice
     fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
         let idx = self.buffers.len();
         self.buffers.push(buf.clone());
@@ -157,7 +158,7 @@ impl ScheduleIr {
             reg: self.next_reg(),
             param_ty: ParamType::None,
             param: 0,
-            gather_param: 0,
+            gs_param: 0,
             literal: var.literal,
             size: var.size,
         };
@@ -174,15 +175,26 @@ impl ScheduleIr {
                 sv.literal = var.literal;
             }
             Op::Gather => {
-                let d0 = ir.var(var.deps[0]);
+                let src = ir.var(var.deps[0]);
 
-                sv.gather_param = self.push_buffer(d0.buffer.as_ref().unwrap());
+                sv.gs_param = self.push_buffer(src.buffer.as_ref().unwrap());
 
                 // Then: collect index and mask.
                 sv.deps = smallvec![
-                    // d0,
-                    self.collect(ir, var.deps[1]),
-                    self.collect(ir, var.deps[2])
+                    // src
+                    self.collect(ir, var.deps[1]), // index
+                    self.collect(ir, var.deps[2])  // mask
+                ];
+            }
+            Op::Scatter => {
+                let src = ir.var(var.deps[0]);
+                sv.gs_param = self.push_buffer(src.buffer.as_ref().unwrap());
+
+                sv.deps = smallvec![
+                    self.collect(ir, var.deps[0]), // src
+                    // dst
+                    self.collect(ir, var.deps[2]), // index
+                    self.collect(ir, var.deps[3])  // mask
                 ];
             }
             _ => {

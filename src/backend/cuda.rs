@@ -769,22 +769,23 @@ impl CUDAKernel {
                 );
             }
             Op::Gather => {
-                // d0: src
-                // d1: index
-                // d2: mask
-                // let d0 = ir.var(var.deps[0]);
-                let d1 = ir.var(var.deps[0]);
-                let d2 = ir.var(var.deps[1]);
-                let unmasked = d2.is_literal() && d2.literal != 0;
+                let index = ir.var(var.deps[0]);
+                let mask = ir.var(var.deps[1]);
+                let unmasked = mask.is_literal() && mask.literal != 0;
                 let is_bool = var.ty.is_bool();
 
                 // TODO: better buffer loading ( dont use as_ptr and get ptr from src in here).
                 if !unmasked {
-                    writeln!(self.asm, "\t@!{} bra l_{}_masked;", d2.reg(), var.reg_idx());
+                    writeln!(
+                        self.asm,
+                        "\t@!{} bra l_{}_masked;",
+                        mask.reg(),
+                        var.reg_idx()
+                    );
                 }
 
                 // Load buffer ptr:
-                let param_offset = (var.gather_param + 1) * 8;
+                let param_offset = (var.gs_param + 1) * 8;
 
                 writeln!(self.asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
@@ -795,16 +796,16 @@ impl CUDAKernel {
                         self.asm,
                         "\tcvt.u64.{} %rd3, {};\n\
                         \tadd.u64 %rd3, %rd3, %rd0;\n",
-                        d1.ty.name_cuda(),
-                        d1.reg(),
+                        index.ty.name_cuda(),
+                        index.reg(),
                         // d0.reg()
                     );
                 } else {
                     writeln!(
                         self.asm,
                         "\tmad.wide.{} %rd3, {}, {}, %rd0;",
-                        d1.ty.name_cuda(),
-                        d1.reg(),
+                        index.ty.name_cuda(),
+                        index.reg(),
                         var.ty.size(),
                         // d0.reg()
                     );
@@ -837,7 +838,61 @@ impl CUDAKernel {
                     );
                 }
             }
-            Op::Scatter => todo!(),
+            Op::Scatter => {
+                let src = ir.var(var.deps[0]);
+                let idx = ir.var(var.deps[1]);
+                let mask = ir.var(var.deps[2]);
+
+                let unmasked = idx.is_literal() && idx.literal != 0;
+                let is_bool = src.ty.is_bool();
+
+                if !unmasked {
+                    writeln!(
+                        self.asm,
+                        "    @!{} bra l_{}_done;\n",
+                        mask.reg(),
+                        var.reg_idx()
+                    );
+                }
+
+                let param_offset = (var.gs_param + 1) * 8;
+
+                writeln!(self.asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
+
+                if src.ty.size() == 1 {
+                    write!(
+                        self.asm,
+                        "\tcvt.u64.{} %rd3, {};\n\
+                        \tadd.u64 %rd3, %rd3, %rd0;\n",
+                        src.ty.name_cuda(),
+                        idx.reg(),
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tmad.wide.{} %rd3, {}, {}, %rd0;",
+                        idx.ty.name_cuda(),
+                        idx.reg(),
+                        src.ty.size(),
+                    );
+                }
+
+                if is_bool {
+                    writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", src.reg());
+                    writeln!(self.asm, "\tst.global$s$s.u8 [%rd3], %w0;");
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tst.global.{} [%rd3], {};",
+                        src.ty.name_cuda(),
+                        src.reg()
+                    );
+                }
+
+                if !unmasked {
+                    writeln!(self.asm, "\tl_{}_done:", var.reg_idx());
+                }
+            }
             Op::Idx => {
                 writeln!(
                     self.asm,
