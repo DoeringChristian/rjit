@@ -201,6 +201,8 @@ impl Internal {
         for id in ids {
             // Don't schedule data
             if self.var(*id).op == Op::Data {
+                // TODO: maybe we only need to test if a buffer
+                // exists
                 dbg!();
                 continue;
             }
@@ -239,16 +241,6 @@ impl VarRef {
     }
     pub fn var(&self) -> MappedMutexGuard<Var> {
         MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
-    }
-    pub fn is_data(&self) -> bool {
-        let var = self.var();
-        if var.buffer.is_some() {
-            assert_eq!(var.op, Op::Data);
-            true
-        } else {
-            assert_ne!(var.op, Op::Data);
-            false
-        }
     }
     pub fn schedule(&self) {
         self.ir.lock().schedule(&[self.id()])

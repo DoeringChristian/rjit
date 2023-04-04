@@ -23,7 +23,7 @@ pub enum Op {
     #[default]
     Nop,
     Literal,
-    Data,
+    Data, // TODO: maybe remove
     Neg,
     Not,
     Sqrt,
