@@ -40,11 +40,11 @@ struct Pass {
 }
 
 impl Pass {
-    fn merge(&mut self, other: &Self) {
-        assert_eq!(self.size, other.size);
-        self.ids = self.ids.union(&other.ids).cloned().collect();
-        self.deps = self.deps.union(&other.deps).cloned().collect();
-    }
+    ///
+    /// Try to merge `other` into self.
+    /// This is only possible if `other.size` == `self.size`
+    /// and `other` does not depend on `self`.
+    ///
     fn try_merge(&mut self, other: &Self) -> Option<()> {
         if self.size != other.size {
             return None;
