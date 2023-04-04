@@ -31,26 +31,13 @@ pub struct Jit {
     pub kernels: Vec<Box<dyn Kernel>>,
 }
 
+#[derive(Debug)]
 struct Pass {
     ids: Vec<VarId>,
-    access: HashMap<VarId, Access>,
+    deps: Vec<VarId>,
+    // access: HashMap<VarId, Access>,
     size: usize,
 }
-
-bitflags::bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    struct Access: u8 {
-        const Read = 0b00000001;
-        const Write = 0b00000010;
-        const ReadWrite = Self::Read.bits() | Self::Write.bits();
-    }
-}
-
-// pub enum Access {
-//     Read,
-//     Write,
-//     ReadWrite,
-// }
 
 ///
 ///  Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
@@ -72,7 +59,6 @@ impl Jit {
     /// A the end, all scheduled variables are overwritten with the calculated data.
     ///
     pub fn eval(&mut self, ir: &mut Internal) {
-        dbg!(&ir.scheduled);
         // For every scheduled variable (destination) we have to create a new buffer (except if it
         // is void)
         for id in ir.scheduled.clone() {
@@ -119,38 +105,45 @@ impl Jit {
         }
         ir.scheduled.clear();
     }
+    ///
+    /// Collect neccesary passes from `ir`.
+    /// NOTE: We would need to correctly assign dependencies on scatter
+    ///
     pub fn passes(&self, ir: &Internal) -> Vec<Pass> {
-        fn get_accessed(ir: &Internal, id: VarId, map: &mut HashMap<VarId, Access>) {
+        ///
+        /// Gets the dependencies of `id` in `scheduled`
+        ///
+        fn dependencies_in(
+            ir: &Internal,
+            id: VarId,
+            scheduled: &HashSet<VarId>,
+            deps: &mut HashSet<VarId>,
+        ) {
+            if scheduled.contains(&id) {
+                deps.insert(id);
+                return;
+            }
             let var = ir.var(id);
-
-            match var.op {
-                Op::Data => {
-                    *map.entry(id).or_insert(Access::Read) |= Access::Read;
-                }
-                _ => {
-                    for dep in var.deps.iter() {
-                        get_accessed(ir, *dep, map);
-                    }
-                }
+            for dep in var.deps.iter() {
+                dependencies_in(ir, *dep, scheduled, deps);
             }
         }
+        let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
         let passes = ir
             .scheduled
             .iter()
             .map(|id| {
-                let mut access = HashMap::default();
-                get_accessed(ir, *id, &mut access);
-                access.insert(*id, Access::Write).and_then(|_| {
-                    unreachable!("Variables can never depend on themselves");
-                    Some(())
-                });
+                let mut deps = HashSet::new();
+                dependencies_in(ir, *id, &scheduled, &mut deps);
+                let deps = deps.difference(&HashSet::from([*id])).cloned().collect();
                 Pass {
                     ids: vec![*id],
-                    access,
+                    deps,
                     size: ir.var(*id).size,
                 }
             })
             .collect::<Vec<_>>();
+
         passes
     }
     ///
@@ -168,6 +161,7 @@ impl Jit {
         self.kernels.clear();
 
         let passses = self.passes(&ir);
+        dbg!(&passses);
 
         let mut scheduled = ir.scheduled.clone();
         scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));

@@ -170,7 +170,7 @@ impl Trace {
 pub struct Internal {
     vars: SlotMap<DefaultKey, Var>,
     pub backend: Option<Box<dyn Backend>>,
-    pub functions: Vec<VarId>,
+    // pub functions: Vec<VarId>,
     pub scheduled: Vec<VarId>,
 }
 

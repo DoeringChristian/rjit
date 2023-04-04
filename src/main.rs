@@ -1,4 +1,4 @@
-use crate::trace::IR;
+use crate::trace::Trace;
 
 use self::jit::Jit;
 
@@ -9,20 +9,18 @@ mod trace;
 mod var;
 
 fn main() {
-    // pretty_env_logger::init();
-    //
+    let IR = Trace::default();
     IR.set_backend("cuda");
-    dbg!(IR.is_locked());
 
-    let x = IR.index(10);
-    dbg!(IR.is_locked());
+    let x = IR.index(3);
 
     let y = IR.index(3);
 
     IR.schedule(&[&y, &x]);
+    dbg!(&IR);
     let mut jit = Jit::default();
     jit.eval(&mut IR.lock());
 
-    assert_eq!(x.to_vec_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    assert_eq!(x.to_vec_u32(), vec![0, 1, 2]);
     assert_eq!(y.to_vec_u32(), vec![0, 1, 2]);
 }
