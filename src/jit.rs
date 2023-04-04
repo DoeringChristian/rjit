@@ -31,11 +31,26 @@ pub struct Jit {
     pub kernels: Vec<Box<dyn Kernel>>,
 }
 
+///
+/// This represents the Evaluation of one or many variables.
+/// With dependencies on other variables which have been scheduled.
+/// TODO: Better naming
+///
+/// Dependencies of a scatter operation have to be set up in the following way:
+///  a  <---------- b
+/// ^ ^------ s1 <--|
+/// '-- s0 <--|
+///
+/// A is an arbitrary operation. If s0 and s1 are scattering operations, a has to be scheduled as
+/// do s0 and s1. In order for s0 and s1 to be evaluated before b, b needs to depend on s1 and s1
+/// on s0.
+/// This can be done by adding extra dependencies to b and s1.
+///
+///
 #[derive(Debug)]
 struct Pass {
     ids: HashSet<VarId>,
     deps: HashSet<VarId>,
-    // access: HashMap<VarId, Access>,
     size: usize,
 }
 
@@ -98,7 +113,8 @@ impl Jit {
         for i in 0..n_kernels {
             let (kernel, schedule) = self.schedule_kernel(i);
             kernel.execute_async(schedule);
-            ir.backend.as_ref().unwrap().synchronize(); // TODO: improve by sorting
+            ir.backend.as_ref().unwrap().synchronize(); // TODO: only sync if we have
+                                                        // dependencies
         }
 
         // After executing the kernels, the Ir is cleaned up.
