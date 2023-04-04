@@ -175,7 +175,6 @@ impl ScheduleIr {
             }
             Op::Gather => {
                 let d0 = ir.var(var.deps[0]);
-                assert_eq!(d0.op, Op::Data);
 
                 sv.gather_param = self.push_buffer(d0.buffer.as_ref().unwrap());
 

@@ -426,21 +426,21 @@ impl VarRef {
         }
 
         self.schedule(); // TODO: instead of evaluation, use dependency scheduling
-        let mut jit = Jit::default();
-        jit.eval(&mut self.ir.lock());
+                         // let mut jit = Jit::default();
+                         // jit.eval(&mut self.ir.lock());
 
-        if self.var().buffer.is_some() {
-            let ret = self.ir.push_var(Var {
-                op: Op::Gather,
-                deps: smallvec![self.id(), index.id(), mask.id()],
-                ty,
-                size,
-                ..Default::default()
-            });
-            return ret;
-        }
+        // if self.var().buffer.is_some() {
+        let ret = self.ir.push_var(Var {
+            op: Op::Gather,
+            deps: smallvec![self.id(), index.id(), mask.id()],
+            ty,
+            size,
+            ..Default::default()
+        });
+        return ret;
+        // }
 
-        unimplemented!();
+        // unimplemented!();
     }
 }
 

@@ -1021,9 +1021,9 @@ mod test {
 
             let r = z.gather(&IR.index(3), None);
             dbg!();
-            assert_eq!(x.var().rc, 1);
-            assert_eq!(y.var().rc, 1);
-            assert_eq!(z.var().rc, 2);
+            assert_eq!(x.var().rc, 2);
+            assert_eq!(y.var().rc, 2);
+            assert_eq!(z.var().rc, 3);
             assert_eq!(r.var().rc, 1);
             tmp_x = x.id();
             tmp_y = y.id();
@@ -1031,9 +1031,10 @@ mod test {
             r
         };
         assert_eq!(r.var().rc, 1);
-        assert!(IR.lock().get_var(tmp_x).is_none());
-        assert!(IR.lock().get_var(tmp_y).is_none());
-        assert_eq!(IR.lock().get_var(tmp_z).unwrap().rc, 1);
+        assert_eq!(IR.lock().get_var(tmp_x).unwrap().rc, 1);
+        assert_eq!(IR.lock().get_var(tmp_y).unwrap().rc, 1);
+        assert_eq!(IR.lock().get_var(tmp_z).unwrap().rc, 2); // z is referenced by r and the
+                                                             // schedule
 
         IR.schedule(&[&r]);
         let mut jit = Jit::default();

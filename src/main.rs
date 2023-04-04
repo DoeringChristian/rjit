@@ -12,15 +12,30 @@ fn main() {
     let IR = Trace::default();
     IR.set_backend("cuda");
 
-    let x = IR.index(3);
+    let tmp_x;
+    let tmp_y;
+    let tmp_z;
+    let r = {
+        let x = IR.index(3);
+        dbg!();
+        let y = IR.buffer_u32(&[1, 2, 3]);
+        dbg!();
 
-    let y = IR.index(3);
+        // let z = ir::add(&x, &y);
+        let z = x.add(&y);
+        dbg!();
 
-    IR.schedule(&[&y, &x]);
-    dbg!(&IR);
+        let r = z.gather(&IR.index(3), None);
+        dbg!();
+        tmp_x = x.id();
+        tmp_y = y.id();
+        tmp_z = z.id();
+        r
+    };
+
+    IR.schedule(&[&r]);
     let mut jit = Jit::default();
     jit.eval(&mut IR.lock());
 
-    assert_eq!(x.to_vec_u32(), vec![0, 1, 2]);
-    assert_eq!(y.to_vec_u32(), vec![0, 1, 2]);
+    assert_eq!(r.to_vec_u32(), vec![1, 3, 5]);
 }

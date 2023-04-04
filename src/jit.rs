@@ -33,10 +33,29 @@ pub struct Jit {
 
 #[derive(Debug)]
 struct Pass {
-    ids: Vec<VarId>,
-    deps: Vec<VarId>,
+    ids: HashSet<VarId>,
+    deps: HashSet<VarId>,
     // access: HashMap<VarId, Access>,
     size: usize,
+}
+
+impl Pass {
+    fn merge(&mut self, other: &Self) {
+        assert_eq!(self.size, other.size);
+        self.ids = self.ids.union(&other.ids).cloned().collect();
+        self.deps = self.deps.union(&other.deps).cloned().collect();
+    }
+    fn try_merge(&mut self, other: &Self) -> Option<()> {
+        if self.size != other.size {
+            return None;
+        }
+        if !self.ids.is_disjoint(&other.deps) {
+            return None;
+        }
+        self.ids = self.ids.union(&other.ids).cloned().collect();
+        self.deps = self.deps.union(&other.deps).cloned().collect();
+        Some(())
+    }
 }
 
 ///
@@ -79,9 +98,8 @@ impl Jit {
         for i in 0..n_kernels {
             let (kernel, schedule) = self.schedule_kernel(i);
             kernel.execute_async(schedule);
+            ir.backend.as_ref().unwrap().synchronize(); // TODO: improve by sorting
         }
-
-        ir.backend.as_ref().unwrap().synchronize();
 
         // After executing the kernels, the Ir is cleaned up.
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to
@@ -108,6 +126,7 @@ impl Jit {
     ///
     /// Collect neccesary passes from `ir`.
     /// NOTE: We would need to correctly assign dependencies on scatter
+    /// NOTE: Passes are in ordered (DAG ordering)
     ///
     pub fn passes(&self, ir: &Internal) -> Vec<Pass> {
         ///
@@ -121,7 +140,6 @@ impl Jit {
         ) {
             if scheduled.contains(&id) {
                 deps.insert(id);
-                return;
             }
             let var = ir.var(id);
             for dep in var.deps.iter() {
@@ -137,12 +155,14 @@ impl Jit {
                 dependencies_in(ir, *id, &scheduled, &mut deps);
                 let deps = deps.difference(&HashSet::from([*id])).cloned().collect();
                 Pass {
-                    ids: vec![*id],
+                    ids: HashSet::from([*id]),
                     deps,
                     size: ir.var(*id).size,
                 }
             })
             .collect::<Vec<_>>();
+
+        // TODO: use passes to flatten dependencies and stop traversal eraly.
 
         passes
     }
@@ -160,30 +180,38 @@ impl Jit {
         self.schedules.clear();
         self.kernels.clear();
 
-        let passses = self.passes(&ir);
-        dbg!(&passses);
-
-        let mut scheduled = ir.scheduled.clone();
-        scheduled.sort_by(|id0, id1| ir.var(*id0).size.cmp(&ir.var(*id1).size));
-
-        let first_register = ir.backend.as_ref().unwrap().first_register();
-        let cur = 0;
-        let mut size;
-        for i in 1..scheduled.len() {
-            let var0 = ir.var(scheduled[i - 1]);
-            let var1 = ir.var(scheduled[i]);
-            size = var0.size;
-            if var0.size != var1.size {
-                let mut tmp = ScheduleIr::new(first_register, size);
-                tmp.collect_vars(ir, &scheduled[cur..i]);
-                self.borrow_mut().schedules.push(tmp);
+        // The problem we try to solve is the following:
+        //
+        // The nodes in `ir` are represent DAG, so do the `passes`.
+        // They are also stored in a topological ordering.
+        // We try to merge as many passes as possible.
+        // Passes can only be merged if tey have the same size.
+        //
+        // This algorithm is not perfect and results in a potentially sub optimal result.
+        // Also, using hash sets might not be the best approach.
+        let mut passes = self.passes(&ir);
+        for i in (0..passes.len()).rev() {
+            for j in (0..i).rev() {
+                // Try to merge p1 into p0
+                // SAFETY: We know that i and j are distinct indices and this does the same as
+                // get_multiple_mut which is not stable yet.
+                let p0 = unsafe { &mut *(&passes[j] as *const _ as *mut Pass) };
+                let p1 = unsafe { &mut *(&passes[i] as *const _ as *mut Pass) };
+                if p0.try_merge(p1).is_some() {
+                    passes.remove(i);
+                    break;
+                }
             }
         }
-        size = ir.var(*scheduled.last().unwrap()).size;
-        let mut tmp = ScheduleIr::new(first_register, size);
-
-        tmp.collect_vars(ir, &scheduled[cur..scheduled.len()]);
-        self.schedules.push(tmp);
+        let first_register = ir.backend.as_ref().unwrap().first_register();
+        self.schedules = passes
+            .iter()
+            .map(|pass| {
+                let mut s = ScheduleIr::new(first_register, pass.size);
+                s.collect_vars(ir, &pass.ids.iter().cloned().collect::<Vec<_>>());
+                s
+            })
+            .collect::<Vec<_>>();
 
         // TODO: paralelize by populating kernels first.
         self.kernels = self
