@@ -32,12 +32,19 @@ impl Deref for Trace {
 
 impl Trace {
     fn push_var(&self, mut v: Var) -> VarRef {
+        // Pus side effects of sources as extra dependencies
+        for dep in v.deps.clone() {
+            if let Some(se) = self.lock().var(dep).last_write {
+                v.deps.push(se);
+            }
+        }
+        // Inc rc for deps
         for dep in v.deps.iter() {
             self.lock().inc_rc(*dep);
         }
         v.rc = 1;
         let id = VarId(self.lock().vars.insert(v));
-        VarRef::steal(&self, id)
+        VarRef::steal_from(&self, id)
     }
     fn var_info(&self, refs: &[&VarRef]) -> VarInfo {
         let ty = refs.first().unwrap().var().ty.clone(); // TODO: Fix (first non void)
@@ -51,7 +58,7 @@ impl Trace {
         VarInfo { ty, size }
     }
     fn push_var_op(&self, op: Op, deps: &[&VarRef], ty: VarType, size: usize) -> VarRef {
-        let deps = deps
+        let mut deps: smallvec::SmallVec<[VarId; 4]> = deps
             .iter()
             .map(|r| {
                 assert!(Arc::ptr_eq(&self.0, &r.ir));
@@ -62,6 +69,7 @@ impl Trace {
             op,
             deps,
             ty,
+            last_write: None,
             // param_ty: ParamType::None,
             buffer: None,
             size,
@@ -194,6 +202,10 @@ impl Internal {
             for dep in var.deps.clone() {
                 self.dec_rc(dep);
             }
+            let var = self.var_mut(id);
+            if let Some(se) = var.last_write.clone() {
+                self.dec_rc(se);
+            }
             self.vars.remove(id.0);
         }
     }
@@ -225,7 +237,7 @@ impl VarRef {
     pub fn id(&self) -> VarId {
         self.id
     }
-    pub fn borrow(trace: &Trace, id: VarId) -> Self {
+    pub fn borrow_from(trace: &Trace, id: VarId) -> Self {
         trace.lock().inc_rc(id);
 
         Self {
@@ -233,7 +245,7 @@ impl VarRef {
             ir: trace.clone(),
         }
     }
-    pub fn steal(trace: &Trace, id: VarId) -> Self {
+    pub fn steal_from(trace: &Trace, id: VarId) -> Self {
         Self {
             id,
             ir: trace.clone(),
@@ -338,7 +350,7 @@ impl VarRef {
         let mut deps = smallvec![];
         if !is_literal {
             for dep in v_deps {
-                let dep = VarRef::borrow(&self.ir, dep);
+                let dep = VarRef::borrow_from(&self.ir, dep);
                 if let Some(dep) = dep.reindex(new_idx, size) {
                     deps.push(dep.id());
                 } else {
@@ -368,8 +380,34 @@ impl VarRef {
                 // param_ty,
                 rc: 0,
                 literal,
+                ..Default::default()
             }));
         }
+    }
+    pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
+        let mask: VarRef = mask
+            .map(|m| {
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
+                m.clone()
+            })
+            .unwrap_or(self.ir.const_bool(true));
+
+        let size = idx.var().size;
+
+        let res = self.ir.push_var(Var {
+            op: Op::Scatter,
+            deps: smallvec![self.id(), dst.id(), idx.id(), mask.id()],
+            last_write: None,
+            ty: VarType::Void,
+            buffer: None,
+            size,
+            rc: 0,
+            literal: 0, // ..Default::default()
+        });
+        res.schedule();
+        dst.var().last_write = Some(res.id()); // Set side effect
+        dst.ir.lock().inc_rc(dst.id);
+        dst.schedule();
     }
     ///
     /// For gather operations there are three ways to resolve them:

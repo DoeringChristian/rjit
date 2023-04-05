@@ -98,7 +98,7 @@ impl Jit {
         for id in ir.scheduled.clone() {
             let var = ir.var(id);
             // Do not reallocate on scheduled variables (don't yet know if this is right)
-            if var.buffer.is_none() {
+            if var.buffer.is_none() && var.ty.size() > 0 {
                 let size = ir.var(id).size;
                 let ty_size = ir.var(id).ty.size();
                 let buffer = ir.backend.as_ref().unwrap().buffer_uninit(size * ty_size);

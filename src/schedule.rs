@@ -130,6 +130,9 @@ impl ScheduleIr {
             let sv_id = self.collect(ir, *id);
 
             let var = ir.var(*id);
+            if var.ty.size() == 0 {
+                continue;
+            }
             let param = self.push_buffer(var.buffer.as_ref().unwrap());
 
             let mut sv = self.var_mut(sv_id);
@@ -187,8 +190,10 @@ impl ScheduleIr {
                 ];
             }
             Op::Scatter => {
-                let src = ir.var(var.deps[0]);
-                sv.gs_param = self.push_buffer(src.buffer.as_ref().unwrap());
+                let dst = ir.var(var.deps[1]);
+                dbg!(&ir);
+                dbg!(var.deps[1]);
+                sv.gs_param = self.push_buffer(dst.buffer.as_ref().unwrap());
 
                 sv.deps = smallvec![
                     self.collect(ir, var.deps[0]), // src

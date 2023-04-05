@@ -190,6 +190,7 @@ impl VarType {
 pub struct Var {
     pub op: Op, // Operation used to construct the variable
     pub deps: SmallVec<[VarId; 4]>,
+    pub last_write: Option<VarId>,
     pub ty: VarType,                     // Type of the variable
     pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer (TODO: Box > Arc)
     pub size: usize,                     // number of elements
