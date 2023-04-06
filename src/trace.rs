@@ -215,7 +215,6 @@ impl Internal {
             if self.var(*id).op == Op::Data {
                 // TODO: maybe we only need to test if a buffer
                 // exists
-                dbg!();
                 continue;
             }
             self.inc_rc(*id);
