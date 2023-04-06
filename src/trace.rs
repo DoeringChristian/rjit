@@ -385,6 +385,8 @@ impl VarRef {
         }
     }
     pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
+        dst.schedule();
+
         let mask: VarRef = mask
             .map(|m| {
                 assert!(Arc::ptr_eq(&self.ir, &m.ir));
@@ -407,7 +409,6 @@ impl VarRef {
         res.schedule();
         dst.var().last_write = Some(res.id()); // Set side effect
         dst.ir.lock().inc_rc(dst.id);
-        dst.schedule();
     }
     ///
     /// For gather operations there are three ways to resolve them:

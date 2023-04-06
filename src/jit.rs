@@ -144,7 +144,7 @@ impl Jit {
     /// NOTE: We would need to correctly assign dependencies on scatter
     /// NOTE: Passes are in ordered (DAG ordering)
     ///
-    pub fn passes(&self, ir: &Internal) -> Vec<Pass> {
+    fn passes(&self, ir: &Internal) -> Vec<Pass> {
         ///
         /// Gets the dependencies of `id` in `scheduled`
         ///
@@ -206,6 +206,7 @@ impl Jit {
         // This algorithm is not perfect and results in a potentially sub optimal result.
         // Also, using hash sets might not be the best approach.
         let mut passes = self.passes(&ir);
+
         for i in (0..passes.len()).rev() {
             for j in (0..i).rev() {
                 // Try to merge p1 into p0
