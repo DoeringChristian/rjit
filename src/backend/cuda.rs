@@ -841,8 +841,9 @@ impl CUDAKernel {
             }
             Op::Scatter => {
                 let src = ir.var(var.deps[0]);
-                let idx = ir.var(var.deps[1]);
-                let mask = ir.var(var.deps[2]);
+                let dst = ir.var(var.deps[1]);
+                let idx = ir.var(var.deps[2]);
+                let mask = ir.var(var.deps[3]);
 
                 let unmasked = idx.is_literal() && idx.literal != 0;
                 let is_bool = src.ty.is_bool();
@@ -856,7 +857,7 @@ impl CUDAKernel {
                     );
                 }
 
-                let param_offset = (var.gs_param + 1) * 8;
+                let param_offset = (dst.param.unwrap() + 1) * 8;
 
                 writeln!(self.asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 

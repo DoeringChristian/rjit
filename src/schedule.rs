@@ -30,7 +30,6 @@ pub struct ScheduleVar {
     pub param_ty: ParamType,
     pub reg: usize,
     pub param: Option<usize>, // Index into literal/buffer/texture vec
-    pub gs_param: usize,      // Parameter offset for gather/scatter operation
     pub literal: u64,
     pub size: usize,
 }
@@ -161,7 +160,6 @@ impl ScheduleIr {
             reg: self.next_reg(),
             param_ty: ParamType::None,
             param: None,
-            gs_param: 0,
             literal: var.literal,
             size: var.size,
         };
@@ -185,14 +183,9 @@ impl ScheduleIr {
                 ];
             }
             Op::Scatter => {
-                let dst = ir.var(var.deps[1]);
-                dbg!(&ir);
-                dbg!(var.deps[1]);
-                sv.gs_param = self.push_buffer(dst.buffer.as_ref().unwrap());
-
                 sv.deps = smallvec![
                     self.collect(ir, var.deps[0]), // src
-                    // dst
+                    self.collect_data(ir, var.deps[1]),
                     self.collect(ir, var.deps[2]), // index
                     self.collect(ir, var.deps[3])  // mask
                 ];
