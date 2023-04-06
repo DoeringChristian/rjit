@@ -29,8 +29,8 @@ pub struct ScheduleVar {
     pub ty: VarType,
     pub param_ty: ParamType,
     pub reg: usize,
-    pub param: usize,    // Index into literal/buffer/texture vec
-    pub gs_param: usize, // Parameter offset for gather/scatter operation
+    pub param: Option<usize>, // Index into literal/buffer/texture vec
+    pub gs_param: usize,      // Parameter offset for gather/scatter operation
     pub literal: u64,
     pub size: usize,
 }
@@ -138,7 +138,7 @@ impl ScheduleIr {
             let mut sv = self.var_mut(sv_id);
 
             sv.param_ty = ParamType::Output;
-            sv.param = param;
+            sv.param = Some(param);
         }
     }
     ///
@@ -160,7 +160,7 @@ impl ScheduleIr {
             deps: smallvec![],
             reg: self.next_reg(),
             param_ty: ParamType::None,
-            param: 0,
+            param: None,
             gs_param: 0,
             literal: var.literal,
             size: var.size,
@@ -170,7 +170,7 @@ impl ScheduleIr {
 
         match var.op {
             Op::Data => {
-                sv.param = self.push_buffer(var.buffer.as_ref().unwrap());
+                sv.param = Some(self.push_buffer(var.buffer.as_ref().unwrap()));
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
@@ -179,12 +179,33 @@ impl ScheduleIr {
             }
             Op::Gather => {
                 let src = ir.var(var.deps[0]);
+                let src_sv = if let Some(id) = self.visited.get(&var.deps[0]).cloned() {
+                    let src_sv = self.var(id);
+                    if src_sv.param.is_none() {
+                        let param = Some(self.push_buffer(&src.buffer.as_ref().unwrap()));
+                        self.var_mut(id).param = param;
+                    }
 
-                sv.gs_param = self.push_buffer(src.buffer.as_ref().unwrap());
+                    id
+                } else {
+                    let reg = self.next_reg();
+                    let param = Some(self.push_buffer(&src.buffer.as_ref().unwrap()));
+                    self.push_var(ScheduleVar {
+                        op: Op::Data,
+                        ty: src.ty.clone(),
+                        reg,
+                        param,
+                        ..Default::default()
+                    })
+                };
+
+                // let src = ir.var(var.deps[0]);
+
+                // sv.gs_param = self.push_buffer(src.buffer.as_ref().unwrap());
 
                 // Then: collect index and mask.
                 sv.deps = smallvec![
-                    // src
+                    src_sv,
                     self.collect(ir, var.deps[1]), // index
                     self.collect(ir, var.deps[2])  // mask
                 ];

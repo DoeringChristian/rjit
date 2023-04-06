@@ -201,7 +201,7 @@ impl Kernel for CUDAKernel {
             match var.param_ty {
                 ParamType::None => self.assemble_var(ir, id),
                 ParamType::Input => {
-                    let param_offset = (var.param + 1) * 8;
+                    let param_offset = (var.param.unwrap() + 1) * 8;
                     // Load from params
                     writeln!(self.asm, "");
                     writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);
@@ -238,7 +238,7 @@ impl Kernel for CUDAKernel {
                     }
                 }
                 ParamType::Output => {
-                    let param_offst = (var.param + 1) * 8;
+                    let param_offst = (var.param.unwrap() + 1) * 8;
                     self.assemble_var(ir, id);
                     // let offset = param_idx * 8;
                     write!(
@@ -769,8 +769,9 @@ impl CUDAKernel {
                 );
             }
             Op::Gather => {
-                let index = ir.var(var.deps[0]);
-                let mask = ir.var(var.deps[1]);
+                let src = ir.var(var.deps[0]);
+                let index = ir.var(var.deps[1]);
+                let mask = ir.var(var.deps[2]);
                 let unmasked = mask.is_literal() && mask.literal != 0;
                 let is_bool = var.ty.is_bool();
 
@@ -785,7 +786,7 @@ impl CUDAKernel {
                 }
 
                 // Load buffer ptr:
-                let param_offset = (var.gs_param + 1) * 8;
+                let param_offset = (src.param.unwrap() + 1) * 8;
 
                 writeln!(self.asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
