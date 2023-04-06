@@ -178,34 +178,8 @@ impl ScheduleIr {
                 sv.literal = var.literal;
             }
             Op::Gather => {
-                let src = ir.var(var.deps[0]);
-                let src_sv = if let Some(id) = self.visited.get(&var.deps[0]).cloned() {
-                    let src_sv = self.var(id);
-                    if src_sv.param.is_none() {
-                        let param = Some(self.push_buffer(&src.buffer.as_ref().unwrap()));
-                        self.var_mut(id).param = param;
-                    }
-
-                    id
-                } else {
-                    let reg = self.next_reg();
-                    let param = Some(self.push_buffer(&src.buffer.as_ref().unwrap()));
-                    self.push_var(ScheduleVar {
-                        op: Op::Data,
-                        ty: src.ty.clone(),
-                        reg,
-                        param,
-                        ..Default::default()
-                    })
-                };
-
-                // let src = ir.var(var.deps[0]);
-
-                // sv.gs_param = self.push_buffer(src.buffer.as_ref().unwrap());
-
-                // Then: collect index and mask.
                 sv.deps = smallvec![
-                    src_sv,
+                    self.collect_data(ir, var.deps[0]),
                     self.collect(ir, var.deps[1]), // index
                     self.collect(ir, var.deps[2])  // mask
                 ];
@@ -237,5 +211,37 @@ impl ScheduleIr {
         self.visited.insert(id, svid);
 
         svid
+    }
+    ///
+    /// Collect variable only as data input/output (for example when it is src/dst for a
+    /// gather/scatter operation).
+    ///
+    /// This only inserts this variable but not its dependencies.
+    ///
+    pub fn collect_data(&mut self, ir: &Internal, id: VarId) -> SVarId {
+        let var = ir.var(id);
+        if let Some(id) = self.visited.get(&id).cloned() {
+            // In case this variable has already been traversed, just ensure that the buffer is
+            // added as a parameter.
+            let sv = self.var(id);
+            if sv.param.is_none() {
+                let param = Some(self.push_buffer(&var.buffer.as_ref().unwrap()));
+                self.var_mut(id).param = param;
+            }
+
+            id
+        } else {
+            let reg = self.next_reg();
+            let param = Some(self.push_buffer(&var.buffer.as_ref().unwrap()));
+            let svid = self.push_var(ScheduleVar {
+                op: Op::Data,
+                ty: var.ty.clone(),
+                reg,
+                param,
+                ..Default::default()
+            });
+            self.visited.insert(id, svid);
+            svid
+        }
     }
 }
