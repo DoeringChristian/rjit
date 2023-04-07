@@ -839,7 +839,7 @@ impl CUDAKernel {
                     );
                 }
             }
-            Op::Scatter => {
+            Op::Scatter { op } => {
                 let src = ir.var(var.deps[0]);
                 let dst = ir.var(var.deps[1]);
                 let idx = ir.var(var.deps[2]);
@@ -879,13 +879,17 @@ impl CUDAKernel {
                     );
                 }
 
+                let op_type = if op == ReduceOp::None { "st" } else { "red" };
+                let op = reduce_op_name(op);
                 if is_bool {
                     writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", src.reg());
-                    writeln!(self.asm, "\tst.global$s$s.u8 [%rd3], %w0;");
+                    writeln!(self.asm, "\t{}.global{}.u8 [%rd3], %w0;", op_type, op);
                 } else {
                     writeln!(
                         self.asm,
-                        "\tst.global.{} [%rd3], {};",
+                        "\t{}.global{}.{} [%rd3], {};",
+                        op_type,
+                        op,
                         src.ty.name_cuda(),
                         src.reg()
                     );
@@ -904,6 +908,18 @@ impl CUDAKernel {
                 );
             }
         }
+    }
+}
+
+fn reduce_op_name(op: ReduceOp) -> &'static str {
+    match op {
+        ReduceOp::None => "",
+        ReduceOp::Add => ".add",
+        ReduceOp::Mul => ".mul",
+        ReduceOp::Min => ".min",
+        ReduceOp::Max => ".max",
+        ReduceOp::And => ".and",
+        ReduceOp::Or => ".or",
     }
 }
 

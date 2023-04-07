@@ -109,7 +109,7 @@ body: // sm_86
 	mov.pred %p10, 0x1;
 
 
-	// [6]: ScheduleVar { op: Scatter, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5)], ty: Void, param_ty: None, reg: 4, param: None, literal: 0, size: 3 } =>
+	// [6]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5)], ty: Void, param_ty: None, reg: 4, param: None, literal: 0, size: 3 } =>
     @!%p10 bra l_4_done;
 
 	ld.param.u64 %rd0, [params+8];

@@ -52,7 +52,7 @@ body: // sm_86
 	mov.pred %p10, 0x1;
 
 
-	// [6]: ScheduleVar { op: Scatter, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5)], ty: Void, param_ty: None, reg: 4, param: None, literal: 0, size: 3 } =>
+	// [6]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5)], ty: Void, param_ty: None, reg: 4, param: None, literal: 0, size: 3 } =>
     @!%p10 bra l_4_done;
 
 	ld.param.u64 %rd0, [params+8];
@@ -114,7 +114,7 @@ body: // sm_86
 	mov.pred %p8, 0x1;
 
 
-	// [4]: ScheduleVar { op: Scatter, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3)], ty: Void, param_ty: None, reg: 4, param: None, literal: 0, size: 2 } =>
+	// [4]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3)], ty: Void, param_ty: None, reg: 4, param: None, literal: 0, size: 2 } =>
     @!%p8 bra l_4_done;
 
 	ld.param.u64 %rd0, [params+8];
@@ -183,7 +183,7 @@ body: // sm_86
 	mov.pred %p10, 0x1;
 
 
-	// [5]: ScheduleVar { op: Scatter, deps: [SVarId(2), SVarId(0), SVarId(3), SVarId(4)], ty: Void, param_ty: None, reg: 7, param: None, literal: 0, size: 2 } =>
+	// [5]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(2), SVarId(0), SVarId(3), SVarId(4)], ty: Void, param_ty: None, reg: 7, param: None, literal: 0, size: 2 } =>
     @!%p10 bra l_7_done;
 
 	ld.param.u64 %rd0, [params+8];

@@ -182,7 +182,7 @@ impl ScheduleIr {
                     self.collect(ir, var.deps[2])  // mask
                 ];
             }
-            Op::Scatter => {
+            Op::Scatter { .. } => {
                 sv.deps = smallvec![
                     self.collect(ir, var.deps[0]), // src
                     self.collect_data(ir, var.deps[1]),

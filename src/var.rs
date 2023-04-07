@@ -18,6 +18,18 @@ pub enum ParamType {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ReduceOp {
+    #[default]
+    None,
+    Add,
+    Mul,
+    Min,
+    Max,
+    And,
+    Or,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Op {
     // Data,
     #[default]
@@ -65,7 +77,9 @@ pub enum Op {
     Cast,
     Bitcast,
     Gather, // Gather operation (gathering directly from buffer).
-    Scatter,
+    Scatter {
+        op: ReduceOp,
+    },
     Idx,
 }
 

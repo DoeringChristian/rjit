@@ -11,7 +11,7 @@ use smallvec::smallvec;
 use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
 use crate::jit::Jit;
-use crate::var::{Op, Var, VarId, VarInfo, VarType};
+use crate::var::{Op, ReduceOp, Var, VarId, VarInfo, VarType};
 
 // We have one global Intermediate Representation that tracks all operations.
 // However, Other Intermediate representations can also be constructed.
@@ -383,7 +383,7 @@ impl VarRef {
             }));
         }
     }
-    pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
+    pub fn scatter_reduce(&self, dst: &Self, idx: &Self, mask: Option<&Self>, reduce_op: ReduceOp) {
         dst.schedule();
 
         let mask: VarRef = mask
@@ -396,7 +396,7 @@ impl VarRef {
         let size = idx.var().size;
 
         let res = self.ir.push_var(Var {
-            op: Op::Scatter,
+            op: Op::Scatter { op: reduce_op },
             deps: smallvec![self.id(), dst.id(), idx.id(), mask.id()],
             last_write: None,
             ty: VarType::Void,
@@ -408,6 +408,9 @@ impl VarRef {
         res.schedule();
         dst.var().last_write = Some(res.id()); // Set side effect
         dst.ir.lock().inc_rc(dst.id);
+    }
+    pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
+        self.scatter_reduce(dst, idx, mask, ReduceOp::None);
     }
     ///
     /// For gather operations there are three ways to resolve them:
