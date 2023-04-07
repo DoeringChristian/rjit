@@ -926,7 +926,7 @@ fn reduce_op_name(op: ReduceOp) -> &'static str {
 #[cfg(test)]
 mod test {
     use crate::jit::Jit;
-    use crate::trace::Trace;
+    use crate::trace::{ReduceOp, Trace};
     use crate::{jit, trace};
 
     #[test]
@@ -1240,5 +1240,27 @@ mod test {
         insta::assert_snapshot!(jit.kernel_debug());
 
         assert_eq!(x.to_vec_u32(), vec![4, 4, 3, 3]);
+    }
+    #[test]
+    fn scatter_reduce() {
+        let IR = Trace::default();
+        IR.set_backend("cuda");
+
+        let x = IR.buffer_u32(&[0, 0, 0, 0]);
+
+        let i = IR.buffer_u32(&[0, 0, 0]);
+
+        let y = IR.const_u32(1);
+
+        y.scatter_reduce(&x, &i, None, ReduceOp::Add);
+
+        IR.schedule(&[&x]);
+
+        let mut jit = Jit::default();
+        jit.eval(&mut IR.lock());
+
+        insta::assert_snapshot!(jit.kernel_debug());
+
+        assert_eq!(x.to_vec_u32(), vec![3, 0, 0, 0]);
     }
 }

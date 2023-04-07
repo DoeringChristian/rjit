@@ -1,4 +1,5 @@
 use crate::trace::Trace;
+use crate::var::ReduceOp;
 
 use self::jit::Jit;
 
@@ -14,27 +15,16 @@ fn main() {
 
     let x = IR.buffer_u32(&[0, 0, 0, 0]);
 
-    let i = IR.index(3);
-    let c = IR.const_u32(1);
-    let i = i.add(&c);
+    let i = IR.buffer_u32(&[0, 0, 0]);
 
-    let y = IR.const_u32(2);
+    let y = IR.const_u32(1);
 
-    y.scatter(&x, &i, None);
-
-    let i = IR.index(2);
-
-    let y = IR.const_u32(3);
-
-    y.scatter(&x, &i, None);
-
-    let c = IR.const_u32(1);
-    let x = x.add(&c);
+    y.scatter_reduce(&x, &i, None, ReduceOp::Add);
 
     IR.schedule(&[&x]);
 
     let mut jit = Jit::default();
     jit.eval(&mut IR.lock());
 
-    assert_eq!(x.to_vec_u32(), vec![4, 4, 3, 3]);
+    assert_eq!(x.to_vec_u32(), vec![3, 0, 0, 0]);
 }
