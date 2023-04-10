@@ -931,10 +931,10 @@ mod test {
 
     #[test]
     fn refcounting() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.buffer_f32(&[1.; 10]);
+        let x = ir.buffer_f32(&[1.; 10]);
         assert_eq!(x.var().rc, 1, "rc of x should be 1 (in x)");
         let y = x.add(&x);
         // let y = ir::add(&x, &x);
@@ -947,7 +947,7 @@ mod test {
 
         assert_eq!(y.var().rc, 1, "rc of y should be 1 (in y)");
 
-        IR.schedule(&[&y]);
+        ir.schedule(&[&y]);
         let mut jit = Jit::default();
 
         assert_eq!(
@@ -956,7 +956,7 @@ mod test {
             "rc of y should be 2 (1 in y and 1 in schedule)"
         );
 
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         assert_eq!(
             x.var().rc,
@@ -975,16 +975,16 @@ mod test {
     }
     #[test]
     fn load_add_f32() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.buffer_f32(&[1.; 10]);
+        let x = ir.buffer_f32(&[1.; 10]);
         // let y = ir::add(&x, &x);
         let y = x.add(&x);
 
-        IR.schedule(&[&y]);
+        ir.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -992,16 +992,16 @@ mod test {
     }
     #[test]
     fn load_gather_f32() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.buffer_f32(&[1., 2., 3., 4., 5.]);
-        let i = IR.buffer_u32(&[0, 1, 4]);
+        let x = ir.buffer_f32(&[1., 2., 3., 4., 5.]);
+        let i = ir.buffer_u32(&[0, 1, 4]);
         let y = x.gather(&i, None);
 
-        IR.schedule(&[&y]);
+        ir.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1009,20 +1009,20 @@ mod test {
     }
     #[test]
     fn reindex() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.index(10);
+        let x = ir.index(10);
 
-        let i = IR.index(3);
-        let c = IR.const_u32(2);
+        let i = ir.index(3);
+        let c = ir.const_u32(2);
         let i = i.add(&c);
 
         let y = x.gather(&i, None);
 
-        IR.schedule(&[&y]);
+        ir.schedule(&[&y]);
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1030,14 +1030,14 @@ mod test {
     }
     #[test]
     fn index() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let i = IR.index(10);
+        let i = ir.index(10);
 
-        IR.schedule(&[&i]);
+        ir.schedule(&[&i]);
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1045,17 +1045,17 @@ mod test {
     }
     #[test]
     fn gather_eval() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
         let tmp_x;
         let tmp_y;
         let tmp_z;
         let r = {
-            let x = IR.index(3);
+            let x = ir.index(3);
             dbg!();
             assert_eq!(x.var().rc, 1);
-            let y = IR.buffer_u32(&[1, 2, 3]);
+            let y = ir.buffer_u32(&[1, 2, 3]);
             dbg!();
             assert_eq!(y.var().rc, 1);
 
@@ -1066,7 +1066,7 @@ mod test {
             assert_eq!(y.var().rc, 2);
             assert_eq!(z.var().rc, 1);
 
-            let r = z.gather(&IR.index(3), None);
+            let r = z.gather(&ir.index(3), None);
             dbg!();
             assert_eq!(x.var().rc, 2);
             assert_eq!(y.var().rc, 2);
@@ -1078,17 +1078,17 @@ mod test {
             r
         };
         assert_eq!(r.var().rc, 1);
-        assert_eq!(IR.borrow_mut().get_var(tmp_x).unwrap().rc, 1);
-        assert_eq!(IR.borrow_mut().get_var(tmp_y).unwrap().rc, 1);
-        assert_eq!(IR.borrow_mut().get_var(tmp_z).unwrap().rc, 2); // z is referenced by r and the
+        assert_eq!(ir.borrow_mut().get_var(tmp_x).unwrap().rc, 1);
+        assert_eq!(ir.borrow_mut().get_var(tmp_y).unwrap().rc, 1);
+        assert_eq!(ir.borrow_mut().get_var(tmp_z).unwrap().rc, 2); // z is referenced by r and the
                                                                    // schedule
 
-        IR.schedule(&[&r]);
+        ir.schedule(&[&r]);
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         assert_eq!(r.var().rc, 1);
-        assert!(IR.borrow_mut().get_var(tmp_z).is_none());
+        assert!(ir.borrow_mut().get_var(tmp_z).is_none());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1096,16 +1096,16 @@ mod test {
     }
     #[test]
     fn paralell() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.index(10);
+        let x = ir.index(10);
 
-        let y = IR.index(3);
+        let y = ir.index(3);
 
-        IR.schedule(&[&x, &y]);
+        ir.schedule(&[&x, &y]);
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1114,15 +1114,15 @@ mod test {
     }
     #[test]
     fn load_gather() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.buffer_f32(&[1., 2., 3.]);
+        let x = ir.buffer_f32(&[1., 2., 3.]);
 
-        IR.schedule(&[&x]);
+        ir.schedule(&[&x]);
 
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1130,23 +1130,23 @@ mod test {
     }
     #[test]
     fn eval_scatter() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.buffer_u32(&[0, 0, 0, 0]);
-        let c = IR.const_u32(1);
+        let x = ir.buffer_u32(&[0, 0, 0, 0]);
+        let c = ir.const_u32(1);
         let x = x.add(&c); // x: [1, 1, 1, 1]
 
-        let i = IR.index(3);
-        let c = IR.const_u32(1);
+        let i = ir.index(3);
+        let c = ir.const_u32(1);
         let i = i.add(&c); // i: [1, 2, 3]
 
-        let y = IR.const_u32(2);
+        let y = ir.const_u32(2);
 
         y.scatter(&x, &i, None); // x: [1, 2, 2, 2]
 
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1154,27 +1154,27 @@ mod test {
     }
     #[test]
     fn scatter_twice() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.buffer_u32(&[0, 0, 0, 0]);
+        let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
-        let i = IR.index(3);
-        let c = IR.const_u32(1);
+        let i = ir.index(3);
+        let c = ir.const_u32(1);
         let i = i.add(&c);
 
-        let y = IR.const_u32(2);
+        let y = ir.const_u32(2);
 
         y.scatter(&x, &i, None);
 
-        let i = IR.index(2);
+        let i = ir.index(2);
 
-        let y = IR.const_u32(3);
+        let y = ir.const_u32(3);
 
         y.scatter(&x, &i, None);
 
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1182,32 +1182,32 @@ mod test {
     }
     #[test]
     fn scatter_twice_add() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.buffer_u32(&[0, 0, 0, 0]);
+        let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
-        let i = IR.index(3);
-        let c = IR.const_u32(1);
+        let i = ir.index(3);
+        let c = ir.const_u32(1);
         let i = i.add(&c);
 
-        let y = IR.const_u32(2);
+        let y = ir.const_u32(2);
 
         y.scatter(&x, &i, None);
 
-        let i = IR.index(2);
+        let i = ir.index(2);
 
-        let y = IR.const_u32(3);
+        let y = ir.const_u32(3);
 
         y.scatter(&x, &i, None);
 
-        let c = IR.const_u32(1);
+        let c = ir.const_u32(1);
         let x = x.add(&c);
 
-        IR.schedule(&[&x]);
+        ir.schedule(&[&x]);
 
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
@@ -1215,21 +1215,21 @@ mod test {
     }
     #[test]
     fn scatter_reduce() {
-        let IR = Trace::default();
-        IR.set_backend("cuda");
+        let ir = Trace::default();
+        ir.set_backend("cuda");
 
-        let x = IR.buffer_u32(&[0, 0, 0, 0]);
+        let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
-        let i = IR.buffer_u32(&[0, 0, 0]);
+        let i = ir.buffer_u32(&[0, 0, 0]);
 
-        let y = IR.const_u32(1);
+        let y = ir.const_u32(1);
 
         y.scatter_reduce(&x, &i, None, ReduceOp::Add);
 
-        IR.schedule(&[&x]);
+        ir.schedule(&[&x]);
 
         let mut jit = Jit::default();
-        jit.eval(&mut IR.borrow_mut());
+        jit.eval(&mut ir.borrow_mut());
 
         insta::assert_snapshot!(jit.kernel_debug());
 
