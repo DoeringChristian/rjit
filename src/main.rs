@@ -26,5 +26,5 @@ fn main() {
     let mut jit = Jit::default();
     jit.eval(&mut ir.borrow_mut());
 
-    assert_eq!(x.to_vec_u32(), vec![3, 0, 0, 0]);
+    assert_eq!(x.to_host_u32(), vec![3, 0, 0, 0]);
 }

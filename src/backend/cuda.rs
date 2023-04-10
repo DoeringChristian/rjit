@@ -971,7 +971,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(y.to_vec_f32(), vec![2f32; 10]);
+        assert_eq!(y.to_host_f32(), vec![2f32; 10]);
     }
     #[test]
     fn load_add_f32() {
@@ -988,7 +988,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(y.to_vec_f32(), vec![2f32; 10]);
+        assert_eq!(y.to_host_f32(), vec![2f32; 10]);
     }
     #[test]
     fn load_gather_f32() {
@@ -1005,7 +1005,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(y.to_vec_f32(), vec![1., 2., 5.]);
+        assert_eq!(y.to_host_f32(), vec![1., 2., 5.]);
     }
     #[test]
     fn reindex() {
@@ -1026,7 +1026,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(y.to_vec_u32(), vec![2, 3, 4]);
+        assert_eq!(y.to_host_u32(), vec![2, 3, 4]);
     }
     #[test]
     fn index() {
@@ -1041,7 +1041,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(i.to_vec_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(i.to_host_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
     #[test]
     fn gather_eval() {
@@ -1092,7 +1092,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(r.to_vec_u32(), vec![1, 3, 5]);
+        assert_eq!(r.to_host_u32(), vec![1, 3, 5]);
     }
     #[test]
     fn paralell() {
@@ -1109,8 +1109,8 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(x.to_vec_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        assert_eq!(y.to_vec_u32(), vec![0, 1, 2]);
+        assert_eq!(x.to_host_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(y.to_host_u32(), vec![0, 1, 2]);
     }
     #[test]
     fn load_gather() {
@@ -1126,7 +1126,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(x.to_vec_f32(), vec![1., 2., 3.]);
+        assert_eq!(x.to_host_f32(), vec![1., 2., 3.]);
     }
     #[test]
     fn eval_scatter() {
@@ -1150,7 +1150,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(x.to_vec_u32(), vec![1, 2, 2, 2]);
+        assert_eq!(x.to_host_u32(), vec![1, 2, 2, 2]);
     }
     #[test]
     fn scatter_twice() {
@@ -1178,7 +1178,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(x.to_vec_u32(), vec![3, 3, 2, 2]);
+        assert_eq!(x.to_host_u32(), vec![3, 3, 2, 2]);
     }
     #[test]
     fn scatter_twice_add() {
@@ -1211,7 +1211,7 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(x.to_vec_u32(), vec![4, 4, 3, 3]);
+        assert_eq!(x.to_host_u32(), vec![4, 4, 3, 3]);
     }
     #[test]
     fn scatter_reduce() {
@@ -1233,6 +1233,6 @@ mod test {
 
         insta::assert_snapshot!(jit.kernel_debug());
 
-        assert_eq!(x.to_vec_u32(), vec![3, 0, 0, 0]);
+        assert_eq!(x.to_host_u32(), vec![3, 0, 0, 0]);
     }
 }

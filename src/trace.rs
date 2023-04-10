@@ -233,7 +233,7 @@ impl VarRef {
     pub fn id(&self) -> VarId {
         self.id
     }
-    pub fn borrow_from(trace: &Trace, id: VarId) -> Self {
+    fn borrow_from(trace: &Trace, id: VarId) -> Self {
         trace.borrow_mut().inc_rc(id);
 
         Self {
@@ -241,32 +241,57 @@ impl VarRef {
             ir: trace.clone(),
         }
     }
-    pub fn steal_from(trace: &Trace, id: VarId) -> Self {
+    fn steal_from(trace: &Trace, id: VarId) -> Self {
         Self {
             id,
             ir: trace.clone(),
         }
     }
-    pub fn var(&self) -> RefMut<Var> {
+    pub(crate) fn var(&self) -> RefMut<Var> {
         RefMut::map(self.ir.borrow_mut(), |ir| &mut ir.vars[self.id().0])
         // MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
     }
+}
+macro_rules! bop_arythmetic {
+    ($Op:ident, $op:ident) => {
+        paste::paste! {
+            pub fn $op(&self, rhs: &VarRef) -> VarRef {
+                let info = self.ir.var_info(&[self, &rhs]);
+                self.ir
+                    .push_var_op(Op::$Op, &[self, &rhs], info.ty, info.size)
+            }
+        }
+    };
+}
+macro_rules! to_host {
+    ($Ty:ident, $ty:ident) => {
+        paste::paste! {
+            pub fn [<to_host_$ty>](&self) -> Vec<$ty> {
+                let var = self.var();
+                assert_eq!(var.ty, VarType::$Ty);
+                let v = var.buffer.as_ref().unwrap().as_vec();
+                Vec::from(cast_slice(&v))
+            }
+        }
+    };
+}
+impl VarRef {
     pub fn schedule(&self) {
         self.ir.borrow_mut().schedule(&[self.id()])
     }
     // To Host functions:
-    pub fn to_vec_f32(&self) -> Vec<f32> {
-        let var = self.var();
-        assert_eq!(var.ty, VarType::F32);
-        let v = var.buffer.as_ref().unwrap().as_vec();
-        Vec::from(cast_slice(&v))
-    }
-    pub fn to_vec_u32(&self) -> Vec<u32> {
-        let var = self.var();
-        assert_eq!(var.ty, VarType::U32);
-        let v = var.buffer.as_ref().unwrap().as_vec();
-        Vec::from(cast_slice(&v))
-    }
+    // to_host!(Bool, bool);
+    to_host!(I8, i8);
+    to_host!(U8, u8);
+    to_host!(I16, i16);
+    to_host!(U16, u16);
+    to_host!(I32, i32);
+    to_host!(U32, u32);
+    to_host!(I64, i64);
+    to_host!(U64, u64);
+    to_host!(F16, f16);
+    to_host!(F32, f32);
+    to_host!(F64, f64);
     // Unarry operations:
     pub fn cast(&self, ty: VarType) -> VarRef {
         let v = self.var();
@@ -279,16 +304,11 @@ impl VarRef {
         })
     }
     // Binarry operations:
-    pub fn add(&self, rhs: &VarRef) -> VarRef {
-        let info = self.ir.var_info(&[self, &rhs]);
-        self.ir
-            .push_var_op(Op::Add, &[self, &rhs], info.ty, info.size)
-    }
-    pub fn mul(&self, rhs: &VarRef) -> VarRef {
-        let info = self.ir.var_info(&[self, &rhs]);
-        self.ir
-            .push_var_op(Op::Mul, &[self, &rhs], info.ty, info.size)
-    }
+    bop_arythmetic!(Add, add);
+    bop_arythmetic!(Sub, sub);
+    bop_arythmetic!(Mul, mul);
+    bop_arythmetic!(Div, div);
+
     pub fn and(&self, rhs: &VarRef) -> VarRef {
         assert!(Rc::ptr_eq(&self.ir, &rhs.ir));
         let info = self.ir.var_info(&[self, &rhs]);
