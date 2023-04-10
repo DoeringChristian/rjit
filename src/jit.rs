@@ -10,11 +10,6 @@ use crate::schedule::ScheduleIr;
 use crate::trace::Internal;
 use crate::var::{Op, VarId};
 
-// ///
-// /// This is the default Just In Time Compiler (JIT).
-// ///
-// pub static JIT: Lazy<Mutex<Jit>> = Lazy::new(|| Mutex::new(Jit::default()));
-
 // TODO: pooling for paralel exectution
 ///
 /// The Jit Compiler first generates schedules (Intermediate Representation) from a Trace.
@@ -72,18 +67,6 @@ impl Pass {
         Some(())
     }
 }
-
-// ///
-// ///  Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
-// ///  into kernels.
-// ///
-// ///  A the end, all scheduled variables are overwritten with the calculated data.
-// ///
-// pub fn eval() {
-//     let mut jit = JIT.lock(); // always lock JIT before IR
-//     let mut ir = IR.lock();
-//     jit.eval(&mut ir);
-// }
 
 impl Jit {
     ///

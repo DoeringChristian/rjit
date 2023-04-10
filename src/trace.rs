@@ -1,22 +1,15 @@
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::{RefCell, RefMut};
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use bytemuck::cast_slice;
-use once_cell::sync::Lazy;
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::smallvec;
 
 use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
 pub use crate::var::{Op, ReduceOp, Var, VarId, VarInfo, VarType};
-
-// We have one global Intermediate Representation that tracks all operations.
-// However, Other Intermediate representations can also be constructed.
-// pub static IR: Lazy<Trace> = Lazy::new(|| Trace::default());
 
 ///
 /// A wrapper arrund an Intermediate Representation.
