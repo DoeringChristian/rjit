@@ -17,7 +17,7 @@ fn main() {
 
     let i = ir.buffer_u32(&[0, 0, 0]);
 
-    let y = ir.const_u32(1);
+    let y = ir.literal_u32(1);
 
     y.scatter_reduce(&x, &i, None, ReduceOp::Add);
 

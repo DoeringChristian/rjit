@@ -19,6 +19,8 @@ slotmap = "1.0.6"
 smallvec = "1.10.0"
 thread_local = "1.1.7"
 tracing-mutex = { version = "0.2.1", features = ["parkinglot"] }
+paste = "1.0.12"
+half = { version = "2.2.1", features = ["bytemuck"]}
 
 [dev-dependencies]
 insta = { version = "1.28.0" }

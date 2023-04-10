@@ -1,3 +1,4 @@
+use half::f16;
 use std::cell::{RefCell, RefMut};
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -88,71 +89,75 @@ impl Trace {
         }
     }
 }
+macro_rules! buffer {
+    ($TY:ident, $ty:ident) => {
+        paste::paste! {
+            pub fn [<buffer_$ty>](&self, slice: &[$ty]) -> VarRef {
+                let buffer = Some(
+                    self.borrow()
+                        .backend
+                        .as_ref()
+                        .unwrap()
+                        .buffer_from_slice(cast_slice(slice)),
+                );
+                self.push_var(Var {
+                    buffer,
+                    size: slice.len(),
+                    ty: VarType::$TY,
+                    op: Op::Data,
+                    ..Default::default()
+                })
+            }
+        }
+    };
+}
+
+macro_rules! literal {
+    ($TY:ident, $i:ident, $ty:ident) => {
+        paste::paste! {
+            pub fn [<literal_$ty>](&self, val: $ty) -> VarRef {
+                self.push_var(Var {
+                    op: Op::Literal,
+                    deps: smallvec![],
+                    ty: VarType::$TY,
+                    literal: bytemuck::cast::<_, $i>(val) as _,
+                    size: 1,
+                    ..Default::default()
+                })
+            }
+        }
+    };
+}
+
 impl Trace {
-    // Constatns:
-    pub fn const_f32(&self, val: f32) -> VarRef {
-        self.push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::F32,
-            literal: bytemuck::cast::<_, u32>(val) as _,
-            size: 1,
-            ..Default::default()
-        })
-    }
-    pub fn const_u32(&self, val: u32) -> VarRef {
-        self.push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::U32,
-            literal: bytemuck::cast::<_, u32>(val) as _,
-            size: 1,
-            ..Default::default()
-        })
-    }
-    pub fn const_bool(&self, val: bool) -> VarRef {
-        self.push_var(Var {
-            op: Op::Literal,
-            deps: smallvec![],
-            ty: VarType::Bool,
-            literal: bytemuck::cast::<_, u8>(val) as _,
-            size: 1,
-            ..Default::default()
-        })
-    }
     // Buffer initializers:
-    pub fn buffer_f32(&self, slice: &[f32]) -> VarRef {
-        let buffer = Some(
-            self.borrow()
-                .backend
-                .as_ref()
-                .unwrap()
-                .buffer_from_slice(cast_slice(slice)),
-        );
-        self.push_var(Var {
-            buffer,
-            size: slice.len(),
-            ty: VarType::F32,
-            op: Op::Data,
-            ..Default::default()
-        })
-    }
-    pub fn buffer_u32(&self, slice: &[u32]) -> VarRef {
-        let buffer = Some(
-            self.borrow()
-                .backend
-                .as_ref()
-                .unwrap()
-                .buffer_from_slice(cast_slice(slice)),
-        );
-        self.push_var(Var {
-            buffer,
-            size: slice.len(),
-            ty: VarType::U32,
-            op: Op::Data,
-            ..Default::default()
-        })
-    }
+    buffer!(Bool, bool);
+    buffer!(I8, i8);
+    buffer!(U8, u8);
+    buffer!(I16, i16);
+    buffer!(U16, u16);
+    buffer!(I32, i32);
+    buffer!(U32, u32);
+    buffer!(I64, i64);
+    buffer!(U64, u64);
+    buffer!(F16, f16);
+    buffer!(F32, f32);
+    buffer!(F64, f64);
+
+    // Literal initializers:
+    literal!(Bool, u8, bool);
+    literal!(I8, u8, i8);
+    literal!(U8, u8, u8);
+    literal!(I16, u16, i16);
+    literal!(U16, u16, u16);
+    literal!(I32, u32, i32);
+    literal!(U32, u32, u32);
+    literal!(I64, u64, i64);
+    literal!(U64, u64, u64);
+    literal!(F16, u16, f16);
+    literal!(F32, u32, f32);
+    literal!(F64, u64, f64);
+
     // Special operations:
     pub fn index(&self, size: usize) -> VarRef {
         let v = self.push_var(Var {
@@ -384,7 +389,7 @@ impl VarRef {
                 assert!(Rc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
-            .unwrap_or(self.ir.const_bool(true));
+            .unwrap_or(self.ir.literal_bool(true));
 
         let size = idx.var().size;
 
@@ -429,7 +434,7 @@ impl VarRef {
                 assert!(Rc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
-            .unwrap_or(self.ir.const_bool(true));
+            .unwrap_or(self.ir.literal_bool(true));
 
         // let res = self.as_ptr();
 

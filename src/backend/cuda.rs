@@ -1015,7 +1015,7 @@ mod test {
         let x = ir.index(10);
 
         let i = ir.index(3);
-        let c = ir.const_u32(2);
+        let c = ir.literal_u32(2);
         let i = i.add(&c);
 
         let y = x.gather(&i, None);
@@ -1134,14 +1134,14 @@ mod test {
         ir.set_backend("cuda");
 
         let x = ir.buffer_u32(&[0, 0, 0, 0]);
-        let c = ir.const_u32(1);
+        let c = ir.literal_u32(1);
         let x = x.add(&c); // x: [1, 1, 1, 1]
 
         let i = ir.index(3);
-        let c = ir.const_u32(1);
+        let c = ir.literal_u32(1);
         let i = i.add(&c); // i: [1, 2, 3]
 
-        let y = ir.const_u32(2);
+        let y = ir.literal_u32(2);
 
         y.scatter(&x, &i, None); // x: [1, 2, 2, 2]
 
@@ -1160,16 +1160,16 @@ mod test {
         let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
         let i = ir.index(3);
-        let c = ir.const_u32(1);
+        let c = ir.literal_u32(1);
         let i = i.add(&c);
 
-        let y = ir.const_u32(2);
+        let y = ir.literal_u32(2);
 
         y.scatter(&x, &i, None);
 
         let i = ir.index(2);
 
-        let y = ir.const_u32(3);
+        let y = ir.literal_u32(3);
 
         y.scatter(&x, &i, None);
 
@@ -1188,20 +1188,20 @@ mod test {
         let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
         let i = ir.index(3);
-        let c = ir.const_u32(1);
+        let c = ir.literal_u32(1);
         let i = i.add(&c);
 
-        let y = ir.const_u32(2);
+        let y = ir.literal_u32(2);
 
         y.scatter(&x, &i, None);
 
         let i = ir.index(2);
 
-        let y = ir.const_u32(3);
+        let y = ir.literal_u32(3);
 
         y.scatter(&x, &i, None);
 
-        let c = ir.const_u32(1);
+        let c = ir.literal_u32(1);
         let x = x.add(&c);
 
         ir.schedule(&[&x]);
@@ -1222,7 +1222,7 @@ mod test {
 
         let i = ir.buffer_u32(&[0, 0, 0]);
 
-        let y = ir.const_u32(1);
+        let y = ir.literal_u32(1);
 
         y.scatter_reduce(&x, &i, None, ReduceOp::Add);
 
