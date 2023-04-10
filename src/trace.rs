@@ -130,7 +130,6 @@ impl Trace {
                 .buffer_from_slice(cast_slice(slice)),
         );
         self.push_var(Var {
-            // param_ty: ParamType::Input,
             buffer,
             size: slice.len(),
             ty: VarType::F32,
@@ -147,7 +146,6 @@ impl Trace {
                 .buffer_from_slice(cast_slice(slice)),
         );
         self.push_var(Var {
-            // param_ty: ParamType::Input,
             buffer,
             size: slice.len(),
             ty: VarType::U32,
