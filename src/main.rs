@@ -24,7 +24,7 @@ fn main() {
     IR.schedule(&[&x]);
 
     let mut jit = Jit::default();
-    jit.eval(&mut IR.lock());
+    jit.eval(&mut IR.borrow_mut());
 
     assert_eq!(x.to_vec_u32(), vec![3, 0, 0, 0]);
 }

@@ -7,13 +7,13 @@ use parking_lot::Mutex;
 
 use crate::backend::Kernel;
 use crate::schedule::ScheduleIr;
-use crate::trace::{Internal, IR};
+use crate::trace::Internal;
 use crate::var::{Op, VarId};
 
-///
-/// This is the default Just In Time Compiler (JIT).
-///
-pub static JIT: Lazy<Mutex<Jit>> = Lazy::new(|| Mutex::new(Jit::default()));
+// ///
+// /// This is the default Just In Time Compiler (JIT).
+// ///
+// pub static JIT: Lazy<Mutex<Jit>> = Lazy::new(|| Mutex::new(Jit::default()));
 
 // TODO: pooling for paralel exectution
 ///
@@ -73,17 +73,17 @@ impl Pass {
     }
 }
 
-///
-///  Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
-///  into kernels.
-///
-///  A the end, all scheduled variables are overwritten with the calculated data.
-///
-pub fn eval() {
-    let mut jit = JIT.lock(); // always lock JIT before IR
-    let mut ir = IR.lock();
-    jit.eval(&mut ir);
-}
+// ///
+// ///  Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
+// ///  into kernels.
+// ///
+// ///  A the end, all scheduled variables are overwritten with the calculated data.
+// ///
+// pub fn eval() {
+//     let mut jit = JIT.lock(); // always lock JIT before IR
+//     let mut ir = IR.lock();
+//     jit.eval(&mut ir);
+// }
 
 impl Jit {
     ///

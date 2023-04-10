@@ -1,5 +1,7 @@
+use std::cell::{Ref, RefCell, RefMut};
 use std::fmt::Debug;
 use std::ops::Deref;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use bytemuck::cast_slice;
@@ -14,15 +16,15 @@ pub use crate::var::{Op, ReduceOp, Var, VarId, VarInfo, VarType};
 
 // We have one global Intermediate Representation that tracks all operations.
 // However, Other Intermediate representations can also be constructed.
-pub static IR: Lazy<Trace> = Lazy::new(|| Trace::default());
+// pub static IR: Lazy<Trace> = Lazy::new(|| Trace::default());
 
 ///
 /// A wrapper arrund an Intermediate Representation.
 ///
 #[derive(Clone, Debug, Default)]
-pub struct Trace(Arc<Mutex<Internal>>);
+pub struct Trace(Rc<RefCell<Internal>>);
 impl Deref for Trace {
-    type Target = Arc<Mutex<Internal>>;
+    type Target = Rc<RefCell<Internal>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -33,16 +35,16 @@ impl Trace {
     fn push_var(&self, mut v: Var) -> VarRef {
         // Pus side effects of sources as extra dependencies
         for dep in v.deps.clone() {
-            if let Some(se) = self.lock().var(dep).last_write {
+            if let Some(se) = self.borrow().var(dep).last_write {
                 v.deps.push(se);
             }
         }
         // Inc rc for deps
         for dep in v.deps.iter() {
-            self.lock().inc_rc(*dep);
+            self.borrow_mut().inc_rc(*dep);
         }
         v.rc = 1;
-        let id = VarId(self.lock().vars.insert(v));
+        let id = VarId(self.borrow_mut().vars.insert(v));
         VarRef::steal_from(&self, id)
     }
     fn var_info(&self, refs: &[&VarRef]) -> VarInfo {
@@ -60,7 +62,7 @@ impl Trace {
         let mut deps: smallvec::SmallVec<[VarId; 4]> = deps
             .iter()
             .map(|r| {
-                assert!(Arc::ptr_eq(&self.0, &r.ir));
+                assert!(Rc::ptr_eq(&self.0, &r.ir));
                 r.id()
             })
             .collect();
@@ -78,18 +80,18 @@ impl Trace {
         ret
     }
     pub fn set_backend(&self, backend: impl AsRef<str>) {
-        if self.lock().backend.is_some() {
+        if self.borrow().backend.is_some() {
             return;
         }
         let backend = backend.as_ref();
         if backend == "cuda" {
-            self.lock().backend = Some(Box::new(CUDABackend::new()));
+            self.borrow_mut().backend = Some(Box::new(CUDABackend::new()));
         }
     }
     pub fn schedule(&self, refs: &[&VarRef]) {
         for r in refs {
-            assert!(Arc::ptr_eq(&r.ir, &self.0));
-            self.lock().schedule(&[r.id()])
+            assert!(Rc::ptr_eq(&r.ir, &self.0));
+            self.borrow_mut().schedule(&[r.id()])
         }
     }
 }
@@ -128,7 +130,7 @@ impl Trace {
     // Buffer initializers:
     pub fn buffer_f32(&self, slice: &[f32]) -> VarRef {
         let buffer = Some(
-            self.lock()
+            self.borrow()
                 .backend
                 .as_ref()
                 .unwrap()
@@ -145,7 +147,7 @@ impl Trace {
     }
     pub fn buffer_u32(&self, slice: &[u32]) -> VarRef {
         let buffer = Some(
-            self.lock()
+            self.borrow()
                 .backend
                 .as_ref()
                 .unwrap()
@@ -236,7 +238,7 @@ impl VarRef {
         self.id
     }
     pub fn borrow_from(trace: &Trace, id: VarId) -> Self {
-        trace.lock().inc_rc(id);
+        trace.borrow_mut().inc_rc(id);
 
         Self {
             id,
@@ -249,11 +251,12 @@ impl VarRef {
             ir: trace.clone(),
         }
     }
-    pub fn var(&self) -> MappedMutexGuard<Var> {
-        MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
+    pub fn var(&self) -> RefMut<Var> {
+        RefMut::map(self.ir.borrow_mut(), |ir| &mut ir.vars[self.id().0])
+        // MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
     }
     pub fn schedule(&self) {
-        self.ir.lock().schedule(&[self.id()])
+        self.ir.borrow_mut().schedule(&[self.id()])
     }
     // To Host functions:
     pub fn to_vec_f32(&self) -> Vec<f32> {
@@ -291,7 +294,7 @@ impl VarRef {
             .push_var_op(Op::Mul, &[self, &rhs], info.ty, info.size)
     }
     pub fn and(&self, rhs: &VarRef) -> VarRef {
-        assert!(Arc::ptr_eq(&self.ir, &rhs.ir));
+        assert!(Rc::ptr_eq(&self.ir, &rhs.ir));
         let info = self.ir.var_info(&[self, &rhs]);
 
         let ty_lhs = self.var().ty.clone();
@@ -331,7 +334,7 @@ impl VarRef {
     /// However, it should sometimes be possible to reuse the old ones.
     ///
     fn reindex(&self, new_idx: &VarRef, size: usize) -> Option<VarRef> {
-        assert!(Arc::ptr_eq(&self.ir, &new_idx.ir));
+        assert!(Rc::ptr_eq(&self.ir, &new_idx.ir));
         // let mut ir = self.ir.lock();
 
         let v = self.var();
@@ -387,7 +390,7 @@ impl VarRef {
 
         let mask: VarRef = mask
             .map(|m| {
-                assert!(Arc::ptr_eq(&self.ir, &m.ir));
+                assert!(Rc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(self.ir.const_bool(true));
@@ -406,7 +409,7 @@ impl VarRef {
         });
         res.schedule();
         dst.var().last_write = Some(res.id()); // Set side effect
-        dst.ir.lock().inc_rc(dst.id);
+        dst.ir.borrow_mut().inc_rc(dst.id);
     }
     pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
         self.scatter_reduce(dst, idx, mask, ReduceOp::None);
@@ -425,14 +428,14 @@ impl VarRef {
     /// is not yet implemented).
     ///
     pub fn gather(&self, index: &VarRef, mask: Option<&VarRef>) -> VarRef {
-        assert!(Arc::ptr_eq(&self.ir, &index.ir));
+        assert!(Rc::ptr_eq(&self.ir, &index.ir));
 
         let size = index.var().size;
         let ty = self.var().ty.clone();
 
         let mask: VarRef = mask
             .map(|m| {
-                assert!(Arc::ptr_eq(&self.ir, &m.ir));
+                assert!(Rc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(self.ir.const_bool(true));
@@ -478,7 +481,7 @@ impl VarRef {
 
 impl Clone for VarRef {
     fn clone(&self) -> Self {
-        self.ir.lock().inc_rc(self.id);
+        self.ir.borrow_mut().inc_rc(self.id);
         Self {
             ir: self.ir.clone(),
             id: self.id,
@@ -488,6 +491,6 @@ impl Clone for VarRef {
 
 impl Drop for VarRef {
     fn drop(&mut self) {
-        self.ir.lock().dec_rc(self.id);
+        self.ir.borrow_mut().dec_rc(self.id);
     }
 }
