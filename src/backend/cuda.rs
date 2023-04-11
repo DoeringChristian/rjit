@@ -867,15 +867,140 @@ impl CUDAKernel {
                     );
                 }
             }
-            Op::Xor => todo!(),
-            Op::Shl => todo!(),
-            Op::Shr => todo!(),
-            Op::Rcp => todo!(),
-            Op::Rsqrt => todo!(),
-            Op::Sin => todo!(),
-            Op::Cos => todo!(),
-            Op::Exp2 => todo!(),
-            Op::Log2 => todo!(),
+            Op::Xor => {
+                writeln!(
+                    self.asm,
+                    "\txor.{} {}, {}, {};",
+                    var.ty.name_cuda_bin(),
+                    var.reg(),
+                    ir.reg(var.deps[0]),
+                    ir.reg(var.deps[1])
+                );
+            }
+            Op::Shl => {
+                if var.ty.size() == 4 {
+                    writeln!(
+                        self.asm,
+                        "\tshl.{} {}, {}, {}",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                } else {
+                    write!(
+                        self.asm,
+                        "\tcvt.u32.{} %r3, {};\n\
+                        \tshl.{} {}, {}, %r3;\n",
+                        ir.var(var.deps[1]).ty.name_cuda(),
+                        ir.reg(var.deps[1]),
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        ir.reg(var.deps[0])
+                    );
+                }
+            }
+            Op::Shr => {
+                if var.ty.size() == 4 {
+                    writeln!(
+                        self.asm,
+                        "\tshr.{} {}, {}, {}",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                } else {
+                    write!(
+                        self.asm,
+                        "\tcvt.u32.{} %r3, {};\n\
+                        \tshr.{} {}, {}, %r3;\n",
+                        ir.var(var.deps[1]).ty.name_cuda(),
+                        ir.reg(var.deps[1]),
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        ir.reg(var.deps[0])
+                    );
+                }
+            }
+            Op::Rcp => {
+                if var.ty.is_single() {
+                    writeln!(
+                        self.asm,
+                        "\trcp.apporx.ftz.{} {}, {};",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0])
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\trcp.rn.ftz.{} {}, {};",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0])
+                    );
+                }
+            }
+            Op::Rsqrt => {
+                if var.ty.is_single() {
+                    writeln!(
+                        self.asm,
+                        "\trsqrt.approx.ftz.{} {}, {};",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0])
+                    );
+                } else {
+                    write!(
+                        self.asm,
+                        "\trcp.rn.{} {}, {};\n\
+                    \tsqrt.rn.{} {}, {};\n",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        var.reg()
+                    );
+                }
+            }
+            Op::Sin => {
+                writeln!(
+                    self.asm,
+                    "\tsin.approx.ftz.{} {}, {};",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0])
+                );
+            }
+            Op::Cos => {
+                writeln!(
+                    self.asm,
+                    "\tcos.approx.ftz.{} {}, {};",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0])
+                );
+            }
+            Op::Exp2 => {
+                writeln!(
+                    self.asm,
+                    "\tex2.approx.ftz.{} {}, {};",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0])
+                );
+            }
+            Op::Log2 => {
+                writeln!(
+                    self.asm,
+                    "\tlg2.approx.ftz.{} {}, {};",
+                    var.ty.name_cuda(),
+                    var.reg(),
+                    ir.reg(var.deps[0])
+                );
+            }
             Op::Cast => {
                 let d0 = ir.var(var.deps[0]);
                 if var.ty.is_bool() {
