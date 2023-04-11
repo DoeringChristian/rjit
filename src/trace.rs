@@ -527,10 +527,13 @@ mod test {
             paste::paste! {
                 #[test]
                 fn [<$jop _$ty $(__$mod)?>]() {
+
+                    let initial: &[$ty] = &$init;
+
                     let ir = Trace::default();
                     ir.set_backend("cuda");
 
-                    let x = ir.[<buffer_$ty>](&[$init]);
+                    let x = ir.[<buffer_$ty>](initial);
 
                     let y = x.$jop();
 
@@ -539,18 +542,20 @@ mod test {
                     let mut jit = Jit::default();
                     jit.eval(&mut ir.borrow_mut());
 
-                    let expected: $ty = ($rop)($init);
 
-                    approx::assert_abs_diff_eq!(y.[<to_host_$ty>]()[0], expected);
+                    for (i, calculated) in y.[<to_host_$ty>]().into_iter().enumerate(){
+                        let expected = ($rop)(initial[i]);
+                        approx::assert_abs_diff_eq!(calculated, expected, epsilon = 0.0001);
+                    }
                 }
             }
         };
     }
 
-    test_uop!(|x:f32| {1./x} => rcp(0.5; f32), "0_5");
-    test_uop!(|x:f32| {1./x.sqrt()} => rsqrt(0.5; f32), "0_5");
-    test_uop!(sin(0.5; f32), "0_5");
-    test_uop!(cos(0.5; f32), "0_5");
-    test_uop!(exp2(0.5; f32), "0_5");
-    test_uop!(log2(0.5; f32), "0_5");
+    test_uop!(|x:f32| {1./x} => rcp(         [0.1, 0.5, 1., std::f32::consts::PI]; f32));
+    test_uop!(|x:f32| {1./x.sqrt()} => rsqrt([0.1, 0.5, 1., std::f32::consts::PI]; f32));
+    test_uop!(sin(                           [0.1, 0.5, 1., std::f32::consts::PI]; f32));
+    test_uop!(cos(                           [0.1, 0.5, 1., std::f32::consts::PI]; f32));
+    test_uop!(exp2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f32));
+    test_uop!(log2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f32));
 }
