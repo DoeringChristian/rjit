@@ -319,6 +319,7 @@ impl CUDAKernel {
         match var.op {
             // Op::Data => {}
             Op::Nop => {}
+            Op::Data => {}
             Op::Literal => {
                 writeln!(
                     self.asm,
@@ -328,7 +329,6 @@ impl CUDAKernel {
                     var.literal
                 );
             }
-            Op::Data => {}
             Op::Neg => {
                 if var.ty.is_uint() {
                     writeln!(
@@ -639,14 +639,186 @@ impl CUDAKernel {
                     );
                 }
             }
-            Op::Lt => todo!(),
-            Op::Le => todo!(),
-            Op::Gt => todo!(),
-            Op::Ge => todo!(),
-            Op::Select => todo!(),
-            Op::Popc => todo!(),
-            Op::Clz => todo!(),
-            Op::Ctz => todo!(),
+            Op::Lt => {
+                if var.ty.is_uint() {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.lo.{} {}, {}, {};",
+                        ir.var(var.deps[0]).ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.lt.{} {}, {}, {};",
+                        ir.var(var.deps[0]).ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                }
+            }
+            Op::Le => {
+                if var.ty.is_uint() {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.ls.{} {}, {}, {};",
+                        ir.var(var.deps[0]).ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.le.{} {}, {}, {};",
+                        ir.var(var.deps[0]).ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                }
+            }
+            Op::Gt => {
+                if var.ty.is_uint() {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.hi.{} {}, {}, {};",
+                        ir.var(var.deps[0]).ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.gt.{} {}, {}, {};",
+                        ir.var(var.deps[0]).ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                }
+            }
+            Op::Ge => {
+                if var.ty.is_uint() {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.hs.{} {}, {}, {};",
+                        ir.var(var.deps[0]).ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tsetp.ge.{} {}, {}, {};",
+                        ir.var(var.deps[0]).ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1])
+                    );
+                }
+            }
+            Op::Select => {
+                if !ir.var(var.deps[0]).ty.is_bool() {
+                    writeln!(
+                        self.asm,
+                        "\tselp.{} {}, {}, {}, {};",
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        ir.reg(var.deps[1]),
+                        ir.reg(var.deps[2]),
+                        ir.reg(var.deps[0])
+                    );
+                } else {
+                    write!(
+                        self.asm,
+                        "\tand.pred %p3, {}, {};\n\
+                        \tand.pred %p2, !{}, {};\n\
+                        \tor.pred {}, %p2, %p3;\n",
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[1]),
+                        ir.reg(var.deps[0]),
+                        ir.reg(var.deps[2]),
+                        var.reg()
+                    );
+                }
+            }
+            Op::Popc => {
+                if var.ty.size() == 4 {
+                    writeln!(
+                        self.asm,
+                        "\tpopc.{} {}, {};",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        ir.reg(var.deps[0])
+                    );
+                } else {
+                    write!(
+                        self.asm,
+                        "\tpopc.{} %r3, {};\n\
+                        \tcvt.{}.u32 {}, %r3;\n",
+                        var.ty.name_cuda_bin(),
+                        ir.reg(var.deps[0]),
+                        var.ty.name_cuda(),
+                        var.reg()
+                    );
+                }
+            }
+            Op::Clz => {
+                if var.ty.size() == 4 {
+                    writeln!(
+                        self.asm,
+                        "\tclz.{} {}, {};",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        ir.reg(var.deps[0])
+                    );
+                } else {
+                    write!(
+                        self.asm,
+                        "\tclz.{} %r3, {};\n\
+                        \tcvt.{}.u32 {}, %r3;\n",
+                        var.ty.name_cuda_bin(),
+                        ir.reg(var.deps[0]),
+                        var.ty.name_cuda(),
+                        var.reg()
+                    );
+                }
+            }
+            Op::Ctz => {
+                if var.ty.size() == 4 {
+                    write!(
+                        self.asm,
+                        "\tbrev.{} {}, {};\n\
+                        \tclz.{} {}, {};\n",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        var.reg()
+                    );
+                } else {
+                    write!(
+                        self.asm,
+                        "\tbrev.{} {}, {};\n\
+                        \tclz.{} %r3, {};\n\
+                        \tcvt.{}.u32 {}, %r3;\n",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        ir.reg(var.deps[0]),
+                        var.ty.name_cuda_bin(),
+                        var.ty.name_cuda(),
+                        var.reg(),
+                        var.reg()
+                    );
+                }
+            }
             Op::And => {
                 let d0 = ir.var(var.deps[0]);
                 let d1 = ir.var(var.deps[1]);
@@ -671,7 +843,30 @@ impl CUDAKernel {
                     );
                 }
             }
-            Op::Or => todo!(),
+            Op::Or => {
+                let d0 = ir.var(var.deps[0]);
+                let d1 = ir.var(var.deps[1]);
+
+                if d0.ty == d1.ty {
+                    writeln!(
+                        self.asm,
+                        "\tor.{} {}, {}, {};",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        d0.reg(),
+                        d1.reg()
+                    );
+                } else {
+                    writeln!(
+                        self.asm,
+                        "\tselp.{} {}, -1, {}, {};",
+                        var.ty.name_cuda_bin(),
+                        var.reg(),
+                        d0.reg(),
+                        d1.reg()
+                    );
+                }
+            }
             Op::Xor => todo!(),
             Op::Shl => todo!(),
             Op::Shr => todo!(),
