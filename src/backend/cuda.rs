@@ -927,7 +927,7 @@ impl CUDAKernel {
                 if var.ty.is_single() {
                     writeln!(
                         self.asm,
-                        "\trcp.apporx.ftz.{} {}, {};",
+                        "\trcp.approx.ftz.{} {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
                         ir.reg(var.deps[0])
@@ -935,7 +935,7 @@ impl CUDAKernel {
                 } else {
                     writeln!(
                         self.asm,
-                        "\trcp.rn.ftz.{} {}, {};",
+                        "\trcp.rn.{} {}, {};",
                         var.ty.name_cuda(),
                         var.reg(),
                         ir.reg(var.deps[0])

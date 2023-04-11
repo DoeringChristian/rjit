@@ -253,9 +253,9 @@ impl VarRef {
     }
 }
 macro_rules! bop_arythmetic {
-    ($Op:ident, $op:ident) => {
+    ($Op:ident) => {
         paste::paste! {
-            pub fn $op(&self, rhs: &VarRef) -> VarRef {
+            pub fn [<$Op:lower>](&self, rhs: &VarRef) -> VarRef {
                 let info = self.ir.var_info(&[self, &rhs]);
                 self.ir
                     .push_var_op(Op::$Op, &[self, &rhs], info.ty, info.size)
@@ -264,9 +264,9 @@ macro_rules! bop_arythmetic {
     };
 }
 macro_rules! to_host {
-    ($Ty:ident, $ty:ident) => {
+    ($Ty:ident) => {
         paste::paste! {
-            pub fn [<to_host_$ty>](&self) -> Vec<$ty> {
+            pub fn [<to_host_$Ty:lower>](&self) -> Vec<[<$Ty:lower>]> {
                 let var = self.var();
                 assert_eq!(var.ty, VarType::$Ty);
                 let v = var.buffer.as_ref().unwrap().as_vec();
@@ -275,23 +275,35 @@ macro_rules! to_host {
         }
     };
 }
+
+macro_rules! uop {
+    ($Op:ident) => {
+        paste::paste! {
+            pub fn [<$Op:lower>](&self) -> Self {
+                let info = self.ir.var_info(&[self]);
+                self.ir.push_var_op(Op::$Op, &[self], info.ty, info.size)
+            }
+        }
+    };
+}
+
 impl VarRef {
     pub fn schedule(&self) {
         self.ir.borrow_mut().schedule(&[self.id()])
     }
     // To Host functions:
     // to_host!(Bool, bool);
-    to_host!(I8, i8);
-    to_host!(U8, u8);
-    to_host!(I16, i16);
-    to_host!(U16, u16);
-    to_host!(I32, i32);
-    to_host!(U32, u32);
-    to_host!(I64, i64);
-    to_host!(U64, u64);
-    to_host!(F16, f16);
-    to_host!(F32, f32);
-    to_host!(F64, f64);
+    to_host!(I8);
+    to_host!(U8);
+    to_host!(I16);
+    to_host!(U16);
+    to_host!(I32);
+    to_host!(U32);
+    to_host!(I64);
+    to_host!(U64);
+    to_host!(F16);
+    to_host!(F32);
+    to_host!(F64);
     // Unarry operations:
     pub fn cast(&self, ty: VarType) -> VarRef {
         let v = self.var();
@@ -304,10 +316,17 @@ impl VarRef {
         })
     }
     // Binarry operations:
-    bop_arythmetic!(Add, add);
-    bop_arythmetic!(Sub, sub);
-    bop_arythmetic!(Mul, mul);
-    bop_arythmetic!(Div, div);
+    bop_arythmetic!(Add);
+    bop_arythmetic!(Sub);
+    bop_arythmetic!(Mul);
+    bop_arythmetic!(Div);
+
+    uop!(Rcp);
+    uop!(Rsqrt);
+    uop!(Sin);
+    uop!(Cos);
+    uop!(Exp2);
+    uop!(Log2);
 
     pub fn and(&self, rhs: &VarRef) -> VarRef {
         assert!(Rc::ptr_eq(&self.ir, &rhs.ir));
@@ -325,24 +344,6 @@ impl VarRef {
             .push_var_op(Op::And, &[self, &rhs], info.ty, info.size);
         ret
     }
-    // pub fn as_ptr(&self) -> Option<VarRef> {
-    //     let ptr = self.var().buffer.as_ref().map(|b| b.as_ptr());
-    //     // TODO: Eval var if needed.
-    //     if let Some(ptr) = ptr {
-    //         Some(self.ir.push_var(Var {
-    //             op: Op::Literal,
-    //             // param_ty: ParamType::Input,
-    //             deps: smallvec![self.id()],
-    //             ty: VarType::Ptr,
-    //             literal: ptr,
-    //             size: 1,
-    //             stop_traversal: true,
-    //             ..Default::default()
-    //         }))
-    //     } else {
-    //         None
-    //     }
-    // }
     /// Reindex a variable with a new index and size.
     /// (Normally size is the size of the index)
     ///
@@ -509,4 +510,47 @@ impl Drop for VarRef {
     fn drop(&mut self) {
         self.ir.borrow_mut().dec_rc(self.id);
     }
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod test {
+    use crate::jit::Jit;
+
+    use super::Trace;
+
+    macro_rules! test_uop {
+        ($jop:ident($init:expr; $ty:ident) $(,$mod:literal)?) => {
+            test_uop!($ty::$jop => $jop($init; $ty) $(,$mod)?);
+        };
+        ($rop:expr => $jop:ident($init:expr; $ty:ident) $(,$mod:literal)?) => {
+            paste::paste! {
+                #[test]
+                fn [<$jop _$ty $(__$mod)?>]() {
+                    let ir = Trace::default();
+                    ir.set_backend("cuda");
+
+                    let x = ir.[<buffer_$ty>](&[$init]);
+
+                    let y = x.$jop();
+
+                    ir.schedule(&[&y]);
+
+                    let mut jit = Jit::default();
+                    jit.eval(&mut ir.borrow_mut());
+
+                    let expected: $ty = ($rop)($init);
+
+                    approx::assert_abs_diff_eq!(y.[<to_host_$ty>]()[0], expected);
+                }
+            }
+        };
+    }
+
+    test_uop!(|x:f32| {1./x} => rcp(0.5; f32), "0_5");
+    test_uop!(|x:f32| {1./x.sqrt()} => rsqrt(0.5; f32), "0_5");
+    test_uop!(sin(0.5; f32), "0_5");
+    test_uop!(cos(0.5; f32), "0_5");
+    test_uop!(exp2(0.5; f32), "0_5");
+    test_uop!(log2(0.5; f32), "0_5");
 }
