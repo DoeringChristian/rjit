@@ -288,6 +288,9 @@ macro_rules! uop {
 }
 
 impl VarRef {
+    pub fn size(&self) -> usize {
+        self.var().size
+    }
     pub fn schedule(&self) {
         self.ir.borrow_mut().schedule(&[self.id()])
     }
@@ -343,6 +346,32 @@ impl VarRef {
             .ir
             .push_var_op(Op::And, &[self, &rhs], info.ty, info.size);
         ret
+    }
+
+    pub fn tex_lookup(&self, pos: &[&VarRef]) -> [Self; 4] {
+        self.schedule();
+        let size = pos[0].size();
+        assert!(pos.iter().all(|p| p.size() == size));
+        let lookup = self.ir.push_var(Var {
+            op: Op::TexLookup {
+                dim: pos.len() as _,
+            },
+            deps: smallvec![self.id()],
+            ty: VarType::F32,
+            size,
+            ..Default::default()
+        });
+
+        [
+            self.ir
+                .push_var_op(Op::Extract { offset: 0 }, &[&lookup], VarType::F32, size),
+            self.ir
+                .push_var_op(Op::Extract { offset: 1 }, &[&lookup], VarType::F32, size),
+            self.ir
+                .push_var_op(Op::Extract { offset: 2 }, &[&lookup], VarType::F32, size),
+            self.ir
+                .push_var_op(Op::Extract { offset: 3 }, &[&lookup], VarType::F32, size),
+        ]
     }
     /// Reindex a variable with a new index and size.
     /// (Normally size is the size of the index)

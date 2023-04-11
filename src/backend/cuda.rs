@@ -40,6 +40,7 @@ impl Backend for CUDABackend {
         unsafe { cust::sys::cuCtxSetCurrent(self.ctx.as_raw()) };
         Arc::new(CUDABuffer {
             buffer: vec![0u8; size].as_slice().as_dbuf().unwrap(),
+            ctx: self.ctx.clone(),
         })
     }
 
@@ -47,6 +48,7 @@ impl Backend for CUDABackend {
         unsafe { cust::sys::cuCtxSetCurrent(self.ctx.as_raw()) };
         Arc::new(CUDABuffer {
             buffer: slice.as_dbuf().unwrap(),
+            ctx: self.ctx.clone(),
         })
     }
     fn synchronize(&self) {
@@ -64,6 +66,7 @@ impl Drop for CUDABackend {
 #[derive(Debug)]
 pub struct CUDABuffer {
     buffer: DeviceBuffer<u8>,
+    ctx: Arc<Context>,
 }
 impl Buffer for CUDABuffer {
     fn as_ptr(&self) -> u64 {
@@ -72,6 +75,10 @@ impl Buffer for CUDABuffer {
     fn as_vec(&self) -> Vec<u8> {
         self.buffer.as_host_vec().unwrap()
     }
+}
+
+pub struct CUDATexture {
+    ctx: Arc<Context>,
 }
 
 pub struct CUDAKernel {
@@ -1225,6 +1232,52 @@ impl CUDAKernel {
                     "\tmov.{} {}, %r0;\n",
                     var.ty.name_cuda(),
                     var.reg()
+                );
+            }
+            Op::TexLookup { dim } => {
+                writeln!(self.asm, "\t{}_out_<4>;", var.reg());
+                if dim == 3 {
+                    writeln!(
+                        self.asm,
+                        "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
+                             {v}_out_3}}, [{d0}, {{{d1}, {d2}, {d3}, {d3}}}]",
+                        v = var.reg(),
+                        d0 = ir.reg(var.deps[0]),
+                        d1 = ir.reg(var.deps[1]),
+                        d2 = ir.reg(var.deps[2]),
+                        d3 = ir.reg(var.deps[3])
+                    );
+                } else if dim == 2 {
+                    writeln!(
+                        self.asm,
+                        "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
+                             {v}_out_3}}, [{d0}, {{{d1}, {d2}}}]",
+                        v = var.reg(),
+                        d0 = ir.reg(var.deps[0]),
+                        d1 = ir.reg(var.deps[1]),
+                        d2 = ir.reg(var.deps[2]),
+                    );
+                } else if dim == 1 {
+                    writeln!(
+                        self.asm,
+                        "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
+                             {v}_out_3}}, [{d0}, {{{d1}}}]",
+                        v = var.reg(),
+                        d0 = ir.reg(var.deps[0]),
+                        d1 = ir.reg(var.deps[1]),
+                    );
+                } else {
+                    unimplemented!();
+                }
+            }
+            Op::Extract { offset } => {
+                writeln!(
+                    self.asm,
+                    "\tmov.{} {}, {}_out_{};",
+                    var.ty.name_cuda_bin(),
+                    var.reg(),
+                    ir.reg(var.deps[0]),
+                    offset
                 );
             }
         }

@@ -80,9 +80,16 @@ pub enum Op {
     Scatter {
         op: ReduceOp,
     },
+    TexLookup {
+        dim: u8,
+    },
+    Extract {
+        offset: usize,
+    },
     Idx,
 }
 
+// TODO: Vector types
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub enum VarType {
     Void,
