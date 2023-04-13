@@ -1,5 +1,5 @@
 ---
-source: src/backend/cuda.rs
+source: src/backend/cuda/cuda.rs
 expression: jit.kernel_debug()
 ---
 ===============================================

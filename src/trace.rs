@@ -8,7 +8,6 @@ use bytemuck::cast_slice;
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::smallvec;
 
-use crate::backend::cuda::CUDABackend;
 use crate::backend::Backend;
 pub use crate::var::{Op, ReduceOp, Var, VarId, VarInfo, VarType};
 
@@ -79,7 +78,7 @@ impl Trace {
         }
         let backend = backend.as_ref();
         if backend == "cuda" {
-            self.borrow_mut().backend = Some(Box::new(CUDABackend::new()));
+            self.borrow_mut().backend = Some(Box::new(crate::backend::cuda::Backend::new()));
         }
     }
     pub fn schedule(&self, refs: &[&VarRef]) {
