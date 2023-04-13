@@ -7,7 +7,7 @@ use crate::schedule::ScheduleIr;
 
 pub trait Texture: Debug + Send + Sync {}
 
-pub trait Kernel: Debug + Send + Sync {
+pub trait Kernel: Debug {
     fn assemble(&mut self, ir: &ScheduleIr);
     fn compile(&mut self);
     fn execute_async(&mut self, ir: &mut ScheduleIr);

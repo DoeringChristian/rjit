@@ -68,6 +68,27 @@ pub struct InternalDevice {
     name: String,
 }
 
+impl Debug for InternalDevice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Device")
+            .field("id", &self.id)
+            // .field("ctx", &self.ctx)
+            .field("instance", &self.instance)
+            .field("pci_bus_id", &self.pci_bus_id)
+            .field("pci_dom_id", &self.pci_dom_id)
+            .field("pci_dev_id", &self.pci_dev_id)
+            .field("num_sm", &self.num_sm)
+            .field("unified_addr", &self.unified_addr)
+            .field("shared_memory_bytes", &self.shared_memory_bytes)
+            .field("cc_minor", &self.cc_minor)
+            .field("cc_major", &self.cc_major)
+            .field("memory_pool", &self.memory_pool)
+            .field("mem_total", &self.mem_total)
+            .field("name", &self.name)
+            .finish()
+    }
+}
+
 impl InternalDevice {
     pub fn new(instance: &Arc<Instance>, id: i32) -> Result<Self, DeviceError> {
         unsafe {
@@ -202,6 +223,13 @@ impl Drop for InternalDevice {
 pub struct Device {
     internal: Arc<InternalDevice>,
 }
+unsafe impl Sync for Device {}
+unsafe impl Send for Device {}
+impl Debug for Device {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.internal)
+    }
+}
 
 impl Device {
     pub fn create(instance: &Arc<Instance>, id: i32) -> Result<Self, DeviceError> {
@@ -219,6 +247,18 @@ pub struct Instance {
     device_count: i32,
     cuda_version_major: i32,
     cuda_version_minor: i32,
+}
+unsafe impl Sync for Instance {}
+unsafe impl Send for Instance {}
+impl Debug for Instance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Instance")
+            // .field("api", &self.api)
+            .field("device_count", &self.device_count)
+            .field("cuda_version_major", &self.cuda_version_major)
+            .field("cuda_version_minor", &self.cuda_version_minor)
+            .finish()
+    }
 }
 impl Instance {
     pub fn new() -> Result<Self, InstanceError> {

@@ -78,7 +78,8 @@ impl Trace {
         }
         let backend = backend.as_ref();
         if backend == "cuda" {
-            self.borrow_mut().backend = Some(Box::new(crate::backend::cuda::Backend::new()));
+            self.borrow_mut().backend =
+                Some(Box::new(crate::backend::cuda::Backend::new().unwrap()));
         }
     }
     pub fn schedule(&self, refs: &[&VarRef]) {

@@ -1,134 +1,300 @@
-use cust::module::{ModuleJitOption, OptLevel};
-use cust::prelude::{Context, DeviceBuffer, Module};
-use cust::stream::{Stream, StreamFlags};
-use cust::util::SliceExt;
-
-use crate::backend;
-use crate::schedule::{SVarId, ScheduleIr};
-use crate::var::*;
+use std::ffi::{c_void, CStr, CString};
 use std::fmt::{Debug, Write};
 use std::sync::Arc;
+use thiserror::Error;
+
+use super::cuda_core::{Device, DeviceError, Instance, InstanceError};
+use crate::backend;
+use crate::schedule::{SVarId, ScheduleIr};
+use crate::trace::VarType;
+use crate::var::ParamType;
+
+#[derive(Debug, Error)]
+pub enum BackendError {
+    #[error("{}", .0)]
+    InstanceError(#[from] InstanceError),
+    #[error("{}", .0)]
+    DeviceError(#[from] DeviceError),
+}
 
 #[derive(Debug)]
 pub struct Backend {
-    ctx: Arc<Context>,
-    stream: Option<cust::stream::Stream>,
+    instance: Arc<Instance>,
+    device: Arc<Device>,
 }
 impl Backend {
-    pub fn new() -> Self {
-        Self {
-            ctx: Arc::new(cust::quick_init().unwrap()),
-            stream: Some(Stream::new(StreamFlags::NON_BLOCKING, None).unwrap()),
-        }
+    pub fn new() -> Result<Self, BackendError> {
+        let instance = Arc::new(Instance::new()?);
+        let device = Arc::new(Device::create(&instance, 0)?);
+        Ok(Self { instance, device })
     }
 }
 
 impl backend::Backend for Backend {
     fn new_kernel(&self) -> Box<dyn backend::Kernel> {
-        Box::new(CUDAKernel {
-            ctx: self.ctx.clone(),
+        Box::new(Kernel {
             asm: Default::default(),
-            module: Default::default(),
-        })
-    }
-    fn first_register(&self) -> usize {
-        CUDAKernel::FIRST_REGISTER
-    }
-
-    fn buffer_uninit(&self, size: usize) -> Arc<dyn backend::Buffer> {
-        unsafe { cust::sys::cuCtxSetCurrent(self.ctx.as_raw()) };
-        Arc::new(Buffer {
-            buffer: vec![0u8; size].as_slice().as_dbuf().unwrap(),
-            ctx: self.ctx.clone(),
+            data: Default::default(),
+            module: std::ptr::null_mut(),
+            func: std::ptr::null_mut(),
+            device: self.device.clone(),
         })
     }
 
-    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn backend::Buffer> {
-        unsafe { cust::sys::cuCtxSetCurrent(self.ctx.as_raw()) };
-        Arc::new(Buffer {
-            buffer: slice.as_dbuf().unwrap(),
-            ctx: self.ctx.clone(),
-        })
+    fn buffer_uninit(&self, size: usize) -> Arc<dyn crate::backend::Buffer> {
+        unsafe {
+            let ctx = self.device.ctx();
+            let mut dptr = 0;
+            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
+            Arc::new(Buffer {
+                device: self.device.clone(),
+                dptr,
+                size,
+            })
+        }
+    }
+
+    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn crate::backend::Buffer> {
+        unsafe {
+            let size = slice.len();
+
+            let ctx = self.device.ctx();
+
+            let mut dptr = 0;
+            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
+            ctx.cuMemcpyHtoD_v2(dptr, slice.as_ptr() as _, size)
+                .check()
+                .unwrap();
+            Arc::new(Buffer {
+                device: self.device.clone(),
+                dptr,
+                size,
+            })
+        }
     }
     fn synchronize(&self) {
-        unsafe { cust::sys::cuCtxSetCurrent(self.ctx.as_raw()) };
-        self.stream.as_ref().unwrap().synchronize().unwrap();
+        // todo!()
+    }
+
+    fn first_register(&self) -> usize {
+        Kernel::FIRST_REGISTER
     }
 }
 
 impl Drop for Backend {
-    fn drop(&mut self) {
-        self.stream.take();
-    }
+    fn drop(&mut self) {}
 }
 
 #[derive(Debug)]
 pub struct Buffer {
-    buffer: DeviceBuffer<u8>,
-    ctx: Arc<Context>,
+    device: Arc<Device>,
+    dptr: u64,
+    size: usize,
 }
 impl backend::Buffer for Buffer {
-    fn as_ptr(&self) -> u64 {
-        self.buffer.as_device_ptr().as_raw()
-    }
     fn as_vec(&self) -> Vec<u8> {
-        self.buffer.as_host_vec().unwrap()
+        unsafe {
+            let ctx = self.device.ctx();
+
+            let mut dst = Vec::with_capacity(self.size);
+            ctx.cuMemcpyDtoH_v2(dst.as_mut_ptr() as *mut _, self.dptr, self.size)
+                .check()
+                .unwrap();
+
+            dst.set_len(self.size);
+
+            dst
+        }
+    }
+
+    fn as_ptr(&self) -> u64 {
+        self.dptr
     }
 }
 
-pub struct Texture {
-    ctx: Arc<Context>,
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.ctx().cuMemFree_v2(self.dptr).check().unwrap();
+        }
+    }
 }
 
-pub struct CUDAKernel {
-    ctx: Arc<Context>,
+pub struct Texture {}
+
+#[derive(Debug)]
+pub struct Kernel {
     pub asm: String,
-    pub module: Option<Module>,
+    pub data: Vec<u8>,
+    pub module: cuda_rs::CUmodule,
+    pub func: cuda_rs::CUfunction,
+    device: Arc<Device>,
 }
 
-impl Debug for CUDAKernel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CUDAKernel")
-            .field("asm", &self.asm)
-            .finish()
+impl Kernel {
+    const ENTRY_POINT: &str = "cujit";
+    const FIRST_REGISTER: usize = 4;
+    #[allow(unused_must_use)]
+    fn assemble_var(&mut self, ir: &ScheduleIr, id: SVarId) {
+        super::codegen::assemble_var(&mut self.asm, ir, id);
     }
 }
 
-impl backend::Kernel for CUDAKernel {
-    fn execute_async(&mut self, ir: &mut ScheduleIr) {
-        unsafe { cust::sys::cuCtxSetCurrent(self.ctx.as_raw()) };
+impl backend::Kernel for Kernel {
+    fn execute_async(&mut self, ir: &mut crate::schedule::ScheduleIr) {
+        let ctx = self.device.ctx();
+        unsafe {
+            let mut unused = 0;
+            let mut block_size = 0;
+            ctx.cuOccupancyMaxPotentialBlockSize(
+                &mut unused,
+                &mut block_size,
+                self.func,
+                None,
+                0,
+                0,
+            )
+            .check()
+            .unwrap();
+            let block_size = block_size as u32;
 
-        let func = self
-            .module
-            .as_ref()
-            .expect("Need to compile Kernel before we can execute it!")
-            .get_function(Self::ENTRY_POINT)
+            let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
+
+            let mut stream = std::ptr::null_mut();
+            ctx.cuStreamCreate(
+                &mut stream,
+                cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT as _,
+            )
+            .check()
             .unwrap();
 
-        let (_, block_size) = func.suggested_launch_configuration(0, 0.into()).unwrap();
+            let mut params = vec![ir.size() as u64];
+            params.extend(ir.buffers().iter().map(|b| b.as_ptr()));
 
-        let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
+            ctx.cuLaunchKernel(
+                self.func,
+                grid_size,
+                1,
+                1,
+                block_size as _,
+                1,
+                1,
+                0,
+                stream,
+                [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
+                std::ptr::null_mut(),
+            )
+            .check()
+            .unwrap();
 
-        let stream =
-            cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
-
-        let mut params = vec![ir.size() as u64];
-        params.extend(ir.buffers().iter().map(|b| b.as_ptr()));
-
-        unsafe {
-            stream
-                .launch(
-                    &func,
-                    grid_size,
-                    block_size,
-                    0,
-                    &[params.as_mut_ptr() as *mut std::ffi::c_void],
-                )
-                .unwrap();
+            ctx.cuStreamSynchronize(stream).check().unwrap();
+            ctx.cuStreamDestroy_v2(stream).check().unwrap();
         }
-
-        // stream.synchronize().unwrap();
     }
+    fn compile(&mut self) {
+        let ctx = self.device.ctx();
+        unsafe {
+            let asm = CString::new(self.asm.as_str()).unwrap();
+
+            const log_size: usize = 16384;
+            let mut error_log = [0u8; log_size];
+            let mut info_log = [0u8; log_size];
+
+            let mut options = [
+                cuda_rs::CUjit_option_enum::CU_JIT_OPTIMIZATION_LEVEL,
+                cuda_rs::CUjit_option_enum::CU_JIT_LOG_VERBOSE,
+                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER,
+                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES,
+                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER,
+                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
+                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_LINE_INFO,
+                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_DEBUG_INFO,
+            ];
+
+            let mut option_values = [
+                4 as *mut c_void,
+                1 as *mut c_void,
+                info_log.as_mut_ptr() as *mut c_void,
+                log_size as *mut c_void,
+                error_log.as_mut_ptr() as *mut c_void,
+                log_size as *mut c_void,
+                0 as *mut c_void,
+                0 as *mut c_void,
+            ];
+
+            let mut linkstate = std::ptr::null_mut();
+            ctx.cuLinkCreate_v2(
+                options.len() as _,
+                options.as_mut_ptr(),
+                option_values.as_mut_ptr(),
+                &mut linkstate,
+            )
+            .check()
+            .unwrap();
+
+            ctx.cuLinkAddData_v2(
+                linkstate,
+                cuda_rs::CUjitInputType::CU_JIT_INPUT_PTX,
+                asm.as_ptr() as *mut c_void,
+                self.asm.len(),
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+            .check()
+            .or_else(|err| {
+                let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
+                log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
+                Err(err)
+            }).unwrap();
+
+            let mut link_out = std::ptr::null_mut();
+            let mut link_out_size = 0;
+            ctx.cuLinkComplete(linkstate, &mut link_out, &mut link_out_size)
+                .check()
+                .or_else(|err| {
+                    let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
+                    log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
+                    Err(err)
+                }).unwrap();
+
+            log::trace!(
+                "Detailed linker output: {}",
+                CStr::from_bytes_until_nul(&info_log)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            );
+
+            let mut out: Vec<u8> = Vec::with_capacity(link_out_size);
+            std::ptr::copy_nonoverlapping(link_out as *mut u8, out.as_mut_ptr(), link_out_size);
+            out.set_len(link_out_size);
+
+            ctx.cuLinkDestroy(linkstate).check().unwrap();
+
+            self.data = out;
+        }
+        unsafe {
+            let mut module = std::ptr::null_mut();
+            ctx.cuModuleLoadData(&mut module, self.data.as_ptr() as *const c_void)
+                .check()
+                .unwrap();
+            self.module = module;
+
+            let fname = CString::new(Self::ENTRY_POINT).unwrap();
+            let mut func = std::ptr::null_mut();
+            ctx.cuModuleGetFunction(&mut func, self.module, fname.as_ptr() as *const i8)
+                .check()
+                .unwrap();
+            self.func = func;
+        }
+    }
+
+    fn assembly(&self) -> &str {
+        &self.asm
+    }
+
     #[allow(unused_must_use)]
     fn assemble(&mut self, ir: &ScheduleIr) {
         self.asm.clear();
@@ -174,9 +340,9 @@ impl backend::Kernel for CUDAKernel {
         write!(
             self.asm,
             "\tmov.u32 %r0, %ctaid.x;\n\
-             \tmov.u32 %r1, %ntid.x;\n\
-             \tmov.u32 %r2, %tid.x;\n\
-             \tmad.lo.u32 %r0, %r0, %r1, %r2; // r0 <- Index\n"
+            \tmov.u32 %r1, %ntid.x;\n\
+            \tmov.u32 %r2, %tid.x;\n\
+            \tmad.lo.u32 %r0, %r0, %r1, %r2; // r0 <- Index\n"
         );
 
         writeln!(self.asm, "");
@@ -193,11 +359,11 @@ impl backend::Kernel for CUDAKernel {
         write!(
             self.asm,
             "\tsetp.ge.u32 %p0, %r0, %r2; // p0 <- r0 >= r2\n\
-            \t@%p0 bra done; // if p0 => done\n\
-            \t\n\
-            \tmov.u32 %r3, %nctaid.x; // r3 <- nctaid.x\n\
-            \tmul.lo.u32 %r1, %r3, %r1; // r1 <- r3 * r1\n\
-            \t\n"
+           \t@%p0 bra done; // if p0 => done\n\
+           \t\n\
+           \tmov.u32 %r3, %nctaid.x; // r3 <- nctaid.x\n\
+           \tmul.lo.u32 %r1, %r3, %r1; // r1 <- r3 * r1\n\
+           \t\n"
         );
 
         write!(self.asm, "body: // sm_{}\n", 86); // TODO: compute capability from device
@@ -250,9 +416,9 @@ impl backend::Kernel for CUDAKernel {
                     write!(
                         self.asm,
                         "\n\t// Store:\n\
-                        \tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
-                            \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
-                            params[offset]\n",
+                       \tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
+                           \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
+                           params[offset]\n",
                         param_offst,
                         var.ty.size(),
                     );
@@ -262,11 +428,11 @@ impl backend::Kernel for CUDAKernel {
                         writeln!(self.asm, "\tst.global.cs.u8 [%rd0], %w0;");
                     } else {
                         writeln!(
-                                self.asm,
-                                "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
-                                var.ty.name_cuda(),
-                                var.reg(),
-                            );
+                               self.asm,
+                               "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
+                               var.ty.name_cuda(),
+                               var.reg(),
+                           );
                     }
                 }
             }
@@ -278,47 +444,20 @@ impl backend::Kernel for CUDAKernel {
         writeln!(
             self.asm,
             "\n\tadd.u32 %r0, %r0, %r1; // r0 <- r0 + r1\n\
-            \tsetp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2\n\
-            \t@!%p0 bra body; // if p0 => body\n\
-            \n"
+           \tsetp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2\n\
+           \t@!%p0 bra body; // if p0 => body\n\
+           \n"
         );
         writeln!(self.asm, "done:");
         write!(
             self.asm,
             "\n\tret;\n\
-        }}\n"
+       }}\n"
         );
 
         std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
 
         log::trace!("{}", self.asm);
-    }
-
-    fn compile(&mut self) {
-        self.module = Some(
-            Module::from_ptx(
-                &self.asm,
-                &[
-                    ModuleJitOption::OptLevel(OptLevel::O0),
-                    ModuleJitOption::GenenerateDebugInfo(true),
-                    ModuleJitOption::GenerateLineInfo(true),
-                ],
-            )
-            .unwrap(),
-        );
-    }
-
-    fn assembly(&self) -> &str {
-        &self.asm
-    }
-}
-
-impl CUDAKernel {
-    const ENTRY_POINT: &str = "cujit";
-    const FIRST_REGISTER: usize = 4;
-    #[allow(unused_must_use)]
-    fn assemble_var(&mut self, ir: &ScheduleIr, id: SVarId) {
-        super::codegen::assemble_var(&mut self.asm, ir, id);
     }
 }
 
@@ -326,7 +465,6 @@ impl CUDAKernel {
 mod test {
     use crate::jit::Jit;
     use crate::trace::{ReduceOp, Trace};
-    use crate::{jit, trace};
 
     #[test]
     fn refcounting() {
