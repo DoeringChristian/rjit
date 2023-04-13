@@ -269,8 +269,12 @@ macro_rules! to_host {
             pub fn [<to_host_$Ty:lower>](&self) -> Vec<[<$Ty:lower>]> {
                 let var = self.var();
                 assert_eq!(var.ty, VarType::$Ty);
-                let v = var.buffer.as_ref().unwrap().as_vec();
-                Vec::from(cast_slice(&v))
+
+                let mut dst = Vec::with_capacity(var.size);
+                unsafe{dst.set_len(var.size)};
+
+                var.buffer.as_ref().unwrap().copy_to_host(bytemuck::cast_slice_mut(&mut dst));
+                dst
             }
         }
     };
@@ -296,6 +300,7 @@ impl VarRef {
     }
     // To Host functions:
     // to_host!(Bool, bool);
+    //
     to_host!(I8);
     to_host!(U8);
     to_host!(I16);

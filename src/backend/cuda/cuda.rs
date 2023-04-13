@@ -92,23 +92,19 @@ pub struct Buffer {
     size: usize,
 }
 impl backend::Buffer for Buffer {
-    fn as_vec(&self) -> Vec<u8> {
+    fn as_ptr(&self) -> u64 {
+        self.dptr
+    }
+
+    fn copy_to_host(&self, dst: &mut [u8]) {
         unsafe {
             let ctx = self.device.ctx();
+            assert!(dst.len() <= self.size);
 
-            let mut dst = Vec::with_capacity(self.size);
             ctx.cuMemcpyDtoH_v2(dst.as_mut_ptr() as *mut _, self.dptr, self.size)
                 .check()
                 .unwrap();
-
-            dst.set_len(self.size);
-
-            dst
         }
-    }
-
-    fn as_ptr(&self) -> u64 {
-        self.dptr
     }
 }
 

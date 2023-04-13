@@ -16,7 +16,7 @@ pub trait Kernel: Debug {
 
 pub trait Buffer: Send + Sync + Debug {
     fn as_ptr(&self) -> u64;
-    fn as_vec(&self) -> Vec<u8>;
+    fn copy_to_host(&self, dst: &mut [u8]);
 }
 
 pub trait Backend: Debug + Send + Sync {
