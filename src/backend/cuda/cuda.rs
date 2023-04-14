@@ -18,13 +18,14 @@ pub enum Error {
 #[derive(Debug)]
 pub struct Backend {
     device: Device,
-    stream: Stream,
+    stream: Arc<Stream>,
 }
 impl Backend {
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(Instance::new()?);
         let device = Device::create(&instance, 0)?;
-        let stream = device.create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)?;
+        let stream =
+            Arc::new(device.create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)?);
         Ok(Self { device, stream })
     }
 }
@@ -37,6 +38,7 @@ impl backend::Backend for Backend {
             module: std::ptr::null_mut(),
             func: std::ptr::null_mut(),
             device: self.device.clone(),
+            stream: self.stream.clone(),
         })
     }
 
@@ -72,7 +74,7 @@ impl backend::Backend for Backend {
         }
     }
     fn synchronize(&self) {
-        // todo!()
+        self.stream.synchronize().unwrap();
     }
 
     fn first_register(&self) -> usize {
@@ -124,6 +126,7 @@ pub struct Kernel {
     pub module: cuda_rs::CUmodule,
     pub func: cuda_rs::CUfunction,
     device: Device,
+    stream: Arc<Stream>,
 }
 
 impl Kernel {
@@ -155,11 +158,6 @@ impl backend::Kernel for Kernel {
 
             let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
 
-            let stream = self
-                .device
-                .create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)
-                .unwrap();
-
             let mut params = vec![ir.size() as u64];
             params.extend(ir.buffers().iter().map(|b| b.as_ptr()));
 
@@ -172,14 +170,12 @@ impl backend::Kernel for Kernel {
                 1,
                 1,
                 0,
-                *stream,
+                **self.stream,
                 [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
                 std::ptr::null_mut(),
             )
             .check()
             .unwrap();
-
-            stream.synchronize().unwrap();
         }
     }
     fn compile(&mut self) {
