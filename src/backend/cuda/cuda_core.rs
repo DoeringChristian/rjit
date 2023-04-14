@@ -235,6 +235,9 @@ impl Device {
     pub fn ctx(&self) -> CtxRef {
         CtxRef::create(&self.internal)
     }
+    pub fn create_stream(&self, flags: cuda_rs::CUstream_flags_enum) -> Result<Stream, Error> {
+        Stream::create(self, flags)
+    }
 }
 
 pub struct Instance {
@@ -319,6 +322,14 @@ impl Stream {
                 device: device.clone(),
             })
         }
+    }
+    #[must_use]
+    pub fn synchronize(&self) -> Result<(), Error> {
+        let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuStreamSynchronize(self.raw).check()?;
+        }
+        Ok(())
     }
 }
 

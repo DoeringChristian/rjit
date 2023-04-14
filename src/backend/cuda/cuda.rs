@@ -18,12 +18,12 @@ pub enum Error {
 #[derive(Debug)]
 pub struct Backend {
     instance: Arc<Instance>,
-    device: Arc<Device>,
+    device: Device,
 }
 impl Backend {
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(Instance::new()?);
-        let device = Arc::new(Device::create(&instance, 0)?);
+        let device = Device::create(&instance, 0)?;
         Ok(Self { instance, device })
     }
 }
@@ -85,7 +85,7 @@ impl Drop for Backend {
 
 #[derive(Debug)]
 pub struct Buffer {
-    device: Arc<Device>,
+    device: Device,
     dptr: u64,
     size: usize,
 }
@@ -122,7 +122,7 @@ pub struct Kernel {
     pub data: Vec<u8>,
     pub module: cuda_rs::CUmodule,
     pub func: cuda_rs::CUfunction,
-    device: Arc<Device>,
+    device: Device,
 }
 
 impl Kernel {
@@ -154,13 +154,17 @@ impl backend::Kernel for Kernel {
 
             let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
 
-            let mut stream = std::ptr::null_mut();
-            ctx.cuStreamCreate(
-                &mut stream,
-                cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT as _,
-            )
-            .check()
-            .unwrap();
+            let stream = self
+                .device
+                .create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)
+                .unwrap();
+            // let mut stream = std::ptr::null_mut();
+            // ctx.cuStreamCreate(
+            //     &mut stream,
+            //     cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT as _,
+            // )
+            // .check()
+            // .unwrap();
 
             let mut params = vec![ir.size() as u64];
             params.extend(ir.buffers().iter().map(|b| b.as_ptr()));
@@ -174,15 +178,16 @@ impl backend::Kernel for Kernel {
                 1,
                 1,
                 0,
-                stream,
+                *stream,
                 [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
                 std::ptr::null_mut(),
             )
             .check()
             .unwrap();
 
-            ctx.cuStreamSynchronize(stream).check().unwrap();
-            ctx.cuStreamDestroy_v2(stream).check().unwrap();
+            stream.synchronize().unwrap();
+            // ctx.cuStreamSynchronize(stream).check().unwrap();
+            // ctx.cuStreamDestroy_v2(stream).check().unwrap();
         }
     }
     fn compile(&mut self) {
