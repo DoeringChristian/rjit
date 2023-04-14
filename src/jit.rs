@@ -49,6 +49,11 @@ struct Pass {
     size: usize,
 }
 
+#[derive(Debug)]
+struct LaunchGraph {
+    passes: Vec<Pass>,
+}
+
 impl Pass {
     ///
     /// Try to merge `other` into self.
