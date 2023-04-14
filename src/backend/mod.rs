@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use crate::schedule::ScheduleIr;
 
-pub trait Texture: Debug {}
+pub trait Texture: Debug {
+    fn as_any(&self) -> &dyn Any;
+}
 
 pub trait Kernel: Debug {
     fn as_any(&self) -> &dyn Any;
@@ -24,6 +26,7 @@ pub trait Buffer: Debug {
 pub trait Backend: Debug {
     fn as_any(&self) -> &dyn Any;
     fn new_kernel(&self) -> Box<dyn Kernel>;
+    fn create_texture(&self, shape: &[usize], n_channels: usize) -> Box<dyn Texture>;
     fn buffer_uninit(&self, size: usize) -> Arc<dyn Buffer>;
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn Buffer>;
     fn first_register(&self) -> usize;

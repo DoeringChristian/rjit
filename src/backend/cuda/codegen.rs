@@ -13,6 +13,7 @@ fn reduce_op_name(op: ReduceOp) -> &'static str {
     }
 }
 
+#[allow(warnings)]
 pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId) {
     let var = ir.var(id);
     writeln!(asm, "");

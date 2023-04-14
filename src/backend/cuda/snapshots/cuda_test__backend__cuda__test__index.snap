@@ -1,5 +1,5 @@
 ---
-source: src/backend/cuda/cuda.rs
+source: src/backend/cuda/test.rs
 expression: jit.kernel_debug()
 ---
 ===============================================
@@ -10,11 +10,11 @@ Kernel 0:
 .address_size 64
 
 .entry cujit(
-	.param .align 8 .b8 params[32]) {
+	.param .align 8 .b8 params[24]) {
 
-	.reg.b8   %b <6>; .reg.b16 %w<6>; .reg.b32 %r<6>;
-	.reg.b64  %rd<6>; .reg.f32 %f<6>; .reg.f64 %d<6>;
-	.reg.pred %p <6>;
+	.reg.b8   %b <5>; .reg.b16 %w<5>; .reg.b32 %r<5>;
+	.reg.b64  %rd<5>; .reg.f32 %f<5>; .reg.f64 %d<5>;
+	.reg.pred %p <5>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -31,18 +31,14 @@ Kernel 0:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 5, param: Some(0), literal: 0, size: 10 } =>
-	ld.param.u64 %rd0, [params+8];
-	mad.wide.u32 %rd0, %r0, 4, %rd0;
-	ld.global.cs.f32 %f5, [%rd0];
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param: Some(0), literal: 0, size: 10 } =>
+	mov.u32 %r4, %r0;
 
-	// [1]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(0)], ty: F32, param_ty: Output, reg: 4, param: Some(1), literal: 0, size: 10 } =>
-	add.f32 %f4, %f5, %f5;
 
 	// Store:
-	ld.param.u64 %rd0, [params + 16]; // rd0 <- params[offset]
+	ld.param.u64 %rd0, [params + 8]; // rd0 <- params[offset]
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
-	st.global.cs.f32 [%rd0], %f4; // (Index * ty.size() + params[offset])[Index] <- var
+	st.global.cs.u32 [%rd0], %r4; // (Index * ty.size() + params[offset])[Index] <- var
 
 	//End of Kernel:
 
