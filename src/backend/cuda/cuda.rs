@@ -31,6 +31,10 @@ impl Backend {
 }
 
 impl backend::Backend for Backend {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn new_kernel(&self) -> Box<dyn backend::Kernel> {
         Box::new(Kernel {
             asm: Default::default(),
@@ -54,7 +58,6 @@ impl backend::Backend for Backend {
             })
         }
     }
-
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn crate::backend::Buffer> {
         unsafe {
             let size = slice.len();
@@ -73,16 +76,13 @@ impl backend::Backend for Backend {
             })
         }
     }
-    fn synchronize(&self) {
-        self.stream.synchronize().unwrap();
-    }
 
     fn first_register(&self) -> usize {
         Kernel::FIRST_REGISTER
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn synchronize(&self) {
+        self.stream.synchronize().unwrap();
     }
 }
 
@@ -102,6 +102,10 @@ impl Buffer {
     }
 }
 impl backend::Buffer for Buffer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn copy_to_host(&self, dst: &mut [u8]) {
         unsafe {
             let ctx = self.device.ctx();
@@ -111,10 +115,6 @@ impl backend::Buffer for Buffer {
                 .check()
                 .unwrap();
         }
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 
@@ -148,153 +148,9 @@ impl Kernel {
 }
 
 impl backend::Kernel for Kernel {
-    fn execute_async(&mut self, ir: &mut crate::schedule::ScheduleIr) {
-        let ctx = self.device.ctx();
-        unsafe {
-            let mut unused = 0;
-            let mut block_size = 0;
-            ctx.cuOccupancyMaxPotentialBlockSize(
-                &mut unused,
-                &mut block_size,
-                self.func,
-                None,
-                0,
-                0,
-            )
-            .check()
-            .unwrap();
-            let block_size = block_size as u32;
-
-            let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
-
-            let mut params = vec![ir.size() as u64];
-            params.extend(
-                ir.buffers()
-                    .iter()
-                    .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().as_ptr()),
-            );
-
-            ctx.cuLaunchKernel(
-                self.func,
-                grid_size,
-                1,
-                1,
-                block_size as _,
-                1,
-                1,
-                0,
-                **self.stream,
-                [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
-                std::ptr::null_mut(),
-            )
-            .check()
-            .unwrap();
-        }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
-    fn compile(&mut self) {
-        let ctx = self.device.ctx();
-        unsafe {
-            let asm = CString::new(self.asm.as_str()).unwrap();
-
-            const log_size: usize = 16384;
-            let mut error_log = [0u8; log_size];
-            let mut info_log = [0u8; log_size];
-
-            let mut options = [
-                cuda_rs::CUjit_option_enum::CU_JIT_OPTIMIZATION_LEVEL,
-                cuda_rs::CUjit_option_enum::CU_JIT_LOG_VERBOSE,
-                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER,
-                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES,
-                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER,
-                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
-                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_LINE_INFO,
-                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_DEBUG_INFO,
-            ];
-
-            let mut option_values = [
-                4 as *mut c_void,
-                1 as *mut c_void,
-                info_log.as_mut_ptr() as *mut c_void,
-                log_size as *mut c_void,
-                error_log.as_mut_ptr() as *mut c_void,
-                log_size as *mut c_void,
-                0 as *mut c_void,
-                0 as *mut c_void,
-            ];
-
-            let mut linkstate = std::ptr::null_mut();
-            ctx.cuLinkCreate_v2(
-                options.len() as _,
-                options.as_mut_ptr(),
-                option_values.as_mut_ptr(),
-                &mut linkstate,
-            )
-            .check()
-            .unwrap();
-
-            ctx.cuLinkAddData_v2(
-                linkstate,
-                cuda_rs::CUjitInputType::CU_JIT_INPUT_PTX,
-                asm.as_ptr() as *mut c_void,
-                self.asm.len(),
-                std::ptr::null(),
-                0,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            )
-            .check()
-            .or_else(|err| {
-                let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
-                log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
-                Err(err)
-            }).unwrap();
-
-            let mut link_out = std::ptr::null_mut();
-            let mut link_out_size = 0;
-            ctx.cuLinkComplete(linkstate, &mut link_out, &mut link_out_size)
-                .check()
-                .or_else(|err| {
-                    let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
-                    log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
-                    Err(err)
-                }).unwrap();
-
-            log::trace!(
-                "Detailed linker output: {}",
-                CStr::from_bytes_until_nul(&info_log)
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-            );
-
-            let mut out: Vec<u8> = Vec::with_capacity(link_out_size);
-            std::ptr::copy_nonoverlapping(link_out as *mut u8, out.as_mut_ptr(), link_out_size);
-            out.set_len(link_out_size);
-
-            ctx.cuLinkDestroy(linkstate).check().unwrap();
-
-            self.data = out;
-        }
-        unsafe {
-            let mut module = std::ptr::null_mut();
-            ctx.cuModuleLoadData(&mut module, self.data.as_ptr() as *const c_void)
-                .check()
-                .unwrap();
-            self.module = module;
-
-            let fname = CString::new(Self::ENTRY_POINT).unwrap();
-            let mut func = std::ptr::null_mut();
-            ctx.cuModuleGetFunction(&mut func, self.module, fname.as_ptr() as *const i8)
-                .check()
-                .unwrap();
-            self.func = func;
-        }
-    }
-
-    fn assembly(&self) -> &str {
-        &self.asm
-    }
-
     #[allow(unused_must_use)]
     fn assemble(&mut self, ir: &ScheduleIr) {
         self.asm.clear();
@@ -460,8 +316,152 @@ impl backend::Kernel for Kernel {
         log::trace!("{}", self.asm);
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn compile(&mut self) {
+        let ctx = self.device.ctx();
+        unsafe {
+            let asm = CString::new(self.asm.as_str()).unwrap();
+
+            const log_size: usize = 16384;
+            let mut error_log = [0u8; log_size];
+            let mut info_log = [0u8; log_size];
+
+            let mut options = [
+                cuda_rs::CUjit_option_enum::CU_JIT_OPTIMIZATION_LEVEL,
+                cuda_rs::CUjit_option_enum::CU_JIT_LOG_VERBOSE,
+                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER,
+                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES,
+                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER,
+                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
+                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_LINE_INFO,
+                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_DEBUG_INFO,
+            ];
+
+            let mut option_values = [
+                4 as *mut c_void,
+                1 as *mut c_void,
+                info_log.as_mut_ptr() as *mut c_void,
+                log_size as *mut c_void,
+                error_log.as_mut_ptr() as *mut c_void,
+                log_size as *mut c_void,
+                0 as *mut c_void,
+                0 as *mut c_void,
+            ];
+
+            let mut linkstate = std::ptr::null_mut();
+            ctx.cuLinkCreate_v2(
+                options.len() as _,
+                options.as_mut_ptr(),
+                option_values.as_mut_ptr(),
+                &mut linkstate,
+            )
+            .check()
+            .unwrap();
+
+            ctx.cuLinkAddData_v2(
+                linkstate,
+                cuda_rs::CUjitInputType::CU_JIT_INPUT_PTX,
+                asm.as_ptr() as *mut c_void,
+                self.asm.len(),
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+            .check()
+            .or_else(|err| {
+                let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
+                log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
+                Err(err)
+            }).unwrap();
+
+            let mut link_out = std::ptr::null_mut();
+            let mut link_out_size = 0;
+            ctx.cuLinkComplete(linkstate, &mut link_out, &mut link_out_size)
+                .check()
+                .or_else(|err| {
+                    let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
+                    log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
+                    Err(err)
+                }).unwrap();
+
+            log::trace!(
+                "Detailed linker output: {}",
+                CStr::from_bytes_until_nul(&info_log)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            );
+
+            let mut out: Vec<u8> = Vec::with_capacity(link_out_size);
+            std::ptr::copy_nonoverlapping(link_out as *mut u8, out.as_mut_ptr(), link_out_size);
+            out.set_len(link_out_size);
+
+            ctx.cuLinkDestroy(linkstate).check().unwrap();
+
+            self.data = out;
+        }
+        unsafe {
+            let mut module = std::ptr::null_mut();
+            ctx.cuModuleLoadData(&mut module, self.data.as_ptr() as *const c_void)
+                .check()
+                .unwrap();
+            self.module = module;
+
+            let fname = CString::new(Self::ENTRY_POINT).unwrap();
+            let mut func = std::ptr::null_mut();
+            ctx.cuModuleGetFunction(&mut func, self.module, fname.as_ptr() as *const i8)
+                .check()
+                .unwrap();
+            self.func = func;
+        }
+    }
+
+    fn execute_async(&mut self, ir: &mut crate::schedule::ScheduleIr) {
+        let ctx = self.device.ctx();
+        unsafe {
+            let mut unused = 0;
+            let mut block_size = 0;
+            ctx.cuOccupancyMaxPotentialBlockSize(
+                &mut unused,
+                &mut block_size,
+                self.func,
+                None,
+                0,
+                0,
+            )
+            .check()
+            .unwrap();
+            let block_size = block_size as u32;
+
+            let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
+
+            let mut params = vec![ir.size() as u64];
+            params.extend(
+                ir.buffers()
+                    .iter()
+                    .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().as_ptr()),
+            );
+
+            ctx.cuLaunchKernel(
+                self.func,
+                grid_size,
+                1,
+                1,
+                block_size as _,
+                1,
+                1,
+                0,
+                **self.stream,
+                [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
+                std::ptr::null_mut(),
+            )
+            .check()
+            .unwrap();
+        }
+    }
+
+    fn assembly(&self) -> &str {
+        &self.asm
     }
 }
 
