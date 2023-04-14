@@ -1,4 +1,3 @@
-
 use crate::jit::Jit;
 use crate::trace::{ReduceOp, Trace};
 

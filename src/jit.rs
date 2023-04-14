@@ -62,12 +62,15 @@ fn depends_on(passes: &[Pass], a: usize, b: usize) -> bool {
     }
     return false;
 }
-fn try_merge(passes: &mut Vec<Pass>, dst: usize, src: usize) -> Option<()> {
+///
+/// Try to merge src into dst.
+///
+fn try_merge(passes: &mut Vec<Pass>, dst: usize, src: usize) -> bool {
     if passes[dst].size != passes[src].size {
-        return None;
+        return false;
     }
     if depends_on(&passes, dst, src) {
-        return None;
+        return false;
     }
 
     let src_pass = passes.remove(src);
@@ -85,7 +88,7 @@ fn try_merge(passes: &mut Vec<Pass>, dst: usize, src: usize) -> Option<()> {
     passes[dst].deps.extend_from_slice(&src_pass.deps);
     passes[dst].ids.extend_from_slice(&src_pass.ids);
 
-    Some(())
+    true
 }
 
 impl Jit {
@@ -220,7 +223,7 @@ impl Jit {
         for i in (0..passes.len()).rev() {
             for j in (0..i).rev() {
                 // Try to merge i into j
-                if try_merge(&mut passes, j, i).is_some() {
+                if try_merge(&mut passes, j, i) {
                     break;
                 }
             }
