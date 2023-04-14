@@ -22,9 +22,10 @@ use crate::var::{Op, VarId};
 ///
 #[derive(Debug, Default)]
 pub struct Jit {
-    // pub schedules: Vec<ScheduleIr>,
+    // schedules: Vec<ScheduleIr>,
+    // hashes: Vec<u128>,
+    // passes: Vec<Pass>,
     pub kernels: HashMap<u128, Box<dyn Kernel>>,
-    // pub hashes: Vec<u128>,
 }
 
 ///
@@ -149,7 +150,7 @@ impl Jit {
     ///
     /// Collect neccesary passes from `ir`.
     /// NOTE: We would need to correctly assign dependencies on scatter
-    /// NOTE: Passes are in ordered (DAG ordering)
+    /// NOTE: Passes are ordered (DAG ordering)
     ///
     fn passes(&self, ir: &Internal) -> Vec<Pass> {
         ///
@@ -171,7 +172,7 @@ impl Jit {
         }
         let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
         let mut id2pass = HashMap::new();
-        let passes = ir
+        let mut passes = ir
             .scheduled
             .iter()
             .enumerate()
@@ -194,6 +195,26 @@ impl Jit {
 
         // TODO: use passes to flatten dependencies and stop traversal eraly.
 
+        // Merge passes if possible
+        //
+        // The problem we try to solve is the following:
+        //
+        // The nodes in `ir` are represent DAG, so do the `passes`.
+        // They are also stored in a topological ordering.
+        // We try to merge as many passes as possible.
+        // Passes can only be merged if tey have the same size.
+        //
+        // This algorithm is not perfect and results in a potentially sub optimal result.
+        // Also, using hash sets might not be the best approach.
+        for i in (0..passes.len()).rev() {
+            for j in (0..i).rev() {
+                // Try to merge i into j
+                if try_merge(&mut passes, j, i) {
+                    break;
+                }
+            }
+        }
+
         passes
     }
     ///
@@ -207,28 +228,9 @@ impl Jit {
         if ir.scheduled.len() == 0 {
             return vec![];
         }
-        // self.schedules.clear();
-        // self.kernels.clear();
 
-        // The problem we try to solve is the following:
-        //
-        // The nodes in `ir` are represent DAG, so do the `passes`.
-        // They are also stored in a topological ordering.
-        // We try to merge as many passes as possible.
-        // Passes can only be merged if tey have the same size.
-        //
-        // This algorithm is not perfect and results in a potentially sub optimal result.
-        // Also, using hash sets might not be the best approach.
-        let mut passes = self.passes(&ir);
+        let passes = self.passes(&ir);
 
-        for i in (0..passes.len()).rev() {
-            for j in (0..i).rev() {
-                // Try to merge i into j
-                if try_merge(&mut passes, j, i) {
-                    break;
-                }
-            }
-        }
         let first_register = ir.backend.as_ref().unwrap().first_register();
         let schedules = passes
             .into_iter()
