@@ -3,12 +3,12 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use cuda_rs::{CUcontext, CUdevice_attribute, CudaApi, CudaError};
+use cuda_rs::{CUcontext, CUdevice_attribute, CUstream, CudaApi, CudaError};
 
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum InstanceError {
+pub enum Error {
     #[error("{}", .0)]
     CudaError(#[from] CudaError),
     #[error("Loading Error {}", .0)]
@@ -43,12 +43,6 @@ impl Drop for CtxRef {
             self.device.instance.api.cuCtxPopCurrent_v2(&mut old_ctx);
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum DeviceError {
-    #[error("{}", .0)]
-    CudaError(#[from] CudaError),
 }
 
 pub struct InternalDevice {
@@ -90,7 +84,7 @@ impl Debug for InternalDevice {
 }
 
 impl InternalDevice {
-    pub fn new(instance: &Arc<Instance>, id: i32) -> Result<Self, DeviceError> {
+    pub fn new(instance: &Arc<Instance>, id: i32) -> Result<Self, Error> {
         unsafe {
             let api = &instance.api;
             let mut ctx = std::ptr::null_mut();
@@ -220,6 +214,7 @@ impl Drop for InternalDevice {
     }
 }
 
+#[derive(Clone)]
 pub struct Device {
     internal: Arc<InternalDevice>,
 }
@@ -232,7 +227,7 @@ impl Debug for Device {
 }
 
 impl Device {
-    pub fn create(instance: &Arc<Instance>, id: i32) -> Result<Self, DeviceError> {
+    pub fn create(instance: &Arc<Instance>, id: i32) -> Result<Self, Error> {
         let internal = Arc::new(InternalDevice::new(&instance, id)?);
 
         Ok(Self { internal })
@@ -261,7 +256,7 @@ impl Debug for Instance {
     }
 }
 impl Instance {
-    pub fn new() -> Result<Self, InstanceError> {
+    pub fn new() -> Result<Self, Error> {
         unsafe {
             let api = CudaApi::find_and_load()?;
             api.cuInit(0).check()?;
@@ -288,10 +283,7 @@ impl Instance {
                     cuda_version_major,
                     cuda_version_minor
                 );
-                return Err(InstanceError::VersionError(
-                    cuda_version_major,
-                    cuda_version_minor,
-                ));
+                return Err(Error::VersionError(cuda_version_major, cuda_version_minor));
             }
             Ok(Self {
                 api,
@@ -308,4 +300,42 @@ impl Instance {
 
 impl Drop for Instance {
     fn drop(&mut self) {}
+}
+
+pub struct Stream {
+    raw: CUstream,
+    device: Device,
+}
+
+impl Stream {
+    pub fn create(device: &Device, flags: cuda_rs::CUstream_flags_enum) -> Result<Self, Error> {
+        let ctx = device.ctx();
+        unsafe {
+            let mut stream = std::ptr::null_mut();
+            ctx.cuStreamCreate(&mut stream, flags as _).check()?;
+
+            Ok(Self {
+                raw: stream,
+                device: device.clone(),
+            })
+        }
+    }
+}
+
+impl Deref for Stream {
+    type Target = CUstream;
+
+    fn deref(&self) -> &Self::Target {
+        &self.raw
+    }
+}
+
+impl Drop for Stream {
+    fn drop(&mut self) {
+        let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuStreamSynchronize(self.raw).check().unwrap();
+            ctx.cuStreamDestroy_v2(self.raw).check().unwrap();
+        }
+    }
 }

@@ -3,18 +3,16 @@ use std::fmt::{Debug, Write};
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::cuda_core::{Device, DeviceError, Instance, InstanceError};
+use super::cuda_core::{Device, Instance};
 use crate::backend;
 use crate::schedule::{SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
 
 #[derive(Debug, Error)]
-pub enum BackendError {
+pub enum Error {
     #[error("{}", .0)]
-    InstanceError(#[from] InstanceError),
-    #[error("{}", .0)]
-    DeviceError(#[from] DeviceError),
+    CoreError(#[from] super::cuda_core::Error),
 }
 
 #[derive(Debug)]
@@ -23,7 +21,7 @@ pub struct Backend {
     device: Arc<Device>,
 }
 impl Backend {
-    pub fn new() -> Result<Self, BackendError> {
+    pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(Instance::new()?);
         let device = Arc::new(Device::create(&instance, 0)?);
         Ok(Self { instance, device })
