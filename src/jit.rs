@@ -44,33 +44,48 @@ pub struct Jit {
 ///
 #[derive(Debug)]
 struct Pass {
-    ids: HashSet<VarId>,
-    deps: HashSet<VarId>,
+    ids: Vec<VarId>,
+    deps: Vec<usize>,
     size: usize,
 }
-
-#[derive(Debug)]
-struct LaunchGraph {
-    passes: Vec<Pass>,
-}
-
-impl Pass {
-    ///
-    /// Try to merge `other` into self.
-    /// This is only possible if `other.size` == `self.size`
-    /// and `other` does not depend on `self`.
-    ///
-    fn try_merge(&mut self, other: &Self) -> Option<()> {
-        if self.size != other.size {
-            return None;
-        }
-        if !self.ids.is_disjoint(&other.deps) {
-            return None;
-        }
-        self.ids = self.ids.union(&other.ids).cloned().collect();
-        self.deps = self.deps.union(&other.deps).cloned().collect();
-        Some(())
+///
+/// Does a depend on b?
+///
+fn depends_on(passes: &[Pass], a: usize, b: usize) -> bool {
+    if a == b {
+        return true;
     }
+    for dep in passes[b].deps.iter() {
+        if depends_on(passes, a, *dep) {
+            return true;
+        }
+    }
+    return false;
+}
+fn try_merge(passes: &mut Vec<Pass>, dst: usize, src: usize) -> Option<()> {
+    if passes[dst].size != passes[src].size {
+        return None;
+    }
+    if depends_on(&passes, dst, src) {
+        return None;
+    }
+
+    let src_pass = passes.remove(src);
+
+    for pass in passes[src..].iter_mut() {
+        for dep in pass.deps.iter_mut() {
+            if *dep == src {
+                *dep = dst;
+            } else if *dep > src {
+                *dep -= 1;
+            }
+        }
+    }
+
+    passes[dst].deps.extend_from_slice(&src_pass.deps);
+    passes[dst].ids.extend_from_slice(&src_pass.ids);
+
+    Some(())
 }
 
 impl Jit {
@@ -151,15 +166,21 @@ impl Jit {
             }
         }
         let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
+        let mut id2pass = HashMap::new();
         let passes = ir
             .scheduled
             .iter()
-            .map(|id| {
+            .enumerate()
+            .map(|(i, id)| {
                 let mut deps = HashSet::new();
                 dependencies_in(ir, *id, &scheduled, &mut deps);
-                let deps = deps.difference(&HashSet::from([*id])).cloned().collect();
+                let deps = deps
+                    .difference(&HashSet::from([*id]))
+                    .map(|dep| id2pass[dep])
+                    .collect();
+                id2pass.insert(*id, i);
                 Pass {
-                    ids: HashSet::from([*id]),
+                    ids: vec![*id],
                     deps,
                     size: ir.var(*id).size,
                 }
@@ -197,13 +218,8 @@ impl Jit {
 
         for i in (0..passes.len()).rev() {
             for j in (0..i).rev() {
-                // Try to merge p1 into p0
-                // SAFETY: We know that i and j are distinct indices and this does the same as
-                // get_multiple_mut which is not stable yet.
-                let p0 = unsafe { &mut *(&passes[j] as *const _ as *mut Pass) };
-                let p1 = unsafe { &mut *(&passes[i] as *const _ as *mut Pass) };
-                if p0.try_merge(p1).is_some() {
-                    passes.remove(i);
+                // Try to merge i into j
+                if try_merge(&mut passes, j, i).is_some() {
                     break;
                 }
             }
