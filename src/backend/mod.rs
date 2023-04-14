@@ -8,6 +8,9 @@ use crate::schedule::ScheduleIr;
 
 pub trait Texture: Debug {
     fn as_any(&self) -> &dyn Any;
+    fn channels(&self) -> usize;
+    fn dimensions(&self) -> usize;
+    fn shape(&self) -> &[usize];
 }
 
 pub trait Kernel: Debug {

@@ -63,12 +63,8 @@ impl Trace {
             op,
             deps,
             ty,
-            last_write: None,
-            // param_ty: ParamType::None,
-            buffer: None,
             size,
-            rc: 0,
-            literal: 0,
+            ..Default::default()
         });
         ret
     }
@@ -353,8 +349,9 @@ impl VarRef {
         ret
     }
 
-    pub fn tex_lookup(&self, pos: &[&VarRef]) -> [Self; 4] {
+    pub fn tex_lookup(&self, pos: &[&VarRef]) -> smallvec::SmallVec<[Self; 4]> {
         self.schedule();
+        assert_eq!(pos[0].size(), pos[1].size());
         let size = pos[0].size();
         assert!(pos.iter().all(|p| p.size() == size));
         let lookup = self.ir.push_var(Var {
@@ -367,16 +364,14 @@ impl VarRef {
             ..Default::default()
         });
 
-        [
-            self.ir
-                .push_var_op(Op::Extract { offset: 0 }, &[&lookup], VarType::F32, size),
-            self.ir
-                .push_var_op(Op::Extract { offset: 1 }, &[&lookup], VarType::F32, size),
-            self.ir
-                .push_var_op(Op::Extract { offset: 2 }, &[&lookup], VarType::F32, size),
-            self.ir
-                .push_var_op(Op::Extract { offset: 3 }, &[&lookup], VarType::F32, size),
-        ]
+        let n_dims = self.var().texture.as_ref().unwrap().dimensions();
+        (0..n_dims)
+            .into_iter()
+            .map(|i| {
+                self.ir
+                    .push_var_op(Op::Extract { offset: i }, &[&lookup], VarType::F32, size)
+            })
+            .collect::<smallvec::SmallVec<_>>()
     }
     /// Reindex a variable with a new index and size.
     /// (Normally size is the size of the index)
@@ -451,12 +446,8 @@ impl VarRef {
         let res = self.ir.push_var(Var {
             op: Op::Scatter { op: reduce_op },
             deps: smallvec![self.id(), dst.id(), idx.id(), mask.id()],
-            last_write: None,
-            ty: VarType::Void,
-            buffer: None,
             size,
-            rc: 0,
-            literal: 0, // ..Default::default()
+            ..Default::default()
         });
         res.schedule();
         dst.var().last_write = Some(res.id()); // Set side effect

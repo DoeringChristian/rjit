@@ -4,7 +4,7 @@ use std::sync::Arc;
 use slotmap::DefaultKey;
 use smallvec::SmallVec;
 
-use crate::backend::Buffer;
+use crate::backend::{Buffer, Texture};
 ///
 /// TODO: better param enum
 ///
@@ -92,8 +92,8 @@ pub enum Op {
 // TODO: Vector types
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub enum VarType {
-    Void,
     #[default]
+    Void,
     Bool,
     I8,
     U8,
@@ -216,7 +216,8 @@ pub struct Var {
     pub last_write: Option<VarId>,
     pub ty: VarType,                     // Type of the variable
     pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer (TODO: Box > Arc)
-    pub size: usize,                     // number of elements
+    pub texture: Option<Arc<dyn Texture>>,
+    pub size: usize, // number of elements
     pub rc: usize,
     pub literal: u64,
 }

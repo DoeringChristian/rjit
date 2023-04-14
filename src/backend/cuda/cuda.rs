@@ -122,6 +122,8 @@ impl backend::Backend for Backend {
                 .check()
                 .unwrap();
             Box::new(Texture {
+                n_channels,
+                shape: smallvec::SmallVec::from(shape),
                 array,
                 tex,
                 device: self.device.clone(),
@@ -212,12 +214,36 @@ impl Drop for Buffer {
 pub struct Texture {
     tex: u64,
     array: cuda_rs::CUarray,
+    n_channels: usize,
+    shape: smallvec::SmallVec<[usize; 4]>,
     device: Device,
+}
+
+impl Drop for Texture {
+    fn drop(&mut self) {
+        let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuArrayDestroy(self.array).check().unwrap();
+            ctx.cuTexObjectDestroy(self.tex).check().unwrap();
+        }
+    }
 }
 
 impl backend::Texture for Texture {
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn channels(&self) -> usize {
+        self.n_channels
+    }
+
+    fn dimensions(&self) -> usize {
+        self.shape.len()
+    }
+
+    fn shape(&self) -> &[usize] {
+        &self.shape
     }
 }
 
