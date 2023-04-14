@@ -155,10 +155,10 @@ impl Jit {
             ir: &Internal,
             id: VarId,
             scheduled: &HashSet<VarId>,
-            deps: &mut HashSet<VarId>,
+            deps: &mut Vec<VarId>,
         ) {
             if scheduled.contains(&id) {
-                deps.insert(id);
+                deps.push(id);
             }
             let var = ir.var(id);
             for dep in var.deps.iter() {
@@ -172,11 +172,12 @@ impl Jit {
             .iter()
             .enumerate()
             .map(|(i, id)| {
-                let mut deps = HashSet::new();
+                let mut deps = Vec::new();
                 dependencies_in(ir, *id, &scheduled, &mut deps);
                 let deps = deps
-                    .difference(&HashSet::from([*id]))
-                    .map(|dep| id2pass[dep])
+                    .into_iter()
+                    .filter(|dep| dep != id)
+                    .map(|dep| id2pass[&dep])
                     .collect();
                 id2pass.insert(*id, i);
                 Pass {
