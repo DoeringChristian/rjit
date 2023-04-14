@@ -158,13 +158,6 @@ impl backend::Kernel for Kernel {
                 .device
                 .create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)
                 .unwrap();
-            // let mut stream = std::ptr::null_mut();
-            // ctx.cuStreamCreate(
-            //     &mut stream,
-            //     cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT as _,
-            // )
-            // .check()
-            // .unwrap();
 
             let mut params = vec![ir.size() as u64];
             params.extend(ir.buffers().iter().map(|b| b.as_ptr()));
@@ -186,8 +179,6 @@ impl backend::Kernel for Kernel {
             .unwrap();
 
             stream.synchronize().unwrap();
-            // ctx.cuStreamSynchronize(stream).check().unwrap();
-            // ctx.cuStreamDestroy_v2(stream).check().unwrap();
         }
     }
     fn compile(&mut self) {
