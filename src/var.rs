@@ -8,7 +8,7 @@ use crate::backend::{Buffer, Texture};
 ///
 /// TODO: better param enum
 ///
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum ParamType {
     #[default]
     None,
@@ -17,7 +17,7 @@ pub enum ParamType {
     // Literal,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum ReduceOp {
     #[default]
     None,
@@ -29,7 +29,7 @@ pub enum ReduceOp {
     Or,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum Op {
     // Data,
     #[default]

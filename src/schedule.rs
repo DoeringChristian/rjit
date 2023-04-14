@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use smallvec::{smallvec, SmallVec};
@@ -22,7 +23,7 @@ impl std::fmt::Display for SVarId {
 ///
 /// Variables are densly stored in the ScheduleIr, simplifying the compilation.
 ///
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Hash)]
 pub struct ScheduleVar {
     pub op: Op,
     pub deps: SmallVec<[SVarId; 4]>,
@@ -236,5 +237,11 @@ impl ScheduleIr {
             self.visited.insert(id, svid);
             svid
         }
+    }
+    pub fn internal_hash(&self) -> u128 {
+        let mut hasher = fasthash::murmur3::Hasher128_x64::default();
+        self.vars.hash(&mut hasher);
+
+        hasher.finish() as _
     }
 }

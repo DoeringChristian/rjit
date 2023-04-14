@@ -22,8 +22,9 @@ use crate::var::{Op, VarId};
 ///
 #[derive(Debug, Default)]
 pub struct Jit {
-    pub schedules: Vec<ScheduleIr>,
-    pub kernels: Vec<Box<dyn Kernel>>,
+    // pub schedules: Vec<ScheduleIr>,
+    pub kernels: HashMap<u128, Box<dyn Kernel>>,
+    // pub hashes: Vec<u128>,
 }
 
 ///
@@ -114,14 +115,14 @@ impl Jit {
             }
         }
 
-        self.compile(ir);
-        let n_kernels = self.kernels.len();
-        for i in 0..n_kernels {
-            let (kernel, schedule) = self.schedule_kernel(i);
-            kernel.execute_async(schedule);
-            ir.backend.as_ref().unwrap().synchronize(); // TODO: only sync if we have
-                                                        // dependencies
+        let schedules = self.compile(ir);
+        for (hash, pass, mut schedule) in schedules {
+            self.kernels
+                .get_mut(&hash)
+                .unwrap()
+                .execute_async(&mut schedule);
         }
+        ir.backend.as_ref().unwrap().synchronize();
 
         // After executing the kernels, the Ir is cleaned up.
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to
@@ -202,12 +203,12 @@ impl Jit {
     /// Then, a Schedule Intermediate Representation is constructed from the groups.
     /// In the end a set of Kernels is assembled and compiled.
     ///
-    fn compile(&mut self, ir: &Internal) {
+    fn compile(&mut self, ir: &Internal) -> Vec<(u128, Pass, ScheduleIr)> {
         if ir.scheduled.len() == 0 {
-            return;
+            return vec![];
         }
-        self.schedules.clear();
-        self.kernels.clear();
+        // self.schedules.clear();
+        // self.kernels.clear();
 
         // The problem we try to solve is the following:
         //
@@ -229,45 +230,54 @@ impl Jit {
             }
         }
         let first_register = ir.backend.as_ref().unwrap().first_register();
-        self.schedules = passes
-            .iter()
+        let schedules = passes
+            .into_iter()
             .map(|pass| {
                 let mut s = ScheduleIr::new(first_register, pass.size);
                 s.collect_vars(ir, &pass.ids.iter().cloned().collect::<Vec<_>>());
-                s
+
+                let hash = s.internal_hash();
+                let kernel = self.kernels.entry(hash).or_insert({
+                    let mut kernel = ir.backend.as_ref().unwrap().new_kernel();
+                    kernel.assemble(&mut s);
+                    kernel.compile();
+                    kernel
+                });
+                (hash, pass, s)
             })
             .collect::<Vec<_>>();
 
-        // TODO: paralelize by populating kernels first.
-        self.kernels = self
-            .schedules
-            .iter()
-            .map(|mut s| {
-                let mut kernel = ir.backend.as_ref().unwrap().new_kernel();
-                kernel.assemble(&mut s);
-                // kernel.compile();
-                kernel
-            })
-            .collect::<Vec<_>>();
-        for kernel in self.kernels.iter_mut() {
-            kernel.compile();
-        }
+        schedules
     }
-    pub fn schedule_kernel(&mut self, i: usize) -> (&mut Box<dyn Kernel>, &mut ScheduleIr) {
-        (&mut self.kernels[i], &mut self.schedules[i])
-    }
+
     ///
     /// Writes the kernel assemblies into a string which can then be checked by snapshot testing
     /// tools such as insta.
     ///
     pub fn kernel_debug(&self) -> String {
-        let mut string = String::new();
-        for (i, k) in self.kernels.iter().enumerate() {
-            writeln!(string, "===============================================").unwrap();
-            writeln!(string, "Kernel {}:", i).unwrap();
-            writeln!(string, "").unwrap();
-            write!(string, "{}", k.assembly()).unwrap();
-        }
+        let mut kernel_strings = self
+            .kernels
+            .iter()
+            .map(|(hash, k)| {
+                let mut string = String::new();
+                writeln!(string, "===============================================").unwrap();
+                writeln!(string, "Kernel {}:", hash).unwrap();
+                writeln!(string, "").unwrap();
+                write!(string, "{}", k.assembly()).unwrap();
+                (string, hash)
+            })
+            .collect::<Vec<_>>();
+
+        kernel_strings.sort_by(|(_, hash0), (_, hash1)| hash0.cmp(hash1));
+
+        let string = kernel_strings.into_iter().map(|(string, _)| string).fold(
+            String::new(),
+            |mut s0, s1| {
+                s0.push_str(&s1);
+                s0
+            },
+        );
+
         string
     }
 }

@@ -25,6 +25,8 @@ cuda-rs = { git = "https://github.com/DoeringChristian/cuda-rs.git" }
 bytesize = "1.2.0"
 libloading = "0.8.0"
 thiserror = "1.0.40"
+xxhash-c-sys = "0.8.3"
+fasthash = "0.4.0"
 
 [dev-dependencies]
 insta = { version = "1.28.0" }
