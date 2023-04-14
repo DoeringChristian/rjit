@@ -3,7 +3,7 @@ use std::fmt::{Debug, Write};
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::cuda_core::{Device, Instance};
+use super::cuda_core::{Device, Instance, Stream};
 use crate::backend;
 use crate::schedule::{SVarId, ScheduleIr};
 use crate::trace::VarType;
@@ -17,14 +17,15 @@ pub enum Error {
 
 #[derive(Debug)]
 pub struct Backend {
-    instance: Arc<Instance>,
     device: Device,
+    stream: Stream,
 }
 impl Backend {
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(Instance::new()?);
         let device = Device::create(&instance, 0)?;
-        Ok(Self { instance, device })
+        let stream = device.create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)?;
+        Ok(Self { device, stream })
     }
 }
 

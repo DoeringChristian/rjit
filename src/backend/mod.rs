@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::schedule::ScheduleIr;
 
-pub trait Texture: Debug + Send + Sync {}
+pub trait Texture: Debug {}
 
 pub trait Kernel: Debug {
     fn assemble(&mut self, ir: &ScheduleIr);
@@ -14,12 +14,12 @@ pub trait Kernel: Debug {
     fn assembly(&self) -> &str;
 }
 
-pub trait Buffer: Send + Sync + Debug {
+pub trait Buffer: Debug {
     fn as_ptr(&self) -> u64;
     fn copy_to_host(&self, dst: &mut [u8]);
 }
 
-pub trait Backend: Debug + Send + Sync {
+pub trait Backend: Debug {
     // type Kernel: Kernel;
     // type Buffer: Buffer;
     fn new_kernel(&self) -> Box<dyn Kernel>;

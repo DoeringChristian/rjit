@@ -305,6 +305,7 @@ impl Drop for Instance {
     fn drop(&mut self) {}
 }
 
+#[derive(Debug)]
 pub struct Stream {
     raw: CUstream,
     device: Device,
