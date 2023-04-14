@@ -80,6 +80,10 @@ impl backend::Backend for Backend {
     fn first_register(&self) -> usize {
         Kernel::FIRST_REGISTER
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl Drop for Backend {
@@ -92,11 +96,12 @@ pub struct Buffer {
     dptr: u64,
     size: usize,
 }
-impl backend::Buffer for Buffer {
+impl Buffer {
     fn as_ptr(&self) -> u64 {
         self.dptr
     }
-
+}
+impl backend::Buffer for Buffer {
     fn copy_to_host(&self, dst: &mut [u8]) {
         unsafe {
             let ctx = self.device.ctx();
@@ -106,6 +111,10 @@ impl backend::Buffer for Buffer {
                 .check()
                 .unwrap();
         }
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -159,7 +168,11 @@ impl backend::Kernel for Kernel {
             let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
 
             let mut params = vec![ir.size() as u64];
-            params.extend(ir.buffers().iter().map(|b| b.as_ptr()));
+            params.extend(
+                ir.buffers()
+                    .iter()
+                    .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().as_ptr()),
+            );
 
             ctx.cuLaunchKernel(
                 self.func,
@@ -445,6 +458,10 @@ impl backend::Kernel for Kernel {
         std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
 
         log::trace!("{}", self.asm);
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
