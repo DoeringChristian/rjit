@@ -105,6 +105,9 @@ impl ScheduleIr {
     pub fn buffers(&self) -> &[Arc<dyn Buffer>] {
         &self.buffers
     }
+    pub fn textures(&self) -> &[Arc<dyn Texture>] {
+        &self.textures
+    }
     pub fn n_regs(&self) -> usize {
         self.n_regs
     }
@@ -251,6 +254,7 @@ impl ScheduleIr {
                 ty: var.ty.clone(),
                 reg,
                 buf,
+                tex,
                 ..Default::default()
             });
             self.visited.insert(id, svid);

@@ -14,7 +14,13 @@ fn reduce_op_name(op: ReduceOp) -> &'static str {
 }
 
 #[allow(warnings)]
-pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId) {
+pub fn assemble_var(
+    asm: &mut impl std::fmt::Write,
+    ir: &ScheduleIr,
+    id: SVarId,
+    buf_offset: usize,
+    tex_offset: usize,
+) {
     let var = ir.var(id);
     writeln!(asm, "");
     writeln!(asm, "\t// [{}]: {:?} =>", id, var);
@@ -804,7 +810,7 @@ pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId)
             }
 
             // Load buffer ptr:
-            let param_offset = (src.buf.unwrap() + 1) * 8;
+            let param_offset = (src.buf.unwrap() + buf_offset) * 8;
 
             writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
@@ -870,7 +876,7 @@ pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId)
                 writeln!(asm, "    @!{} bra l_{}_done;\n", mask.reg(), var.reg_idx());
             }
 
-            let param_offset = (dst.buf.unwrap() + 1) * 8;
+            let param_offset = (dst.buf.unwrap() + buf_offset) * 8;
 
             writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
@@ -918,7 +924,7 @@ pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId)
         Op::TexLookup { dim } => {
             let src = ir.var(var.deps[0]);
             // Load texture ptr:
-            let param_offset = (src.buf.unwrap() + 1) * 8;
+            let param_offset = (src.tex.unwrap() + tex_offset) * 8;
 
             writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
