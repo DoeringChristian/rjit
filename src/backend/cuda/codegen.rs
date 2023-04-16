@@ -928,12 +928,12 @@ pub fn assemble_var(
 
             writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
-            writeln!(asm, "\t{}_out_<4>;", var.reg());
+            writeln!(asm, "\t.reg.f32 {}_out_<4>;", var.reg());
             if dim == 3 {
                 writeln!(
                     asm,
                     "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [%rd0, {{{d1}, {d2}, {d3}, {d3}}}]",
+                             {v}_out_3}}, [%rd0, {{{d1}, {d2}, {d3}, {d3}}}];",
                     v = var.reg(),
                     // d0 = ir.reg(var.deps[0]),
                     d1 = ir.reg(var.deps[1]),
@@ -943,8 +943,8 @@ pub fn assemble_var(
             } else if dim == 2 {
                 writeln!(
                     asm,
-                    "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [%rd0, {{{d1}, {d2}}}]",
+                    "\ttex.2d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
+                             {v}_out_3}}, [%rd0, {{{d1}, {d2}}}];",
                     v = var.reg(),
                     // d0 = ir.reg(var.deps[0]),
                     d1 = ir.reg(var.deps[1]),
@@ -953,8 +953,8 @@ pub fn assemble_var(
             } else if dim == 1 {
                 writeln!(
                     asm,
-                    "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [%rd0, {{{d1}}}]",
+                    "\ttex.1d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
+                             {v}_out_3}}, [%rd0, {{{d1}}}];",
                     v = var.reg(),
                     // d0 = ir.reg(var.deps[0]),
                     d1 = ir.reg(var.deps[1]),

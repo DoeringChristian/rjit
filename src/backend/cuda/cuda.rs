@@ -46,8 +46,10 @@ impl backend::Backend for Backend {
         })
     }
 
-    fn create_texture(&self, shape: &[usize], n_channels: usize) -> Box<dyn backend::Texture> {
+    fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
         let ctx = self.device.ctx();
+        dbg!(shape);
+        dbg!(n_channels);
         unsafe {
             let mut tex = 0;
             let mut array = std::ptr::null_mut();
@@ -88,16 +90,16 @@ impl backend::Backend for Backend {
                 flags: 0,
             };
             let tex_desc = cuda_rs::CUDA_TEXTURE_DESC {
-                addressMode: todo!(),
-                filterMode: todo!(),
-                flags: todo!(),
-                maxAnisotropy: todo!(),
-                mipmapFilterMode: todo!(),
-                mipmapLevelBias: todo!(),
-                minMipmapLevelClamp: todo!(),
-                maxMipmapLevelClamp: todo!(),
-                borderColor: todo!(),
-                reserved: todo!(),
+                addressMode: [cuda_rs::CUaddress_mode::CU_TR_ADDRESS_MODE_WRAP; 3],
+                filterMode: cuda_rs::CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
+                flags: 1,
+                maxAnisotropy: 1,
+                mipmapFilterMode: cuda_rs::CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
+                mipmapLevelBias: Default::default(),
+                minMipmapLevelClamp: Default::default(),
+                maxMipmapLevelClamp: Default::default(),
+                borderColor: Default::default(),
+                reserved: Default::default(),
             };
             let view_desc = cuda_rs::CUDA_RESOURCE_VIEW_DESC {
                 format: if n_channels == 1 {
@@ -118,10 +120,12 @@ impl backend::Backend for Backend {
                 lastLayer: Default::default(),
                 reserved: Default::default(),
             };
+            dbg!(&tex_desc);
+            dbg!(&view_desc);
             ctx.cuTexObjectCreate(&mut tex, &res_desc, &tex_desc, &view_desc)
                 .check()
                 .unwrap();
-            Box::new(Texture {
+            Arc::new(Texture {
                 n_channels,
                 shape: smallvec::SmallVec::from(shape),
                 array,

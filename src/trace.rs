@@ -165,8 +165,22 @@ impl Trace {
         });
         v
     }
-    pub fn texture(&self, array: &VarRef, shape: &[usize]) -> VarRef {
-        todo!()
+    pub fn texture(&self, shape: &[usize]) -> VarRef {
+        let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap();
+        let texture = self
+            .0
+            .borrow_mut()
+            .backend
+            .as_ref()
+            .unwrap()
+            .create_texture(shape, 4);
+        self.push_var(Var {
+            op: Op::Nop,
+            ty: VarType::U32,
+            size,
+            texture: Some(texture),
+            ..Default::default()
+        })
     }
 }
 

@@ -13,18 +13,19 @@ fn main() {
     let ir = Trace::default();
     ir.set_backend("cuda");
 
-    let x = ir.buffer_u32(&[0, 0, 0, 0]);
+    let x = ir.buffer_f32(&[0.1, 0.2]);
+    let y = ir.buffer_f32(&[0.1, 0.2]);
 
-    let i = ir.buffer_u32(&[0, 0, 0]);
+    let tex = ir.texture(&[10, 10]);
 
-    let y = ir.literal_u32(1);
+    let res = tex.tex_lookup(&[&x, &y]);
 
-    y.scatter_reduce(&x, &i, None, ReduceOp::Add);
+    let r = res[0].clone();
 
-    ir.schedule(&[&x]);
+    r.schedule();
 
     let mut jit = Jit::default();
     jit.eval(&mut ir.borrow_mut());
 
-    assert_eq!(x.to_host_u32(), vec![3, 0, 0, 0]);
+    dbg!(r.to_host_f32());
 }
