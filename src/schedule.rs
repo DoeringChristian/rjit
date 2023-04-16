@@ -7,7 +7,7 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::backend::{Buffer, Texture};
 use crate::trace::Internal;
-use crate::var::{Op, ParamType, VarId, VarType};
+use crate::var::{Data, Op, ParamType, VarId, VarType};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SVarId(pub usize);
@@ -142,7 +142,7 @@ impl ScheduleIr {
             if var.ty.size() == 0 {
                 continue;
             }
-            let param = self.push_buffer(var.buffer.as_ref().unwrap());
+            let param = self.push_buffer(var.data.buffer().unwrap());
 
             let mut sv = self.var_mut(sv_id);
 
@@ -171,7 +171,7 @@ impl ScheduleIr {
             param_ty: ParamType::None,
             buf: None,
             tex: None,
-            literal: var.literal,
+            literal: 0,
             size: var.size,
         };
 
@@ -179,12 +179,12 @@ impl ScheduleIr {
 
         match var.op {
             Op::Data => {
-                sv.buf = Some(self.push_buffer(var.buffer.as_ref().unwrap()));
+                sv.buf = Some(self.push_buffer(var.data.buffer().unwrap()));
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
                 // sv.param_offset = self.push_param(var.literal);
-                sv.literal = var.literal;
+                sv.literal = var.data.literal().unwrap();
             }
             Op::Gather => {
                 sv.deps = smallvec![
@@ -235,20 +235,24 @@ impl ScheduleIr {
         if let Some(id) = self.visited.get(&id).cloned() {
             // In case this variable has already been traversed, just ensure that the buffer is
             // added as a parameter.
-            let sv = self.var(id);
-            if sv.buf.is_none() && var.buffer.is_some() {
-                let param = Some(self.push_buffer(&var.buffer.as_ref().unwrap()));
-                self.var_mut(id).buf = param;
-            } else if sv.tex.is_none() && var.texture.is_some() {
-                let tex = Some(self.push_texture(&var.texture.as_ref().unwrap()));
-                self.var_mut(id).buf = tex;
+            // let sv = self.var(id);
+            match &var.data {
+                Data::Buffer(buf) => {
+                    let buf = Some(self.push_buffer(buf));
+                    self.var_mut(id).buf = buf;
+                }
+                Data::Texture(tex) => {
+                    let tex = Some(self.push_texture(tex));
+                    self.var_mut(id).tex = tex;
+                }
+                _ => {}
             }
-
             id
         } else {
             let reg = self.next_reg();
-            let buf = var.buffer.as_ref().map(|buf| self.push_buffer(&buf));
-            let tex = var.texture.as_ref().map(|tex| self.push_texture(&tex));
+            let buf = var.data.buffer().map(|buf| self.push_buffer(&buf));
+            let tex = var.data.texture().map(|tex| self.push_texture(&tex));
+            dbg!(&tex);
             let svid = self.push_var(ScheduleVar {
                 op: Op::Data,
                 ty: var.ty.clone(),

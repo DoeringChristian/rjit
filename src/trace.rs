@@ -9,7 +9,7 @@ use slotmap::{DefaultKey, SlotMap};
 use smallvec::smallvec;
 
 use crate::backend::Backend;
-pub use crate::var::{Op, ReduceOp, Var, VarId, VarInfo, VarType};
+pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
 
 ///
 /// A wrapper arrund an Intermediate Representation.
@@ -89,15 +89,13 @@ macro_rules! buffer {
     ($TY:ident, $ty:ident) => {
         paste::paste! {
             pub fn [<buffer_$ty>](&self, slice: &[$ty]) -> VarRef {
-                let buffer = Some(
-                    self.borrow()
+                let buffer = self.borrow()
                         .backend
                         .as_ref()
                         .unwrap()
-                        .buffer_from_slice(cast_slice(slice)),
-                );
+                        .buffer_from_slice(cast_slice(slice));
                 self.push_var(Var {
-                    buffer,
+                    data: Data::Buffer(buffer),
                     size: slice.len(),
                     ty: VarType::$TY,
                     op: Op::Data,
@@ -116,7 +114,7 @@ macro_rules! literal {
                     op: Op::Literal,
                     deps: smallvec![],
                     ty: VarType::$TY,
-                    literal: bytemuck::cast::<_, $i>(val) as _,
+                    data: Data::Literal(bytemuck::cast::<_, $i>(val) as _),
                     size: 1,
                     ..Default::default()
                 })
@@ -178,7 +176,7 @@ impl Trace {
             op: Op::Nop,
             ty: VarType::U32,
             size,
-            texture: Some(texture),
+            data: Data::Texture(texture),
             ..Default::default()
         })
     }
@@ -286,7 +284,7 @@ macro_rules! to_host {
                 let mut dst = Vec::with_capacity(var.size);
                 unsafe{dst.set_len(var.size)};
 
-                var.buffer.as_ref().unwrap().copy_to_host(bytemuck::cast_slice_mut(&mut dst));
+                var.data.buffer().unwrap().copy_to_host(bytemuck::cast_slice_mut(&mut dst));
                 dst
             }
         }
@@ -385,7 +383,7 @@ impl VarRef {
             ..Default::default()
         });
 
-        let n_dims = self.var().texture.as_ref().unwrap().dimensions();
+        let n_dims = self.var().data.texture().unwrap().dimensions();
         (0..n_dims)
             .into_iter()
             .map(|i| {
@@ -431,8 +429,13 @@ impl VarRef {
 
         let op = v.op;
         let ty = v.ty.clone();
-        // let param_ty = v.param_ty;
-        let literal = v.literal;
+
+        let data = if let Some(lit) = v.data.literal() {
+            Data::Literal(lit)
+        } else {
+            Data::None
+        };
+
         drop(v);
 
         if op == Op::Idx {
@@ -443,11 +446,9 @@ impl VarRef {
                 op,
                 deps,
                 ty,
-                buffer: None,
                 size,
-                // param_ty,
                 rc: 0,
-                literal,
+                data,
                 ..Default::default()
             }));
         }
@@ -505,7 +506,7 @@ impl VarRef {
 
         // let res = self.as_ptr();
 
-        if self.var().buffer.is_some() {
+        if self.var().data.is_storage() {
             let ret = self.ir.push_var(Var {
                 op: Op::Gather,
                 deps: smallvec![self.id(), index.id(), mask.id()],

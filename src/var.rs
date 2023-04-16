@@ -214,12 +214,15 @@ pub struct Var {
     // Variable performing the latest write operation.
     // (used when building a scatter dependency chain).
     pub last_write: Option<VarId>,
-    pub ty: VarType,                     // Type of the variable
-    pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer (TODO: Box > Arc)
-    pub texture: Option<Arc<dyn Texture>>,
+    pub ty: VarType, // Type of the variable
+    // pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer
+    // TODO: unify buffer and texture to
+    // single enum
+    // pub texture: Option<Arc<dyn Texture>>,
     pub size: usize, // number of elements
     pub rc: usize,
-    pub literal: u64,
+    pub data: Data,
+    // pub literal: u64,
 }
 
 impl Var {
@@ -238,4 +241,60 @@ pub struct VarId(pub DefaultKey);
 pub struct VarInfo {
     pub ty: VarType,
     pub size: usize,
+}
+
+#[derive(Debug, Default)]
+pub enum Data {
+    #[default]
+    None,
+    Literal(u64),
+    Buffer(Arc<dyn Buffer>),
+    Texture(Arc<dyn Texture>),
+}
+impl Data {
+    pub fn is_none(&self) -> bool {
+        match self {
+            Self::None => true,
+            _ => false,
+        }
+    }
+    pub fn is_literal(&self) -> bool {
+        match self {
+            Self::Literal(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_buffer(&self) -> bool {
+        match self {
+            Self::Buffer(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_texture(&self) -> bool {
+        match self {
+            Self::Texture(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_storage(&self) -> bool {
+        self.is_buffer() || self.is_texture()
+    }
+    pub fn literal(&self) -> Option<u64> {
+        match self {
+            Self::Literal(lit) => Some(*lit),
+            _ => None,
+        }
+    }
+    pub fn buffer(&self) -> Option<&Arc<dyn Buffer>> {
+        match self {
+            Self::Buffer(buf) => Some(buf),
+            _ => None,
+        }
+    }
+    pub fn texture(&self) -> Option<&Arc<dyn Texture>> {
+        match self {
+            Self::Texture(tex) => Some(tex),
+            _ => None,
+        }
+    }
 }

@@ -47,7 +47,7 @@ body: // sm_86
 
 
 	// [4]: ScheduleVar { op: Scatter { op: Add }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3)], ty: Void, param_ty: None, reg: 4, buf: None, tex: None, literal: 0, size: 3 } =>
-    @!%p8 bra l_4_done;
+	@!%p8 bra l_4_done;
 
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r7, 4, %rd0;

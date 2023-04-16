@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use crate::backend::Kernel;
 use crate::schedule::ScheduleIr;
 use crate::trace::Internal;
-use crate::var::{Op, VarId};
+use crate::var::{Data, Op, VarId};
 
 // TODO: pooling for paralel exectution
 ///
@@ -106,13 +106,13 @@ impl Jit {
         for id in ir.scheduled.clone() {
             let var = ir.var(id);
             // Do not reallocate on scheduled variables (don't yet know if this is right)
-            if var.buffer.is_none() && var.ty.size() > 0 {
+            if !var.data.is_buffer() && var.ty.size() > 0 {
                 let size = ir.var(id).size;
                 let ty_size = ir.var(id).ty.size();
                 let buffer = ir.backend.as_ref().unwrap().buffer_uninit(size * ty_size);
 
                 let mut var = ir.var_mut(id);
-                var.buffer = Some(buffer);
+                var.data = Data::Buffer(buffer);
             }
         }
 

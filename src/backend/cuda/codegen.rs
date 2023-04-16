@@ -873,7 +873,7 @@ pub fn assemble_var(
             let is_bool = src.ty.is_bool();
 
             if !unmasked {
-                writeln!(asm, "    @!{} bra l_{}_done;\n", mask.reg(), var.reg_idx());
+                writeln!(asm, "\t@!{} bra l_{}_done;\n", mask.reg(), var.reg_idx());
             }
 
             let param_offset = (dst.buf.unwrap() + buf_offset) * 8;

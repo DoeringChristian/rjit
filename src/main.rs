@@ -18,6 +18,10 @@ fn main() {
 
     let tex = ir.texture(&[10, 10]);
 
+    let data = ir.literal_f32(1.);
+
+    data.scatter(&tex, &ir.index(10 * 10 * 4), None);
+
     let res = tex.tex_lookup(&[&x, &y]);
 
     let r = res[0].clone();
@@ -26,6 +30,8 @@ fn main() {
 
     let mut jit = Jit::default();
     jit.eval(&mut ir.borrow_mut());
+
+    println!("{}", jit.kernel_debug());
 
     dbg!(r.to_host_f32());
 }
