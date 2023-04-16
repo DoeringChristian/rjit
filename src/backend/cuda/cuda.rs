@@ -348,7 +348,7 @@ impl backend::Kernel for Kernel {
             match var.param_ty {
                 ParamType::None => self.assemble_var(ir, id),
                 ParamType::Input => {
-                    let param_offset = (var.param.unwrap() + 1) * 8;
+                    let param_offset = (var.buf.unwrap() + 1) * 8;
                     // Load from params
                     writeln!(self.asm, "");
                     writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);
@@ -385,7 +385,7 @@ impl backend::Kernel for Kernel {
                     }
                 }
                 ParamType::Output => {
-                    let param_offst = (var.param.unwrap() + 1) * 8;
+                    let param_offst = (var.buf.unwrap() + 1) * 8;
                     self.assemble_var(ir, id);
                     // let offset = param_idx * 8;
                     write!(

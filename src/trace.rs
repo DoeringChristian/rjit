@@ -357,11 +357,15 @@ impl VarRef {
         assert_eq!(pos[0].size(), pos[1].size());
         let size = pos[0].size();
         assert!(pos.iter().all(|p| p.size() == size));
+
+        let mut deps = smallvec![self.id()];
+        deps.extend(pos.iter().map(|r| r.id()));
+
         let lookup = self.ir.push_var(Var {
             op: Op::TexLookup {
                 dim: pos.len() as _,
             },
-            deps: smallvec![self.id()],
+            deps,
             ty: VarType::F32,
             size,
             ..Default::default()

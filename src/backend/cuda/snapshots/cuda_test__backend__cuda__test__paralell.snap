@@ -3,7 +3,7 @@ source: src/backend/cuda/test.rs
 expression: jit.kernel_debug()
 ---
 ===============================================
-Kernel 3069126075165437383:
+Kernel 17964352771536061295:
 
 .version 8.0
 .target sm_86
@@ -31,7 +31,7 @@ Kernel 3069126075165437383:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param: Some(0), literal: 0, size: 10 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, buf: Some(0), tex: None, literal: 0, size: 10 } =>
 	mov.u32 %r4, %r0;
 
 
@@ -52,7 +52,7 @@ done:
 	ret;
 }
 ===============================================
-Kernel 10385504898856450234:
+Kernel 17972975174725845997:
 
 .version 8.0
 .target sm_86
@@ -80,7 +80,7 @@ Kernel 10385504898856450234:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, param: Some(0), literal: 0, size: 3 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, buf: Some(0), tex: None, literal: 0, size: 3 } =>
 	mov.u32 %r4, %r0;
 
 

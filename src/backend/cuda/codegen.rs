@@ -804,7 +804,7 @@ pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId)
             }
 
             // Load buffer ptr:
-            let param_offset = (src.param.unwrap() + 1) * 8;
+            let param_offset = (src.buf.unwrap() + 1) * 8;
 
             writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
@@ -870,7 +870,7 @@ pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId)
                 writeln!(asm, "    @!{} bra l_{}_done;\n", mask.reg(), var.reg_idx());
             }
 
-            let param_offset = (dst.param.unwrap() + 1) * 8;
+            let param_offset = (dst.buf.unwrap() + 1) * 8;
 
             writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
 
@@ -916,14 +916,20 @@ pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId)
             writeln!(asm, "\tmov.{} {}, %r0;\n", var.ty.name_cuda(), var.reg());
         }
         Op::TexLookup { dim } => {
+            let src = ir.var(var.deps[0]);
+            // Load texture ptr:
+            let param_offset = (src.buf.unwrap() + 1) * 8;
+
+            writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
+
             writeln!(asm, "\t{}_out_<4>;", var.reg());
             if dim == 3 {
                 writeln!(
                     asm,
                     "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [{d0}, {{{d1}, {d2}, {d3}, {d3}}}]",
+                             {v}_out_3}}, [%rd0, {{{d1}, {d2}, {d3}, {d3}}}]",
                     v = var.reg(),
-                    d0 = ir.reg(var.deps[0]),
+                    // d0 = ir.reg(var.deps[0]),
                     d1 = ir.reg(var.deps[1]),
                     d2 = ir.reg(var.deps[2]),
                     d3 = ir.reg(var.deps[3])
@@ -932,9 +938,9 @@ pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId)
                 writeln!(
                     asm,
                     "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [{d0}, {{{d1}, {d2}}}]",
+                             {v}_out_3}}, [%rd0, {{{d1}, {d2}}}]",
                     v = var.reg(),
-                    d0 = ir.reg(var.deps[0]),
+                    // d0 = ir.reg(var.deps[0]),
                     d1 = ir.reg(var.deps[1]),
                     d2 = ir.reg(var.deps[2]),
                 );
@@ -942,9 +948,9 @@ pub fn assemble_var(asm: &mut impl std::fmt::Write, ir: &ScheduleIr, id: SVarId)
                 writeln!(
                     asm,
                     "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [{d0}, {{{d1}}}]",
+                             {v}_out_3}}, [%rd0, {{{d1}}}]",
                     v = var.reg(),
-                    d0 = ir.reg(var.deps[0]),
+                    // d0 = ir.reg(var.deps[0]),
                     d1 = ir.reg(var.deps[1]),
                 );
             } else {

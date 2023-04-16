@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use smallvec::{smallvec, SmallVec};
 
-use crate::backend::Buffer;
+use crate::backend::{Buffer, Texture};
 use crate::trace::Internal;
 use crate::var::{Op, ParamType, VarId, VarType};
 
@@ -30,7 +30,8 @@ pub struct ScheduleVar {
     pub ty: VarType,
     pub param_ty: ParamType,
     pub reg: usize,
-    pub param: Option<usize>, // Index into literal/buffer/texture vec
+    pub buf: Option<usize>, // Index into literal/buffer/texture vec
+    pub tex: Option<usize>,
     pub literal: u64,
     pub size: usize,
 }
@@ -76,6 +77,7 @@ pub struct ScheduleIr {
     size: usize,
     literals: Vec<u64>,            // Literals (directly passed to the kernel)
     buffers: Vec<Arc<dyn Buffer>>, // Buffers referenced in the kernel
+    textures: Vec<Arc<dyn Texture>>,
     n_regs: usize,
     visited: HashMap<VarId, SVarId>,
 }
@@ -119,10 +121,14 @@ impl ScheduleIr {
         self.vars.push(var);
         id
     }
-    /// TODO: optimization to not push buffer twice
     fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
         let idx = self.buffers.len();
         self.buffers.push(buf.clone());
+        idx
+    }
+    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> usize {
+        let idx = self.buffers.len();
+        self.textures.push(tex.clone());
         idx
     }
     pub fn collect_vars(&mut self, ir: &Internal, schedule: &[VarId]) {
@@ -138,7 +144,7 @@ impl ScheduleIr {
             let mut sv = self.var_mut(sv_id);
 
             sv.param_ty = ParamType::Output;
-            sv.param = Some(param);
+            sv.buf = Some(param);
         }
     }
     ///
@@ -160,7 +166,8 @@ impl ScheduleIr {
             deps: smallvec![],
             reg: self.next_reg(),
             param_ty: ParamType::None,
-            param: None,
+            buf: None,
+            tex: None,
             literal: var.literal,
             size: var.size,
         };
@@ -169,7 +176,7 @@ impl ScheduleIr {
 
         match var.op {
             Op::Data => {
-                sv.param = Some(self.push_buffer(var.buffer.as_ref().unwrap()));
+                sv.buf = Some(self.push_buffer(var.buffer.as_ref().unwrap()));
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
@@ -190,6 +197,14 @@ impl ScheduleIr {
                     self.collect(ir, var.deps[2]), // index
                     self.collect(ir, var.deps[3])  // mask
                 ];
+            }
+            Op::TexLookup { dim } => {
+                sv.deps = smallvec![self.collect_data(ir, var.deps[0]),];
+                sv.deps.extend(
+                    var.deps[1..(dim as usize + 1)]
+                        .iter()
+                        .map(|dep| self.collect(ir, *dep)),
+                );
             }
             _ => {
                 sv.deps = var
@@ -218,20 +233,24 @@ impl ScheduleIr {
             // In case this variable has already been traversed, just ensure that the buffer is
             // added as a parameter.
             let sv = self.var(id);
-            if sv.param.is_none() {
+            if sv.buf.is_none() && var.buffer.is_some() {
                 let param = Some(self.push_buffer(&var.buffer.as_ref().unwrap()));
-                self.var_mut(id).param = param;
+                self.var_mut(id).buf = param;
+            } else if sv.tex.is_none() && var.texture.is_some() {
+                let tex = Some(self.push_texture(&var.texture.as_ref().unwrap()));
+                self.var_mut(id).buf = tex;
             }
 
             id
         } else {
             let reg = self.next_reg();
-            let param = Some(self.push_buffer(&var.buffer.as_ref().unwrap()));
+            let buf = var.buffer.as_ref().map(|buf| self.push_buffer(&buf));
+            let tex = var.texture.as_ref().map(|tex| self.push_texture(&tex));
             let svid = self.push_var(ScheduleVar {
                 op: Op::Data,
                 ty: var.ty.clone(),
                 reg,
-                param,
+                buf,
                 ..Default::default()
             });
             self.visited.insert(id, svid);
