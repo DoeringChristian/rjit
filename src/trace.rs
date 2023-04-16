@@ -165,6 +165,9 @@ impl Trace {
         });
         v
     }
+    pub fn texture(&self, array: &VarRef, shape: &[usize]) -> VarRef {
+        todo!()
+    }
 }
 
 #[derive(Default, Debug)]
