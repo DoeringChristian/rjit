@@ -367,17 +367,26 @@ impl VarRef {
     pub fn to_texture(&self, shape: &[usize], n_channels: usize) -> Self {
         self.schedule();
         // TODO: deferr texture copy
-        assert_eq!(
-            self.size(),
-            shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels
-        );
-        let dst = self.ir.texture(&shape, n_channels);
-        let buf = self.var().data.buffer().unwrap().clone();
-        dst.var()
-            .data
-            .texture()
+
+        let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
+        assert_eq!(self.size(), size,);
+
+        let texture = self
+            .ir
+            .borrow_mut()
+            .backend
+            .as_ref()
             .unwrap()
-            .copy_from_buffer(buf.as_ref());
+            .create_texture(shape, n_channels);
+        let dst = self.ir.push_var(Var {
+            op: Op::TexUpload,
+            deps: smallvec![self.id()],
+            ty: VarType::Void,
+            size,
+            data: Data::Texture(texture),
+            ..Default::default()
+        });
+        dst.schedule();
         dst
     }
     pub fn tex_to_buffer(&self) -> Self {

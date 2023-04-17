@@ -70,6 +70,7 @@ impl ScheduleVar {
 
 ///
 /// Intermediate representation for scheduled variables
+/// TODO: split into ir and env
 ///
 #[derive(Debug, Default)]
 pub struct ScheduleIr {

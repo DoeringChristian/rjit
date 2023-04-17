@@ -28,6 +28,14 @@ pub struct Jit {
     pub kernels: HashMap<u128, Box<dyn Kernel>>,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+enum PassOp {
+    #[default]
+    None,
+    KernelLaunch(u128),
+    TexUpload,
+}
+
 ///
 /// This represents the Evaluation of one or many variables.
 /// With dependencies on other variables which have been scheduled.
@@ -44,11 +52,13 @@ pub struct Jit {
 /// This can be done by adding extra dependencies to b and s1.
 ///
 ///
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Pass {
     ids: Vec<VarId>,
     deps: Vec<usize>,
     size: usize,
+    op: PassOp,
+    ir: Option<ScheduleIr>,
 }
 ///
 /// Does a depend on b?
@@ -74,6 +84,9 @@ fn try_merge(passes: &mut Vec<Pass>, dst: usize, src: usize) -> bool {
     if depends_on(&passes, dst, src) {
         return false;
     }
+    if !same_op(passes, dst, src) {
+        return false;
+    }
 
     let src_pass = passes.remove(src);
 
@@ -93,6 +106,10 @@ fn try_merge(passes: &mut Vec<Pass>, dst: usize, src: usize) -> bool {
     true
 }
 
+fn same_op(passes: &[Pass], a: usize, b: usize) -> bool {
+    passes[a].op == passes[b].op
+}
+
 impl Jit {
     ///
     /// Evaluates a Ir by first constructing Schedules, which are then compiled and assembled
@@ -106,6 +123,7 @@ impl Jit {
         for id in ir.scheduled.clone() {
             let var = ir.var(id);
             // Do not reallocate on scheduled variables (don't yet know if this is right)
+            // TODO: better test
             if !var.data.is_buffer() && var.ty.size() > 0 {
                 let size = ir.var(id).size;
                 let ty_size = ir.var(id).ty.size();
@@ -117,11 +135,29 @@ impl Jit {
         }
 
         let schedules = self.compile(ir);
-        for (hash, pass, mut schedule) in schedules {
-            self.kernels
-                .get_mut(&hash)
-                .unwrap()
-                .execute_async(&mut schedule);
+        for mut pass in schedules {
+            match pass.op {
+                PassOp::KernelLaunch(hash) => {
+                    self.kernels
+                        .get_mut(&hash)
+                        .unwrap()
+                        .execute_async(pass.ir.as_mut().unwrap());
+                }
+                PassOp::TexUpload => {
+                    for id in pass.ids.iter() {
+                        let dep = ir.var(*id).deps[0];
+                        let buf = ir.var(dep).data.buffer().unwrap().clone();
+                        ir.var(*id)
+                            .data
+                            .texture()
+                            .unwrap()
+                            .copy_from_buffer(buf.as_ref());
+                    }
+                }
+                _ => {
+                    todo!()
+                }
+            }
         }
         ir.backend.as_ref().unwrap().synchronize();
 
@@ -184,11 +220,19 @@ impl Jit {
                     .filter(|dep| dep != id)
                     .map(|dep| id2pass[&dep])
                     .collect();
+                let op = if ir.var(*id).op == Op::TexUpload {
+                    dbg!("test");
+                    PassOp::TexUpload
+                } else {
+                    PassOp::KernelLaunch(0)
+                };
                 id2pass.insert(*id, i);
                 Pass {
                     ids: vec![*id],
                     deps,
                     size: ir.var(*id).size,
+                    op,
+                    ..Default::default()
                 }
             })
             .collect::<Vec<_>>();
@@ -224,17 +268,16 @@ impl Jit {
     /// Then, a Schedule Intermediate Representation is constructed from the groups.
     /// In the end a set of Kernels is assembled and compiled.
     ///
-    fn compile(&mut self, ir: &Internal) -> Vec<(u128, Pass, ScheduleIr)> {
+    fn compile(&mut self, ir: &Internal) -> Vec<Pass> {
         if ir.scheduled.len() == 0 {
             return vec![];
         }
 
-        let passes = self.passes(&ir);
+        let mut passes = self.passes(&ir);
 
         let first_register = ir.backend.as_ref().unwrap().first_register();
-        let schedules = passes
-            .into_iter()
-            .map(|pass| {
+        for mut pass in passes.iter_mut() {
+            if pass.op == PassOp::KernelLaunch(0) {
                 let mut s = ScheduleIr::new(first_register, pass.size);
                 s.collect_vars(ir, &pass.ids.iter().cloned().collect::<Vec<_>>());
 
@@ -245,11 +288,14 @@ impl Jit {
                     kernel.compile();
                     kernel
                 });
-                (hash, pass, s)
-            })
-            .collect::<Vec<_>>();
-
-        schedules
+                pass.ir = Some(s);
+                pass.op = PassOp::KernelLaunch(hash);
+            } else if pass.op == PassOp::TexUpload {
+            } else {
+                todo!()
+            }
+        }
+        passes
     }
 
     ///
