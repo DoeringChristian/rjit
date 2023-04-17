@@ -288,6 +288,45 @@ impl backend::Texture for Texture {
             }
         }
     }
+
+    fn copy_to_buffer(&self, buf: &dyn backend::Buffer) {
+        let buf = buf.as_any().downcast_ref::<Buffer>().unwrap();
+        let ctx = self.device.ctx();
+        unsafe {
+            if self.shape.len() == 1 || self.shape.len() == 2 {
+                let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY2D {
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    srcArray: self.array,
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    dstDevice: buf.ptr(),
+                    dstPitch: pitch,
+                    WidthInBytes: pitch,
+                    Height: if self.shape.len() == 2 {
+                        self.shape[1]
+                    } else {
+                        1
+                    },
+                    ..Default::default()
+                };
+                ctx.cuMemcpy2D_v2(&op).check().unwrap();
+            } else {
+                let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY3D {
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    srcHeight: self.shape[1],
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    srcArray: self.array,
+                    dstDevice: buf.ptr(),
+                    WidthInBytes: pitch,
+                    Height: self.shape[1],
+                    Depth: self.shape[2],
+                    ..Default::default()
+                };
+                ctx.cuMemcpy3D_v2(&op).check().unwrap();
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

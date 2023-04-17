@@ -381,6 +381,16 @@ impl VarRef {
             .copy_from_buffer(buf.as_ref());
         dst
     }
+    pub fn tex_to_buffer(&self) -> Self {
+        let dst = self.ir.buffer_f32(&vec![0.; self.size()]);
+        let buf = dst.var().data.buffer().unwrap().clone();
+        self.var()
+            .data
+            .texture()
+            .unwrap()
+            .copy_to_buffer(buf.as_ref());
+        dst
+    }
 
     pub fn tex_lookup(&self, pos: &[&VarRef]) -> smallvec::SmallVec<[Self; 4]> {
         self.schedule();
