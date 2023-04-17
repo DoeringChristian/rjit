@@ -232,6 +232,11 @@ impl Drop for Texture {
         }
     }
 }
+impl Texture {
+    fn ptr(&self) -> u64 {
+        self.tex
+    }
+}
 
 impl backend::Texture for Texture {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -641,6 +646,11 @@ impl backend::Kernel for Kernel {
                 ir.buffers()
                     .iter()
                     .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().ptr()),
+            );
+            params.extend(
+                ir.textures()
+                    .iter()
+                    .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
             );
 
             ctx.cuLaunchKernel(

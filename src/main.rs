@@ -13,12 +13,12 @@ fn main() {
     let ir = Trace::default();
     ir.set_backend("cuda");
 
-    let x = ir.buffer_f32(&[0.1, 0.2]);
-    let y = ir.buffer_f32(&[0.1, 0.2]);
+    let x = ir.literal_f32(0.0);
+    let y = ir.literal_f32(0.0);
 
-    let data = ir.buffer_f32(&[1.; 400]);
+    let data = ir.buffer_f32(&[1.; 40000]);
 
-    let tex = data.to_texture(&[10, 10]);
+    let tex = data.to_texture(&[100, 100]);
 
     let res = tex.tex_lookup(&[&x, &y]);
 
