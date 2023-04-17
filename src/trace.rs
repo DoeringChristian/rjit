@@ -393,7 +393,6 @@ impl VarRef {
     }
 
     pub fn tex_lookup(&self, pos: &[&VarRef]) -> smallvec::SmallVec<[Self; 4]> {
-        self.schedule();
         assert_eq!(pos[0].size(), pos[1].size());
         let size = pos[0].size();
         assert!(pos.iter().all(|p| p.size() == size));
