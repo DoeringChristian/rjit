@@ -203,6 +203,7 @@ impl ScheduleIr {
             }
             Op::TexLookup { dim } => {
                 sv.deps = smallvec![self.collect_data(ir, var.deps[0]),];
+                dbg!(ir.var(var.deps[0]));
                 sv.deps.extend(
                     var.deps[1..(dim as usize + 1)]
                         .iter()
@@ -252,7 +253,7 @@ impl ScheduleIr {
             let reg = self.next_reg();
             let buf = var.data.buffer().map(|buf| self.push_buffer(&buf));
             let tex = var.data.texture().map(|tex| self.push_texture(&tex));
-            dbg!(&tex);
+            // dbg!(&var.data);
             let svid = self.push_var(ScheduleVar {
                 op: Op::Data,
                 ty: var.ty.clone(),

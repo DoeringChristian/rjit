@@ -185,7 +185,7 @@ pub struct Buffer {
     size: usize,
 }
 impl Buffer {
-    fn as_ptr(&self) -> u64 {
+    fn ptr(&self) -> u64 {
         self.dptr
     }
 }
@@ -248,6 +248,45 @@ impl backend::Texture for Texture {
 
     fn shape(&self) -> &[usize] {
         &self.shape
+    }
+
+    fn copy_from_buffer(&self, buf: &dyn backend::Buffer) {
+        let buf = buf.as_any().downcast_ref::<Buffer>().unwrap();
+        let ctx = self.device.ctx();
+        unsafe {
+            if self.shape.len() == 1 || self.shape.len() == 2 {
+                let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY2D {
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    srcDevice: buf.ptr(),
+                    srcPitch: pitch,
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    dstArray: self.array,
+                    WidthInBytes: pitch,
+                    Height: if self.shape.len() == 2 {
+                        self.shape[1]
+                    } else {
+                        1
+                    },
+                    ..Default::default()
+                };
+                ctx.cuMemcpy2D_v2(&op).check().unwrap();
+            } else {
+                let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY3D {
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    srcDevice: buf.ptr(),
+                    srcHeight: self.shape[1],
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    dstArray: self.array,
+                    WidthInBytes: pitch,
+                    Height: self.shape[1],
+                    Depth: self.shape[2],
+                    ..Default::default()
+                };
+                ctx.cuMemcpy3D_v2(&op).check().unwrap();
+            }
+        }
     }
 }
 
@@ -562,7 +601,7 @@ impl backend::Kernel for Kernel {
             params.extend(
                 ir.buffers()
                     .iter()
-                    .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().as_ptr()),
+                    .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().ptr()),
             );
 
             ctx.cuLaunchKernel(

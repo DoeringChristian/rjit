@@ -164,17 +164,18 @@ impl Trace {
         v
     }
     pub fn texture(&self, shape: &[usize]) -> VarRef {
-        let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap();
+        let n_channels = 4;
+        let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
         let texture = self
             .0
             .borrow_mut()
             .backend
             .as_ref()
             .unwrap()
-            .create_texture(shape, 4);
+            .create_texture(shape, n_channels);
         self.push_var(Var {
             op: Op::Nop,
-            ty: VarType::U32,
+            ty: VarType::Void,
             size,
             data: Data::Texture(texture),
             ..Default::default()
@@ -362,6 +363,23 @@ impl VarRef {
             .ir
             .push_var_op(Op::And, &[self, &rhs], info.ty, info.size);
         ret
+    }
+
+    pub fn to_texture(&self, shape: &[usize]) -> Self {
+        // TODO: deferr texture copy
+        let n_channels = 4;
+        assert_eq!(
+            self.size(),
+            shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels
+        );
+        let dst = self.ir.texture(&shape);
+        let buf = self.var().data.buffer().unwrap().clone();
+        dst.var()
+            .data
+            .texture()
+            .unwrap()
+            .copy_from_buffer(buf.as_ref());
+        dst
     }
 
     pub fn tex_lookup(&self, pos: &[&VarRef]) -> smallvec::SmallVec<[Self; 4]> {

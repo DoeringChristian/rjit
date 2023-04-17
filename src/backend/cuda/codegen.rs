@@ -923,6 +923,7 @@ pub fn assemble_var(
         }
         Op::TexLookup { dim } => {
             let src = ir.var(var.deps[0]);
+
             // Load texture ptr:
             let param_offset = (src.tex.unwrap() + tex_offset) * 8;
 

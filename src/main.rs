@@ -16,11 +16,9 @@ fn main() {
     let x = ir.buffer_f32(&[0.1, 0.2]);
     let y = ir.buffer_f32(&[0.1, 0.2]);
 
-    let tex = ir.texture(&[10, 10]);
+    let data = ir.buffer_f32(&[1.; 400]);
 
-    let data = ir.literal_f32(1.);
-
-    data.scatter(&tex, &ir.index(10 * 10 * 4), None);
+    let tex = data.to_texture(&[10, 10]);
 
     let res = tex.tex_lookup(&[&x, &y]);
 

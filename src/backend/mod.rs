@@ -11,6 +11,7 @@ pub trait Texture: Debug {
     fn channels(&self) -> usize;
     fn dimensions(&self) -> usize;
     fn shape(&self) -> &[usize];
+    fn copy_from_buffer(&self, buf: &dyn Buffer);
 }
 
 pub trait Kernel: Debug {
