@@ -26,9 +26,9 @@ pub fn assemble_var(
     writeln!(asm, "\t// [{}]: {:?} =>", id, var);
 
     match var.op {
-        // Op::Data => {}
         Op::Nop => {}
         Op::Data => {}
+        Op::TexUpload => {}
         Op::Literal => {
             writeln!(
                 asm,

@@ -163,8 +163,7 @@ impl Trace {
         });
         v
     }
-    pub fn texture(&self, shape: &[usize]) -> VarRef {
-        let n_channels = 4;
+    pub fn texture(&self, shape: &[usize], n_channels: usize) -> VarRef {
         let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
         let texture = self
             .0
@@ -365,14 +364,14 @@ impl VarRef {
         ret
     }
 
-    pub fn to_texture(&self, shape: &[usize]) -> Self {
+    pub fn to_texture(&self, shape: &[usize], n_channels: usize) -> Self {
+        self.schedule();
         // TODO: deferr texture copy
-        let n_channels = 4;
         assert_eq!(
             self.size(),
             shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels
         );
-        let dst = self.ir.texture(&shape);
+        let dst = self.ir.texture(&shape, n_channels);
         let buf = self.var().data.buffer().unwrap().clone();
         dst.var()
             .data

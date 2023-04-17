@@ -3,7 +3,7 @@ source: src/backend/cuda/test.rs
 expression: jit.kernel_debug()
 ---
 ===============================================
-Kernel 12063189529404504172:
+Kernel 3237557274802390305:
 
 .version 8.0
 .target sm_86
@@ -60,7 +60,7 @@ done:
 	ret;
 }
 ===============================================
-Kernel 17859622399939313176:
+Kernel 8313981092121466247:
 
 .version 8.0
 .target sm_86

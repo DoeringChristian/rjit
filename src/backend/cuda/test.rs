@@ -317,7 +317,7 @@ fn tex_lookup() {
 
     let data = ir.buffer_f32(&[1.; 400]);
 
-    let tex = data.to_texture(&[10, 10]);
+    let tex = data.to_texture(&[10, 10], 4);
 
     let res = tex.tex_lookup(&[&x, &y]);
 

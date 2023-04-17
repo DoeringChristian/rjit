@@ -86,6 +86,7 @@ pub enum Op {
     Extract {
         offset: usize,
     },
+    TexUpload,
     Idx,
 }
 
