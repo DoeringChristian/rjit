@@ -4,7 +4,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use crate::schedule::ScheduleIr;
+use crate::schedule::{Env, ScheduleIr};
 
 pub trait Texture: Debug {
     fn as_any(&self) -> &dyn Any;
@@ -17,9 +17,9 @@ pub trait Texture: Debug {
 
 pub trait Kernel: Debug {
     fn as_any(&self) -> &dyn Any;
-    fn assemble(&mut self, ir: &ScheduleIr);
+    fn assemble(&mut self, ir: &ScheduleIr, env: &Env);
     fn compile(&mut self);
-    fn execute_async(&mut self, ir: &mut ScheduleIr);
+    fn execute_async(&mut self, ir: &mut Env, size: usize);
     fn assembly(&self) -> &str;
 }
 

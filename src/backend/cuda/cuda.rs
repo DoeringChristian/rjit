@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use super::cuda_core::{Device, Instance, Stream};
 use crate::backend;
-use crate::schedule::{SVarId, ScheduleIr};
+use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
 
@@ -348,8 +348,8 @@ impl Kernel {
     const ENTRY_POINT: &str = "cujit";
     const FIRST_REGISTER: usize = 4;
     #[allow(unused_must_use)]
-    fn assemble_var(&mut self, ir: &ScheduleIr, id: SVarId) {
-        super::codegen::assemble_var(&mut self.asm, ir, id, 1, 1 + ir.buffers().len());
+    fn assemble_var(&mut self, ir: &ScheduleIr, env: &Env, id: SVarId) {
+        super::codegen::assemble_var(&mut self.asm, ir, id, 1, 1 + env.buffers().len());
     }
 }
 
@@ -358,9 +358,9 @@ impl backend::Kernel for Kernel {
         self
     }
     #[allow(unused_must_use)]
-    fn assemble(&mut self, ir: &ScheduleIr) {
+    fn assemble(&mut self, ir: &ScheduleIr, env: &Env) {
         self.asm.clear();
-        let n_params = 1 + ir.buffers().len(); // Add 1 for size
+        let n_params = 1 + env.buffers().len() + env.textures().len(); // Add 1 for size
         let n_regs = ir.n_regs();
 
         /* Special registers:
@@ -433,7 +433,7 @@ impl backend::Kernel for Kernel {
         for id in ir.ids() {
             let var = ir.var(id);
             match var.param_ty {
-                ParamType::None => self.assemble_var(ir, id),
+                ParamType::None => self.assemble_var(ir, env, id),
                 ParamType::Input => {
                     let param_offset = (var.buf.unwrap() + 1) * 8;
                     // Load from params
@@ -473,7 +473,7 @@ impl backend::Kernel for Kernel {
                 }
                 ParamType::Output => {
                     let param_offst = (var.buf.unwrap() + 1) * 8;
-                    self.assemble_var(ir, id);
+                    self.assemble_var(ir, env, id);
                     // let offset = param_idx * 8;
                     write!(
                         self.asm,
@@ -622,7 +622,7 @@ impl backend::Kernel for Kernel {
         }
     }
 
-    fn execute_async(&mut self, ir: &mut crate::schedule::ScheduleIr) {
+    fn execute_async(&mut self, env: &mut crate::schedule::Env, size: usize) {
         let ctx = self.device.ctx();
         unsafe {
             let mut unused = 0;
@@ -639,16 +639,16 @@ impl backend::Kernel for Kernel {
             .unwrap();
             let block_size = block_size as u32;
 
-            let grid_size = (ir.size() as u32 + block_size - 1) / block_size;
+            let grid_size = (size as u32 + block_size - 1) / block_size;
 
-            let mut params = vec![ir.size() as u64];
+            let mut params = vec![size as u64];
             params.extend(
-                ir.buffers()
+                env.buffers()
                     .iter()
                     .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().ptr()),
             );
             params.extend(
-                ir.textures()
+                env.textures()
                     .iter()
                     .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
             );

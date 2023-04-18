@@ -68,6 +68,37 @@ impl ScheduleVar {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct Env {
+    literals: Vec<u64>,
+    buffers: Vec<Arc<dyn Buffer>>,
+    textures: Vec<Arc<dyn Texture>>,
+}
+
+impl Env {
+    fn push_literal(&mut self, literal: u64) -> usize {
+        let idx = self.literals.len();
+        self.literals.push(literal);
+        idx
+    }
+    fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
+        let idx = self.buffers.len();
+        self.buffers.push(buf.clone());
+        idx
+    }
+    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> usize {
+        let idx = self.buffers.len();
+        self.textures.push(tex.clone());
+        idx
+    }
+    pub fn buffers(&self) -> &[Arc<dyn Buffer>] {
+        &self.buffers
+    }
+    pub fn textures(&self) -> &[Arc<dyn Texture>] {
+        &self.textures
+    }
+}
+
 ///
 /// Intermediate representation for scheduled variables
 /// TODO: split into ir and env
@@ -76,9 +107,6 @@ impl ScheduleVar {
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
     size: usize,
-    literals: Vec<u64>,            // Literals (directly passed to the kernel)
-    buffers: Vec<Arc<dyn Buffer>>, // Buffers referenced in the kernel
-    textures: Vec<Arc<dyn Texture>>,
     n_regs: usize,
     visited: HashMap<VarId, SVarId>,
 }
@@ -103,12 +131,6 @@ impl ScheduleIr {
     pub fn reg(&self, id: SVarId) -> Reg {
         self.var(id).reg()
     }
-    pub fn buffers(&self) -> &[Arc<dyn Buffer>] {
-        &self.buffers
-    }
-    pub fn textures(&self) -> &[Arc<dyn Texture>] {
-        &self.textures
-    }
     pub fn n_regs(&self) -> usize {
         self.n_regs
     }
@@ -125,25 +147,15 @@ impl ScheduleIr {
         self.vars.push(var);
         id
     }
-    fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
-        let idx = self.buffers.len();
-        self.buffers.push(buf.clone());
-        idx
-    }
-    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> usize {
-        let idx = self.buffers.len();
-        self.textures.push(tex.clone());
-        idx
-    }
-    pub fn collect_vars(&mut self, ir: &Internal, schedule: &[VarId]) {
+    pub fn collect_vars(&mut self, env: &mut Env, ir: &Internal, schedule: &[VarId]) {
         for id in schedule {
-            let sv_id = self.collect(ir, *id);
+            let sv_id = self.collect(env, ir, *id);
 
             let var = ir.var(*id);
             if var.ty.size() == 0 {
                 continue;
             }
-            let param = self.push_buffer(var.data.buffer().unwrap());
+            let param = env.push_buffer(var.data.buffer().unwrap());
 
             let mut sv = self.var_mut(sv_id);
 
@@ -157,7 +169,7 @@ impl ScheduleIr {
     /// If a gather operation is encountered, that only depends on trivial operations we can
     /// reindex it using the parameter idx.
     ///
-    pub fn collect(&mut self, ir: &Internal, id: VarId) -> SVarId {
+    pub fn collect(&mut self, env: &mut Env, ir: &Internal, id: VarId) -> SVarId {
         if self.visited.contains_key(&id) {
             return self.visited[&id];
         }
@@ -180,7 +192,7 @@ impl ScheduleIr {
 
         match var.op {
             Op::Data => {
-                sv.buf = Some(self.push_buffer(var.data.buffer().unwrap()));
+                sv.buf = Some(env.push_buffer(var.data.buffer().unwrap()));
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
@@ -189,33 +201,33 @@ impl ScheduleIr {
             }
             Op::Gather => {
                 sv.deps = smallvec![
-                    self.collect_data(ir, var.deps[0]),
-                    self.collect(ir, var.deps[1]), // index
-                    self.collect(ir, var.deps[2])  // mask
+                    self.collect_data(env, ir, var.deps[0]),
+                    self.collect(env, ir, var.deps[1]), // index
+                    self.collect(env, ir, var.deps[2])  // mask
                 ];
             }
             Op::Scatter { .. } => {
                 sv.deps = smallvec![
-                    self.collect(ir, var.deps[0]), // src
-                    self.collect_data(ir, var.deps[1]),
-                    self.collect(ir, var.deps[2]), // index
-                    self.collect(ir, var.deps[3])  // mask
+                    self.collect(env, ir, var.deps[0]), // src
+                    self.collect_data(env, ir, var.deps[1]),
+                    self.collect(env, ir, var.deps[2]), // index
+                    self.collect(env, ir, var.deps[3])  // mask
                 ];
             }
             Op::TexLookup { dim } => {
-                sv.deps = smallvec![self.collect_data(ir, var.deps[0]),];
+                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0]),];
                 dbg!(ir.var(var.deps[0]));
                 sv.deps.extend(
                     var.deps[1..(dim as usize + 1)]
                         .iter()
-                        .map(|dep| self.collect(ir, *dep)),
+                        .map(|dep| self.collect(env, ir, *dep)),
                 );
             }
             _ => {
                 sv.deps = var
                     .deps
                     .iter()
-                    .map(|id| self.collect(ir, *id))
+                    .map(|id| self.collect(env, ir, *id))
                     .collect::<SmallVec<[_; 4]>>();
             }
         }
@@ -232,7 +244,7 @@ impl ScheduleIr {
     ///
     /// This only inserts this variable but not its dependencies.
     ///
-    pub fn collect_data(&mut self, ir: &Internal, id: VarId) -> SVarId {
+    pub fn collect_data(&mut self, env: &mut Env, ir: &Internal, id: VarId) -> SVarId {
         let var = ir.var(id);
         if let Some(id) = self.visited.get(&id).cloned() {
             // In case this variable has already been traversed, just ensure that the buffer is
@@ -240,11 +252,11 @@ impl ScheduleIr {
             // let sv = self.var(id);
             match &var.data {
                 Data::Buffer(buf) => {
-                    let buf = Some(self.push_buffer(buf));
+                    let buf = Some(env.push_buffer(buf));
                     self.var_mut(id).buf = buf;
                 }
                 Data::Texture(tex) => {
-                    let tex = Some(self.push_texture(tex));
+                    let tex = Some(env.push_texture(tex));
                     self.var_mut(id).tex = tex;
                 }
                 _ => {}
@@ -252,8 +264,8 @@ impl ScheduleIr {
             id
         } else {
             let reg = self.next_reg();
-            let buf = var.data.buffer().map(|buf| self.push_buffer(&buf));
-            let tex = var.data.texture().map(|tex| self.push_texture(&tex));
+            let buf = var.data.buffer().map(|buf| env.push_buffer(&buf));
+            let tex = var.data.texture().map(|tex| env.push_texture(&tex));
             // dbg!(&var.data);
             let svid = self.push_var(ScheduleVar {
                 op: Op::Data,

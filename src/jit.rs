@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
 use crate::backend::Kernel;
-use crate::schedule::ScheduleIr;
+use crate::schedule::{Env, ScheduleIr};
 use crate::trace::Internal;
 use crate::var::{Data, Op, VarId};
 
@@ -28,11 +28,11 @@ pub struct Jit {
     pub kernels: HashMap<u128, Box<dyn Kernel>>,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default)]
 enum PassOp {
     #[default]
     None,
-    KernelLaunch(u128),
+    KernelLaunch(u128, Env, usize),
     TexUpload,
 }
 
@@ -58,7 +58,7 @@ struct Pass {
     deps: Vec<usize>,
     size: usize,
     op: PassOp,
-    ir: Option<ScheduleIr>,
+    // ir: Option<ScheduleIr>,
 }
 ///
 /// Does a depend on b?
@@ -107,7 +107,20 @@ fn try_merge(passes: &mut Vec<Pass>, dst: usize, src: usize) -> bool {
 }
 
 fn same_op(passes: &[Pass], a: usize, b: usize) -> bool {
-    passes[a].op == passes[b].op
+    match passes[a].op {
+        PassOp::None => match passes[b].op {
+            PassOp::None => true,
+            _ => false,
+        },
+        PassOp::KernelLaunch(_, _, _) => match passes[b].op {
+            PassOp::KernelLaunch(..) => true,
+            _ => false,
+        },
+        PassOp::TexUpload => match passes[b].op {
+            PassOp::TexUpload => true,
+            _ => false,
+        },
+    }
 }
 
 impl Jit {
@@ -136,12 +149,14 @@ impl Jit {
 
         let schedules = self.compile(ir);
         for mut pass in schedules {
-            match pass.op {
-                PassOp::KernelLaunch(hash) => {
+            match &mut pass.op {
+                PassOp::KernelLaunch(hash, env, size) => {
+                    dbg!(&env);
+                    dbg!(&size);
                     self.kernels
                         .get_mut(&hash)
                         .unwrap()
-                        .execute_async(pass.ir.as_mut().unwrap());
+                        .execute_async(env, *size);
                 }
                 PassOp::TexUpload => {
                     for id in pass.ids.iter() {
@@ -224,7 +239,7 @@ impl Jit {
                     dbg!("test");
                     PassOp::TexUpload
                 } else {
-                    PassOp::KernelLaunch(0)
+                    PassOp::KernelLaunch(0, Env::default(), 0)
                 };
                 id2pass.insert(*id, i);
                 Pass {
@@ -277,22 +292,25 @@ impl Jit {
 
         let first_register = ir.backend.as_ref().unwrap().first_register();
         for mut pass in passes.iter_mut() {
-            if pass.op == PassOp::KernelLaunch(0) {
-                let mut s = ScheduleIr::new(first_register, pass.size);
-                s.collect_vars(ir, &pass.ids.iter().cloned().collect::<Vec<_>>());
+            match &mut pass.op {
+                PassOp::KernelLaunch(ref mut hash, env, ref mut size) => {
+                    let mut s = ScheduleIr::new(first_register, pass.size);
+                    s.collect_vars(env, ir, &pass.ids.iter().cloned().collect::<Vec<_>>());
+                    dbg!(&s);
 
-                let hash = s.internal_hash();
-                let kernel = self.kernels.entry(hash).or_insert({
-                    let mut kernel = ir.backend.as_ref().unwrap().new_kernel();
-                    kernel.assemble(&mut s);
-                    kernel.compile();
-                    kernel
-                });
-                pass.ir = Some(s);
-                pass.op = PassOp::KernelLaunch(hash);
-            } else if pass.op == PassOp::TexUpload {
-            } else {
-                todo!()
+                    *hash = s.internal_hash();
+                    let kernel = self.kernels.entry(*hash).or_insert({
+                        let mut kernel = ir.backend.as_ref().unwrap().new_kernel();
+                        kernel.assemble(&s, env);
+                        kernel.compile();
+                        kernel
+                    });
+                    *size = s.size();
+                }
+                PassOp::TexUpload => {}
+                _ => {
+                    todo!()
+                }
             }
         }
         passes
