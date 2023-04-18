@@ -296,7 +296,6 @@ impl Jit {
                 PassOp::KernelLaunch(ref mut hash, env, ref mut size) => {
                     let mut s = ScheduleIr::new(first_register, pass.size);
                     s.collect_vars(env, ir, &pass.ids.iter().cloned().collect::<Vec<_>>());
-                    dbg!(&s);
 
                     *hash = s.internal_hash();
                     if !self.kernels.contains_key(hash) {
