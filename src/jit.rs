@@ -291,7 +291,7 @@ impl Jit {
         let mut passes = self.passes(&ir);
 
         let first_register = ir.backend.as_ref().unwrap().first_register();
-        for mut pass in passes.iter_mut() {
+        for pass in passes.iter_mut() {
             match &mut pass.op {
                 PassOp::KernelLaunch(ref mut hash, env, ref mut size) => {
                     let mut s = ScheduleIr::new(first_register, pass.size);
