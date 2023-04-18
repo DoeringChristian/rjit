@@ -299,12 +299,14 @@ impl Jit {
                     dbg!(&s);
 
                     *hash = s.internal_hash();
-                    let kernel = self.kernels.entry(*hash).or_insert({
-                        let mut kernel = ir.backend.as_ref().unwrap().new_kernel();
-                        kernel.assemble(&s, env);
-                        kernel.compile();
-                        kernel
-                    });
+                    if !self.kernels.contains_key(hash) {
+                        self.kernels.insert(*hash, {
+                            let mut kernel = ir.backend.as_ref().unwrap().new_kernel();
+                            kernel.assemble(&s, env);
+                            kernel.compile();
+                            kernel
+                        });
+                    }
                     *size = s.size();
                 }
                 PassOp::TexUpload => {}
