@@ -30,6 +30,7 @@ pub struct Jit {
 
 ///
 /// An `ExecutionGraph` records The high level operations that need to be executed.
+/// TODO: Since this is a per eval structure, it would be preferable to pool the passes.
 ///
 struct ExecutionGraph {
     passes: Vec<Pass>,
@@ -91,20 +92,20 @@ impl ExecutionGraph {
             .collect::<Vec<_>>();
         Self { passes }
     }
+
+    /// Merge passes if possible
+    ///
+    /// The problem we try to solve is the following:
+    ///
+    /// The nodes in `ir` are represent DAG, so do the `passes`.
+    /// They are also stored in a topological ordering.
+    /// We try to merge as many passes as possible.
+    /// Passes can only be merged if tey have the same size.
+    ///
+    /// This algorithm is not perfect and results in a potentially sub optimal result.
+    /// Also, using hash sets might not be the best approach.
     fn simplify(&mut self) {
         // TODO: use passes to flatten dependencies and stop traversal eraly.
-
-        // Merge passes if possible
-        //
-        // The problem we try to solve is the following:
-        //
-        // The nodes in `ir` are represent DAG, so do the `passes`.
-        // They are also stored in a topological ordering.
-        // We try to merge as many passes as possible.
-        // Passes can only be merged if tey have the same size.
-        //
-        // This algorithm is not perfect and results in a potentially sub optimal result.
-        // Also, using hash sets might not be the best approach.
         for i in (0..self.passes.len()).rev() {
             for j in (0..i).rev() {
                 // Try to merge i into j
