@@ -37,3 +37,6 @@ pub trait Backend: Debug {
     fn first_register(&self) -> usize;
     fn synchronize(&self);
 }
+pub trait Accel: Debug {
+    fn as_any(&self) -> &dyn Any;
+}
