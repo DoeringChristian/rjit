@@ -10,7 +10,7 @@ use crate::schedule::{Env, ScheduleIr};
 use crate::trace::Internal;
 use crate::var::{Data, Op, VarId};
 
-// TODO: pooling for paralel exectution
+// TODO: pooling for paralel execution
 ///
 /// The Jit Compiler first generates schedules (Intermediate Representation) from a Trace.
 /// It then assembles and compiles a Kernel depending on the Backend.
@@ -26,6 +26,153 @@ pub struct Jit {
     // hashes: Vec<u128>,
     // passes: Vec<Pass>,
     pub kernels: HashMap<u128, Box<dyn Kernel>>,
+}
+
+struct ExecutionGraph {
+    passes: Vec<Pass>,
+}
+
+impl ExecutionGraph {
+    ///
+    /// Collect neccesary passes from `ir`.
+    /// NOTE: We would need to correctly assign dependencies on scatter
+    /// NOTE: Passes are ordered (DAG ordering)
+    ///
+    fn new(ir: &Internal) -> Self {
+        ///
+        /// Gets the dependencies of `id` in `scheduled`
+        ///
+        fn dependencies_in(
+            ir: &Internal,
+            id: VarId,
+            scheduled: &HashSet<VarId>,
+            deps: &mut Vec<VarId>,
+        ) {
+            if scheduled.contains(&id) {
+                deps.push(id);
+            }
+            let var = ir.var(id);
+            for dep in var.deps.iter() {
+                dependencies_in(ir, *dep, scheduled, deps);
+            }
+        }
+        let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
+        let mut id2pass = HashMap::new();
+        let mut passes = ir
+            .scheduled
+            .iter()
+            .enumerate()
+            .map(|(i, id)| {
+                let mut deps = Vec::new();
+                dependencies_in(ir, *id, &scheduled, &mut deps);
+                let deps = deps
+                    .into_iter()
+                    .filter(|dep| dep != id)
+                    .map(|dep| id2pass[&dep])
+                    .collect();
+                let op = if ir.var(*id).op == Op::TexUpload {
+                    dbg!("test");
+                    PassOp::TexUpload
+                } else {
+                    PassOp::KernelLaunch(0, Env::default(), 0)
+                };
+                id2pass.insert(*id, i);
+                Pass {
+                    ids: vec![*id],
+                    deps,
+                    size: ir.var(*id).size,
+                    op,
+                    ..Default::default()
+                }
+            })
+            .collect::<Vec<_>>();
+        Self { passes }
+    }
+    fn simplify(&mut self) {
+        // TODO: use passes to flatten dependencies and stop traversal eraly.
+
+        // Merge passes if possible
+        //
+        // The problem we try to solve is the following:
+        //
+        // The nodes in `ir` are represent DAG, so do the `passes`.
+        // They are also stored in a topological ordering.
+        // We try to merge as many passes as possible.
+        // Passes can only be merged if tey have the same size.
+        //
+        // This algorithm is not perfect and results in a potentially sub optimal result.
+        // Also, using hash sets might not be the best approach.
+        for i in (0..self.passes.len()).rev() {
+            for j in (0..i).rev() {
+                // Try to merge i into j
+                if self.try_merge(j, i) {
+                    break;
+                }
+            }
+        }
+    }
+    ///
+    /// Does a depend on b?
+    ///
+    fn depends_on(&self, a: usize, b: usize) -> bool {
+        if a == b {
+            return true;
+        }
+        for dep in self.passes[b].deps.iter() {
+            if self.depends_on(a, *dep) {
+                return true;
+            }
+        }
+        return false;
+    }
+    ///
+    /// Try to merge src into dst.
+    ///
+    fn try_merge(&mut self, dst: usize, src: usize) -> bool {
+        if self.passes[dst].size != self.passes[src].size {
+            return false;
+        }
+        if self.depends_on(dst, src) {
+            return false;
+        }
+        if !self.same_op(dst, src) {
+            return false;
+        }
+
+        let src_pass = self.passes.remove(src);
+
+        for pass in self.passes[src..].iter_mut() {
+            for dep in pass.deps.iter_mut() {
+                if *dep == src {
+                    *dep = dst;
+                } else if *dep > src {
+                    *dep -= 1;
+                }
+            }
+        }
+
+        self.passes[dst].deps.extend_from_slice(&src_pass.deps);
+        self.passes[dst].ids.extend_from_slice(&src_pass.ids);
+
+        true
+    }
+
+    fn same_op(&self, a: usize, b: usize) -> bool {
+        match self.passes[a].op {
+            PassOp::None => match self.passes[b].op {
+                PassOp::None => true,
+                _ => false,
+            },
+            PassOp::KernelLaunch(_, _, _) => match self.passes[b].op {
+                PassOp::KernelLaunch(..) => true,
+                _ => false,
+            },
+            PassOp::TexUpload => match self.passes[b].op {
+                PassOp::TexUpload => true,
+                _ => false,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -60,68 +207,6 @@ struct Pass {
     op: PassOp,
     // ir: Option<ScheduleIr>,
 }
-///
-/// Does a depend on b?
-///
-fn depends_on(passes: &[Pass], a: usize, b: usize) -> bool {
-    if a == b {
-        return true;
-    }
-    for dep in passes[b].deps.iter() {
-        if depends_on(passes, a, *dep) {
-            return true;
-        }
-    }
-    return false;
-}
-///
-/// Try to merge src into dst.
-///
-fn try_merge(passes: &mut Vec<Pass>, dst: usize, src: usize) -> bool {
-    if passes[dst].size != passes[src].size {
-        return false;
-    }
-    if depends_on(&passes, dst, src) {
-        return false;
-    }
-    if !same_op(passes, dst, src) {
-        return false;
-    }
-
-    let src_pass = passes.remove(src);
-
-    for pass in passes[src..].iter_mut() {
-        for dep in pass.deps.iter_mut() {
-            if *dep == src {
-                *dep = dst;
-            } else if *dep > src {
-                *dep -= 1;
-            }
-        }
-    }
-
-    passes[dst].deps.extend_from_slice(&src_pass.deps);
-    passes[dst].ids.extend_from_slice(&src_pass.ids);
-
-    true
-}
-
-fn same_op(passes: &[Pass], a: usize, b: usize) -> bool {
-    match passes[a].op {
-        PassOp::None => match passes[b].op {
-            PassOp::None => true,
-            _ => false,
-        },
-        PassOp::KernelLaunch(_, _, _) => match passes[b].op {
-            PassOp::KernelLaunch(..) => true,
-            _ => false,
-        },
-        PassOp::TexUpload => match passes[b].op {
-            PassOp::TexUpload => true,
-            _ => false,
-        },
-    }
-}
 
 impl Jit {
     ///
@@ -147,8 +232,13 @@ impl Jit {
             }
         }
 
-        let schedules = self.compile(ir);
-        for mut pass in schedules {
+        let graph = if let Some(graph) = self.compile(ir) {
+            graph
+        } else {
+            return;
+        };
+
+        for mut pass in graph.passes {
             match &mut pass.op {
                 PassOp::KernelLaunch(hash, env, size) => {
                     dbg!(&env);
@@ -199,99 +289,21 @@ impl Jit {
         ir.scheduled.clear();
     }
     ///
-    /// Collect neccesary passes from `ir`.
-    /// NOTE: We would need to correctly assign dependencies on scatter
-    /// NOTE: Passes are ordered (DAG ordering)
-    ///
-    fn passes(&self, ir: &Internal) -> Vec<Pass> {
-        ///
-        /// Gets the dependencies of `id` in `scheduled`
-        ///
-        fn dependencies_in(
-            ir: &Internal,
-            id: VarId,
-            scheduled: &HashSet<VarId>,
-            deps: &mut Vec<VarId>,
-        ) {
-            if scheduled.contains(&id) {
-                deps.push(id);
-            }
-            let var = ir.var(id);
-            for dep in var.deps.iter() {
-                dependencies_in(ir, *dep, scheduled, deps);
-            }
-        }
-        let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
-        let mut id2pass = HashMap::new();
-        let mut passes = ir
-            .scheduled
-            .iter()
-            .enumerate()
-            .map(|(i, id)| {
-                let mut deps = Vec::new();
-                dependencies_in(ir, *id, &scheduled, &mut deps);
-                let deps = deps
-                    .into_iter()
-                    .filter(|dep| dep != id)
-                    .map(|dep| id2pass[&dep])
-                    .collect();
-                let op = if ir.var(*id).op == Op::TexUpload {
-                    dbg!("test");
-                    PassOp::TexUpload
-                } else {
-                    PassOp::KernelLaunch(0, Env::default(), 0)
-                };
-                id2pass.insert(*id, i);
-                Pass {
-                    ids: vec![*id],
-                    deps,
-                    size: ir.var(*id).size,
-                    op,
-                    ..Default::default()
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // TODO: use passes to flatten dependencies and stop traversal eraly.
-
-        // Merge passes if possible
-        //
-        // The problem we try to solve is the following:
-        //
-        // The nodes in `ir` are represent DAG, so do the `passes`.
-        // They are also stored in a topological ordering.
-        // We try to merge as many passes as possible.
-        // Passes can only be merged if tey have the same size.
-        //
-        // This algorithm is not perfect and results in a potentially sub optimal result.
-        // Also, using hash sets might not be the best approach.
-        for i in (0..passes.len()).rev() {
-            for j in (0..i).rev() {
-                // Try to merge i into j
-                if try_merge(&mut passes, j, i) {
-                    break;
-                }
-            }
-        }
-
-        passes
-    }
-    ///
     /// Compiles the computation graph of all scheduled variables in a Ir.
     ///
     /// First, all scheduled variables with the same size are grouped.
     /// Then, a Schedule Intermediate Representation is constructed from the groups.
     /// In the end a set of Kernels is assembled and compiled.
     ///
-    fn compile(&mut self, ir: &Internal) -> Vec<Pass> {
+    fn compile(&mut self, ir: &Internal) -> Option<ExecutionGraph> {
         if ir.scheduled.len() == 0 {
-            return vec![];
+            return None;
         }
 
-        let mut passes = self.passes(&ir);
+        let mut graph = ExecutionGraph::new(&ir);
 
         let first_register = ir.backend.as_ref().unwrap().first_register();
-        for pass in passes.iter_mut() {
+        for pass in graph.passes.iter_mut() {
             match &mut pass.op {
                 PassOp::KernelLaunch(ref mut hash, env, ref mut size) => {
                     let mut s = ScheduleIr::new(first_register, pass.size);
@@ -314,7 +326,7 @@ impl Jit {
                 }
             }
         }
-        passes
+        Some(graph)
     }
 
     ///
