@@ -58,7 +58,7 @@ impl ExecutionGraph {
         }
         let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
         let mut id2pass = HashMap::new();
-        let mut passes = ir
+        let passes = ir
             .scheduled
             .iter()
             .enumerate()
@@ -298,6 +298,7 @@ impl Jit {
         }
 
         let mut graph = ExecutionGraph::new(&ir);
+        graph.simplify();
 
         let first_register = ir.backend.as_ref().unwrap().first_register();
         for pass in graph.passes.iter_mut() {
