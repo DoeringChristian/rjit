@@ -106,16 +106,14 @@ impl Env {
 #[derive(Debug, Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
-    size: usize,
     n_regs: usize,
     visited: HashMap<VarId, SVarId>,
 }
 
 impl ScheduleIr {
-    pub fn new(first_register: usize, size: usize) -> Self {
+    pub fn new(first_register: usize) -> Self {
         Self {
             n_regs: first_register,
-            size,
             ..Default::default()
         }
     }
@@ -138,9 +136,6 @@ impl ScheduleIr {
         let reg = self.n_regs;
         self.n_regs += 1;
         reg
-    }
-    pub fn size(&self) -> usize {
-        self.size
     }
     fn push_var(&mut self, var: ScheduleVar) -> SVarId {
         let id = SVarId(self.vars.len());

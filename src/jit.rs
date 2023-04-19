@@ -74,7 +74,7 @@ impl ExecutionGraph {
                     dbg!("test");
                     PassOp::TexUpload
                 } else {
-                    PassOp::KernelLaunch(0, Env::default(), 0)
+                    PassOp::KernelLaunch(0, Env::default())
                 };
                 id2pass.insert(*id, i);
                 Pass {
@@ -163,7 +163,7 @@ impl ExecutionGraph {
                 PassOp::None => true,
                 _ => false,
             },
-            PassOp::KernelLaunch(_, _, _) => match self.passes[b].op {
+            PassOp::KernelLaunch(..) => match self.passes[b].op {
                 PassOp::KernelLaunch(..) => true,
                 _ => false,
             },
@@ -179,7 +179,7 @@ impl ExecutionGraph {
 enum PassOp {
     #[default]
     None,
-    KernelLaunch(u128, Env, usize),
+    KernelLaunch(u128, Env),
     TexUpload,
 }
 
@@ -201,11 +201,10 @@ enum PassOp {
 ///
 #[derive(Debug, Default)]
 struct Pass {
-    ids: Vec<VarId>,
-    deps: Vec<usize>,
-    size: usize,
-    op: PassOp,
-    // ir: Option<ScheduleIr>,
+    ids: Vec<VarId>,  // Variables to evaluate
+    deps: Vec<usize>, // Passes on which this depends on
+    size: usize,      // Number of threads for this execution
+    op: PassOp,       // Operation that needs to be performed
 }
 
 impl Jit {
@@ -240,13 +239,11 @@ impl Jit {
 
         for mut pass in graph.passes {
             match &mut pass.op {
-                PassOp::KernelLaunch(hash, env, size) => {
-                    dbg!(&env);
-                    dbg!(&size);
+                PassOp::KernelLaunch(hash, env) => {
                     self.kernels
                         .get_mut(&hash)
                         .unwrap()
-                        .execute_async(env, *size);
+                        .execute_async(env, pass.size);
                 }
                 PassOp::TexUpload => {
                     for id in pass.ids.iter() {
@@ -305,8 +302,8 @@ impl Jit {
         let first_register = ir.backend.as_ref().unwrap().first_register();
         for pass in graph.passes.iter_mut() {
             match &mut pass.op {
-                PassOp::KernelLaunch(ref mut hash, env, ref mut size) => {
-                    let mut s = ScheduleIr::new(first_register, pass.size);
+                PassOp::KernelLaunch(ref mut hash, env) => {
+                    let mut s = ScheduleIr::new(first_register);
                     s.collect_vars(env, ir, &pass.ids.iter().cloned().collect::<Vec<_>>());
 
                     *hash = s.internal_hash();
@@ -318,7 +315,6 @@ impl Jit {
                             kernel
                         });
                     }
-                    *size = s.size();
                 }
                 PassOp::TexUpload => {}
                 _ => {
