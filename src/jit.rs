@@ -28,6 +28,9 @@ pub struct Jit {
     pub kernels: HashMap<u128, Box<dyn Kernel>>,
 }
 
+///
+/// An `ExecutionGraph` records The high level operations that need to be executed.
+///
 struct ExecutionGraph {
     passes: Vec<Pass>,
 }
