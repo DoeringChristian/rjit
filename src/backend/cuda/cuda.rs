@@ -101,11 +101,7 @@ impl backend::Backend for Backend {
                 flags: 1,
                 maxAnisotropy: 1,
                 mipmapFilterMode: cuda_rs::CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
-                mipmapLevelBias: Default::default(),
-                minMipmapLevelClamp: Default::default(),
-                maxMipmapLevelClamp: Default::default(),
-                borderColor: Default::default(),
-                reserved: Default::default(),
+                ..Default::default()
             };
             let view_desc = cuda_rs::CUDA_RESOURCE_VIEW_DESC {
                 format: if n_channels == 1 {
@@ -120,11 +116,7 @@ impl backend::Backend for Backend {
                 width: shape[0],
                 height: if shape.len() >= 2 { shape[1] } else { 1 },
                 depth: if shape.len() == 3 { shape[2] } else { 0 },
-                firstMipmapLevel: Default::default(),
-                lastMipmapLevel: Default::default(),
-                firstLayer: Default::default(),
-                lastLayer: Default::default(),
-                reserved: Default::default(),
+                ..Default::default()
             };
             dbg!(&tex_desc);
             dbg!(&view_desc);
