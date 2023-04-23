@@ -171,7 +171,50 @@ impl backend::Backend for Backend {
         self.stream.synchronize().unwrap();
     }
 
-    fn compress(&self, buf: &dyn backend::Buffer) {
+    fn compress(&self, src: &dyn backend::Buffer, dst: &dyn backend::Buffer) {
+        let src = src.as_any().downcast_ref::<Buffer>().unwrap();
+        let dst = dst.as_any().downcast_ref::<Buffer>().unwrap();
+        let ctx = self.device.ctx();
+        let execute = |func: &Function, size: usize, params: &mut [u64]| unsafe {
+            let mut unused = 0;
+            let mut block_size = 0;
+            ctx.cuOccupancyMaxPotentialBlockSize(
+                &mut unused,
+                &mut block_size,
+                func.raw(),
+                None,
+                0,
+                0,
+            )
+            .check()
+            .unwrap();
+            let block_size = block_size as u32;
+
+            let grid_size = (size as u32 + block_size - 1) / block_size;
+
+            ctx.cuLaunchKernel(
+                func.raw(),
+                grid_size,
+                1,
+                1,
+                block_size as _,
+                1,
+                1,
+                0,
+                **self.stream,
+                [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
+                std::ptr::null_mut(),
+            )
+            .check()
+            .unwrap();
+        };
+        unsafe {
+            if src.size <= 4096 {
+                let func = self.kernels.function("compress_small").unwrap();
+                execute(&func, src.size, &mut [src.ptr(), dst.ptr(), src.size as _]);
+            } else {
+            }
+        }
         todo!()
     }
 }
