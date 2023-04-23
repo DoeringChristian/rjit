@@ -1,9 +1,8 @@
-use std::ffi::{c_void, CStr, CString};
 use std::fmt::{Debug, Write};
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::cuda_core::{Device, Function, Instance, InternalModule, Module, Stream};
+use super::cuda_core::{Device, Function, Instance, Module, Stream};
 use crate::backend;
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
