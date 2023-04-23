@@ -1,4 +1,4 @@
-use std::ffi::CStr;
+use std::ffi::{c_void, CStr, CString};
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -349,5 +349,145 @@ impl Drop for Stream {
             ctx.cuStreamSynchronize(self.raw).check().unwrap();
             ctx.cuStreamDestroy_v2(self.raw).check().unwrap();
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct InternalModule {
+    module: cuda_rs::CUmodule,
+    device: Device,
+}
+
+impl Drop for InternalModule {
+    fn drop(&mut self) {
+        let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuModuleUnload(self.module);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Module(Arc<InternalModule>);
+
+impl Module {
+    pub fn from_ptx(device: &Device, ptx: &str) -> Module {
+        let ctx = device.ctx();
+        unsafe {
+            let ptx_cstring = CString::new(ptx).unwrap();
+
+            const log_size: usize = 16384;
+            let mut error_log = [0u8; log_size];
+            let mut info_log = [0u8; log_size];
+
+            let mut options = [
+                cuda_rs::CUjit_option_enum::CU_JIT_OPTIMIZATION_LEVEL,
+                cuda_rs::CUjit_option_enum::CU_JIT_LOG_VERBOSE,
+                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER,
+                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES,
+                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER,
+                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
+                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_LINE_INFO,
+                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_DEBUG_INFO,
+            ];
+
+            let mut option_values = [
+                4 as *mut c_void,
+                1 as *mut c_void,
+                info_log.as_mut_ptr() as *mut c_void,
+                log_size as *mut c_void,
+                error_log.as_mut_ptr() as *mut c_void,
+                log_size as *mut c_void,
+                0 as *mut c_void,
+                0 as *mut c_void,
+            ];
+
+            let mut linkstate = std::ptr::null_mut();
+            ctx.cuLinkCreate_v2(
+                options.len() as _,
+                options.as_mut_ptr(),
+                option_values.as_mut_ptr(),
+                &mut linkstate,
+            )
+            .check()
+            .unwrap();
+
+            ctx.cuLinkAddData_v2(
+                linkstate,
+                cuda_rs::CUjitInputType::CU_JIT_INPUT_PTX,
+                ptx_cstring.as_ptr() as *mut c_void,
+                ptx.len(),
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+            .check()
+            .or_else(|err| {
+                let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
+                log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
+                Err(err)
+            }).unwrap();
+
+            let mut link_out = std::ptr::null_mut();
+            let mut link_out_size = 0;
+            ctx.cuLinkComplete(linkstate, &mut link_out, &mut link_out_size)
+                .check()
+                .or_else(|err| {
+                    let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
+                    log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
+                    Err(err)
+                }).unwrap();
+
+            log::trace!(
+                "Detailed linker output: {}",
+                CStr::from_bytes_until_nul(&info_log)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            );
+
+            let mut out: Vec<u8> = Vec::with_capacity(link_out_size);
+            std::ptr::copy_nonoverlapping(link_out as *mut u8, out.as_mut_ptr(), link_out_size);
+            out.set_len(link_out_size);
+
+            ctx.cuLinkDestroy(linkstate).check().unwrap();
+
+            let mut module = std::ptr::null_mut();
+            ctx.cuModuleLoadData(&mut module, out.as_ptr() as *const c_void)
+                .check()
+                .unwrap();
+
+            Self(Arc::new(InternalModule {
+                module,
+                device: device.clone(),
+            }))
+        }
+    }
+    pub fn function(&self, name: &str) -> Function {
+        let ctx = self.0.device.ctx();
+        unsafe {
+            let fname = CString::new(name).unwrap();
+            let mut func = std::ptr::null_mut();
+            ctx.cuModuleGetFunction(&mut func, self.0.module, fname.as_ptr() as *const i8)
+                .check()
+                .unwrap();
+            Function {
+                func,
+                module: self.clone(),
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Function {
+    func: cuda_rs::CUfunction,
+    module: Module,
+}
+
+impl Function {
+    pub unsafe fn raw(&self) -> cuda_rs::CUfunction {
+        self.func
     }
 }

@@ -3,7 +3,7 @@ use std::fmt::{Debug, Write};
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::cuda_core::{Device, Instance, Stream};
+use super::cuda_core::{Device, Function, Instance, InternalModule, Module, Stream};
 use crate::backend;
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
@@ -26,6 +26,7 @@ impl Backend {
         let device = Device::create(&instance, 0)?;
         let stream =
             Arc::new(device.create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)?);
+
         Ok(Self { device, stream })
     }
 }
@@ -38,9 +39,8 @@ impl backend::Backend for Backend {
     fn new_kernel(&self) -> Box<dyn backend::Kernel> {
         Box::new(Kernel {
             asm: Default::default(),
-            data: Default::default(),
-            module: std::ptr::null_mut(),
-            func: std::ptr::null_mut(),
+            module: None,
+            func: None,
             device: self.device.clone(),
             stream: self.stream.clone(),
         })
@@ -171,6 +171,10 @@ impl backend::Backend for Backend {
 
     fn synchronize(&self) {
         self.stream.synchronize().unwrap();
+    }
+
+    fn compress(&self, buf: &dyn backend::Buffer) {
+        todo!()
     }
 }
 
@@ -337,9 +341,8 @@ impl backend::Texture for Texture {
 #[derive(Debug)]
 pub struct Kernel {
     pub asm: String,
-    pub data: Vec<u8>,
-    pub module: cuda_rs::CUmodule,
-    pub func: cuda_rs::CUfunction,
+    module: Option<Module>,
+    func: Option<Function>,
     device: Device,
     stream: Arc<Stream>,
 }
@@ -523,103 +526,8 @@ impl backend::Kernel for Kernel {
     }
 
     fn compile(&mut self) {
-        let ctx = self.device.ctx();
-        unsafe {
-            let asm = CString::new(self.asm.as_str()).unwrap();
-
-            const log_size: usize = 16384;
-            let mut error_log = [0u8; log_size];
-            let mut info_log = [0u8; log_size];
-
-            let mut options = [
-                cuda_rs::CUjit_option_enum::CU_JIT_OPTIMIZATION_LEVEL,
-                cuda_rs::CUjit_option_enum::CU_JIT_LOG_VERBOSE,
-                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER,
-                cuda_rs::CUjit_option_enum::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES,
-                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER,
-                cuda_rs::CUjit_option_enum::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
-                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_LINE_INFO,
-                cuda_rs::CUjit_option_enum::CU_JIT_GENERATE_DEBUG_INFO,
-            ];
-
-            let mut option_values = [
-                4 as *mut c_void,
-                1 as *mut c_void,
-                info_log.as_mut_ptr() as *mut c_void,
-                log_size as *mut c_void,
-                error_log.as_mut_ptr() as *mut c_void,
-                log_size as *mut c_void,
-                0 as *mut c_void,
-                0 as *mut c_void,
-            ];
-
-            let mut linkstate = std::ptr::null_mut();
-            ctx.cuLinkCreate_v2(
-                options.len() as _,
-                options.as_mut_ptr(),
-                option_values.as_mut_ptr(),
-                &mut linkstate,
-            )
-            .check()
-            .unwrap();
-
-            ctx.cuLinkAddData_v2(
-                linkstate,
-                cuda_rs::CUjitInputType::CU_JIT_INPUT_PTX,
-                asm.as_ptr() as *mut c_void,
-                self.asm.len(),
-                std::ptr::null(),
-                0,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            )
-            .check()
-            .or_else(|err| {
-                let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
-                log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
-                Err(err)
-            }).unwrap();
-
-            let mut link_out = std::ptr::null_mut();
-            let mut link_out_size = 0;
-            ctx.cuLinkComplete(linkstate, &mut link_out, &mut link_out_size)
-                .check()
-                .or_else(|err| {
-                    let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
-                    log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
-                    Err(err)
-                }).unwrap();
-
-            log::trace!(
-                "Detailed linker output: {}",
-                CStr::from_bytes_until_nul(&info_log)
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-            );
-
-            let mut out: Vec<u8> = Vec::with_capacity(link_out_size);
-            std::ptr::copy_nonoverlapping(link_out as *mut u8, out.as_mut_ptr(), link_out_size);
-            out.set_len(link_out_size);
-
-            ctx.cuLinkDestroy(linkstate).check().unwrap();
-
-            self.data = out;
-        }
-        unsafe {
-            let mut module = std::ptr::null_mut();
-            ctx.cuModuleLoadData(&mut module, self.data.as_ptr() as *const c_void)
-                .check()
-                .unwrap();
-            self.module = module;
-
-            let fname = CString::new(Self::ENTRY_POINT).unwrap();
-            let mut func = std::ptr::null_mut();
-            ctx.cuModuleGetFunction(&mut func, self.module, fname.as_ptr() as *const i8)
-                .check()
-                .unwrap();
-            self.func = func;
-        }
+        self.module = Some(Module::from_ptx(&self.device, &self.asm));
+        self.func = Some(self.module.as_ref().unwrap().function(Self::ENTRY_POINT));
     }
 
     fn execute_async(&mut self, env: &mut crate::schedule::Env, size: usize) {
@@ -630,7 +538,7 @@ impl backend::Kernel for Kernel {
             ctx.cuOccupancyMaxPotentialBlockSize(
                 &mut unused,
                 &mut block_size,
-                self.func,
+                self.func.as_ref().unwrap().raw(),
                 None,
                 0,
                 0,
@@ -654,7 +562,7 @@ impl backend::Kernel for Kernel {
             );
 
             ctx.cuLaunchKernel(
-                self.func,
+                self.func.as_ref().unwrap().raw(),
                 grid_size,
                 1,
                 1,
