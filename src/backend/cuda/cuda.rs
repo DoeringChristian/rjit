@@ -18,6 +18,7 @@ pub enum Error {
 pub struct Backend {
     device: Device,
     stream: Arc<Stream>,
+    kernels: Module, // Default kernels
 }
 impl Backend {
     pub fn new() -> Result<Self, Error> {
@@ -26,7 +27,13 @@ impl Backend {
         let stream =
             Arc::new(device.create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)?);
 
-        Ok(Self { device, stream })
+        let kernels = Module::from_ptx(&device, include_str!("./kernels/kernels_70.ptx")).unwrap();
+
+        Ok(Self {
+            device,
+            stream,
+            kernels,
+        })
     }
 }
 
@@ -525,8 +532,14 @@ impl backend::Kernel for Kernel {
     }
 
     fn compile(&mut self) {
-        self.module = Some(Module::from_ptx(&self.device, &self.asm));
-        self.func = Some(self.module.as_ref().unwrap().function(Self::ENTRY_POINT));
+        self.module = Some(Module::from_ptx(&self.device, &self.asm).unwrap());
+        self.func = Some(
+            self.module
+                .as_ref()
+                .unwrap()
+                .function(Self::ENTRY_POINT)
+                .unwrap(),
+        );
     }
 
     fn execute_async(&mut self, env: &mut crate::schedule::Env, size: usize) {

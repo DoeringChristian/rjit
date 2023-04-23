@@ -371,7 +371,7 @@ impl Drop for InternalModule {
 pub struct Module(Arc<InternalModule>);
 
 impl Module {
-    pub fn from_ptx(device: &Device, ptx: &str) -> Module {
+    pub fn from_ptx(device: &Device, ptx: &str) -> Result<Module, Error> {
         let ctx = device.ctx();
         unsafe {
             let ptx_cstring = CString::new(ptx).unwrap();
@@ -409,8 +409,7 @@ impl Module {
                 option_values.as_mut_ptr(),
                 &mut linkstate,
             )
-            .check()
-            .unwrap();
+            .check()?;
 
             ctx.cuLinkAddData_v2(
                 linkstate,
@@ -427,7 +426,7 @@ impl Module {
                 let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
                 log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
                 Err(err)
-            }).unwrap();
+            })?;
 
             let mut link_out = std::ptr::null_mut();
             let mut link_out_size = 0;
@@ -437,7 +436,7 @@ impl Module {
                     let error_log = CStr::from_bytes_until_nul(&error_log).unwrap().to_str().unwrap();
                     log::error!("Compilation failed. Please see the PTX listing and error message below:\n{}\n{}", error_log, err);
                     Err(err)
-                }).unwrap();
+                })?;
 
             log::trace!(
                 "Detailed linker output: {}",
@@ -451,31 +450,29 @@ impl Module {
             std::ptr::copy_nonoverlapping(link_out as *mut u8, out.as_mut_ptr(), link_out_size);
             out.set_len(link_out_size);
 
-            ctx.cuLinkDestroy(linkstate).check().unwrap();
+            ctx.cuLinkDestroy(linkstate).check()?;
 
             let mut module = std::ptr::null_mut();
             ctx.cuModuleLoadData(&mut module, out.as_ptr() as *const c_void)
-                .check()
-                .unwrap();
+                .check()?;
 
-            Self(Arc::new(InternalModule {
+            Ok(Self(Arc::new(InternalModule {
                 module,
                 device: device.clone(),
-            }))
+            })))
         }
     }
-    pub fn function(&self, name: &str) -> Function {
+    pub fn function(&self, name: &str) -> Result<Function, Error> {
         let ctx = self.0.device.ctx();
         unsafe {
             let fname = CString::new(name).unwrap();
             let mut func = std::ptr::null_mut();
             ctx.cuModuleGetFunction(&mut func, self.0.module, fname.as_ptr() as *const i8)
-                .check()
-                .unwrap();
-            Function {
+                .check()?;
+            Ok(Function {
                 func,
                 module: self.clone(),
-            }
+            })
         }
     }
 }
