@@ -203,7 +203,9 @@ impl backend::Backend for Backend {
             dbg!(shared_size);
             dbg!(size);
 
-            ctx.cuMemAlloc_v2(&mut count_dptr, 4).check().unwrap();
+            let mut count_dptr = std::ptr::null_mut();
+            ctx.cuMemAllocHost_v2(&mut count_dptr, 4).check().unwrap();
+            // ctx.cuMemAlloc_v2(&mut count_dptr, 4).check().unwrap();
 
             if trailer > 0 {
                 dbg!(size);
@@ -220,17 +222,19 @@ impl backend::Backend for Backend {
                     &mut size as *mut _ as *mut c_void,
                     &mut count_dptr as *mut _ as *mut c_void,
                 ],
-                (1, 1, 1),
-                (thread_count, 1, 1),
+                1,
+                thread_count,
                 shared_size,
             )
             .unwrap();
             self.stream.synchronize().unwrap();
-            let mut out_size: u32 = 0;
-            ctx.cuMemcpyDtoH_v2(&mut out_size as *mut _ as *mut c_void, count_dptr, 4)
-                .check()
-                .unwrap();
-            ctx.cuMemFree_v2(count_dptr).check().unwrap();
+            // let mut out_size: u32 = 0;
+            // ctx.cuMemcpyDtoH_v2(&mut out_size as *mut _ as *mut c_void, count_dptr, 4)
+            //     .check()
+            //     .unwrap();
+            // ctx.cuMemFree_v2(count_dptr).check().unwrap();
+            let out_size: u32 = *(count_dptr as *mut _);
+            ctx.cuMemFreeHost(count_dptr).check().unwrap();
             dbg!(out_size);
             out_size as usize
         }

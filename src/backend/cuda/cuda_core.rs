@@ -495,8 +495,8 @@ impl Function {
         &self,
         stream: &Stream,
         args: &mut [*mut c_void],
-        block_size: (u32, u32, u32),
-        grid_size: (u32, u32, u32),
+        block_size: impl Into<KernelSize>,
+        grid_size: impl Into<KernelSize>,
         shared_size: u32,
     ) -> Result<(), Error> {
         let ctx = self.module.0.device.ctx();
@@ -507,6 +507,8 @@ impl Function {
         // let block_size = block_size as u32;
         //
         // let grid_size = (size as u32 + block_size - 1) / block_size;
+        let block_size = block_size.into();
+        let grid_size = grid_size.into();
 
         ctx.cuLaunchKernel(
             self.raw(),
@@ -523,5 +525,23 @@ impl Function {
         )
         .check()?;
         Ok(())
+    }
+}
+
+pub struct KernelSize(u32, u32, u32);
+
+impl From<u32> for KernelSize {
+    fn from(value: u32) -> Self {
+        Self(value, 1, 1)
+    }
+}
+impl From<(u32, u32)> for KernelSize {
+    fn from(value: (u32, u32)) -> Self {
+        Self(value.0, value.1, 1)
+    }
+}
+impl From<(u32, u32, u32)> for KernelSize {
+    fn from(value: (u32, u32, u32)) -> Self {
+        Self(value.0, value.1, value.2)
     }
 }
