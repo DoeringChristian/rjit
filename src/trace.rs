@@ -312,6 +312,29 @@ impl VarRef {
     // To Host functions:
     // to_host!(Bool, bool);
     //
+
+    // =========================================
+    // Recursive expansion of the to_host! macro
+    // =========================================
+
+    pub fn to_host_bool(&self) -> Vec<bool> {
+        let var = self.var();
+        assert_eq!(var.ty, VarType::Bool);
+
+        let mut dst = Vec::with_capacity(var.size);
+        unsafe { dst.set_len(var.size) };
+        unsafe {
+            var.data
+                .buffer()
+                .unwrap()
+                .copy_to_host(std::slice::from_raw_parts_mut(
+                    dst.as_mut_ptr() as *mut _,
+                    dst.len(),
+                ));
+        }
+        dst
+    }
+
     to_host!(I8);
     to_host!(U8);
     to_host!(I16);
@@ -346,6 +369,39 @@ impl VarRef {
     uop!(Cos);
     uop!(Exp2);
     uop!(Log2);
+
+    pub fn compress(&self) -> Self {
+        assert_eq!(self.var().ty, VarType::Bool);
+        let size = self.var().size;
+        let mut var = Var {
+            op: Op::Data,
+            ty: VarType::U32,
+            ..Default::default()
+        };
+
+        let dst = self
+            .ir
+            .borrow()
+            .backend
+            .as_ref()
+            .unwrap()
+            .buffer_uninit(size * 4);
+
+        let src = self.var().data.buffer().unwrap().clone();
+
+        let size = self
+            .ir
+            .borrow()
+            .backend
+            .as_ref()
+            .unwrap()
+            .compress(src.as_ref(), dst.as_ref());
+
+        var.data = Data::Buffer(dst);
+        var.size = size;
+
+        self.ir.push_var(var)
+    }
 
     pub fn and(&self, rhs: &VarRef) -> VarRef {
         assert!(Rc::ptr_eq(&self.ir, &rhs.ir));

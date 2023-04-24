@@ -232,6 +232,7 @@ impl Device {
 
         Ok(Self { internal })
     }
+    // TODO: better context switch operation
     pub fn ctx(&self) -> CtxRef {
         CtxRef::create(&self.internal)
     }
@@ -331,6 +332,9 @@ impl Stream {
             ctx.cuStreamSynchronize(self.raw).check()?;
         }
         Ok(())
+    }
+    pub unsafe fn raw(&self) -> CUstream {
+        self.raw
     }
 }
 
@@ -486,5 +490,38 @@ pub struct Function {
 impl Function {
     pub unsafe fn raw(&self) -> cuda_rs::CUfunction {
         self.func
+    }
+    pub unsafe fn launch(
+        &self,
+        stream: &Stream,
+        args: &mut [*mut c_void],
+        block_size: (u32, u32, u32),
+        grid_size: (u32, u32, u32),
+        shared_size: u32,
+    ) -> Result<(), Error> {
+        let ctx = self.module.0.device.ctx();
+        // let mut unused = 0;
+        // let mut block_size = 0;
+        // ctx.cuOccupancyMaxPotentialBlockSize(&mut unused, &mut block_size, self.raw(), None, 0, 0)
+        //     .check()?;
+        // let block_size = block_size as u32;
+        //
+        // let grid_size = (size as u32 + block_size - 1) / block_size;
+
+        ctx.cuLaunchKernel(
+            self.raw(),
+            grid_size.0,
+            grid_size.1,
+            grid_size.2,
+            block_size.0,
+            block_size.1,
+            block_size.2,
+            shared_size,
+            **stream,
+            args.as_mut_ptr(),
+            std::ptr::null_mut(),
+        )
+        .check()?;
+        Ok(())
     }
 }

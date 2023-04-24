@@ -1,3 +1,4 @@
+use std::ffi::c_void;
 use std::fmt::{Debug, Write};
 use std::sync::Arc;
 use thiserror::Error;
@@ -171,51 +172,68 @@ impl backend::Backend for Backend {
         self.stream.synchronize().unwrap();
     }
 
-    fn compress(&self, src: &dyn backend::Buffer, dst: &dyn backend::Buffer) {
+    fn compress(&self, src: &dyn backend::Buffer, dst: &dyn backend::Buffer) -> usize {
         let src = src.as_any().downcast_ref::<Buffer>().unwrap();
         let dst = dst.as_any().downcast_ref::<Buffer>().unwrap();
         let ctx = self.device.ctx();
-        let execute = |func: &Function, size: usize, params: &mut [u64]| unsafe {
-            let mut unused = 0;
-            let mut block_size = 0;
-            ctx.cuOccupancyMaxPotentialBlockSize(
-                &mut unused,
-                &mut block_size,
-                func.raw(),
-                None,
-                0,
-                0,
-            )
-            .check()
-            .unwrap();
-            let block_size = block_size as u32;
-
-            let grid_size = (size as u32 + block_size - 1) / block_size;
-
-            ctx.cuLaunchKernel(
-                func.raw(),
-                grid_size,
-                1,
-                1,
-                block_size as _,
-                1,
-                1,
-                0,
-                **self.stream,
-                [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
-                std::ptr::null_mut(),
-            )
-            .check()
-            .unwrap();
-        };
         unsafe {
-            if src.size <= 4096 {
-                let func = self.kernels.function("compress_small").unwrap();
-                execute(&func, src.size, &mut [src.ptr(), dst.ptr(), src.size as _]);
-            } else {
+            fn round_pow2(mut x: u32) -> u32 {
+                x -= 1;
+                x |= x.wrapping_shr(1);
+                x |= x.wrapping_shr(2);
+                x |= x.wrapping_shr(4);
+                x |= x.wrapping_shr(8);
+                x |= x.wrapping_shr(16);
+                x + 1
             }
+
+            let func = self.kernels.function("compress_small").unwrap();
+            let mut size = src.size as u32;
+            let mut count_dptr = 0;
+            let mut src_dptr = src.ptr();
+            let mut dst_dptr = dst.ptr();
+
+            let items_per_thread = 4;
+            let thread_count = round_pow2((size + items_per_thread - 1) / items_per_thread);
+            let shared_size = thread_count * 2 * std::mem::size_of::<u32>() as u32;
+
+            let trailer = thread_count * items_per_thread - size;
+
+            dbg!(thread_count);
+            dbg!(shared_size);
+            dbg!(size);
+
+            ctx.cuMemAlloc_v2(&mut count_dptr, 4).check().unwrap();
+
+            if trailer > 0 {
+                dbg!(size);
+                ctx.cuMemsetD8Async(src_dptr + size as u64, 0, trailer as _, self.stream.raw())
+                    .check()
+                    .unwrap();
+            }
+
+            func.launch(
+                &self.stream,
+                &mut [
+                    &mut src_dptr as *mut _ as *mut c_void,
+                    &mut dst_dptr as *mut _ as *mut c_void,
+                    &mut size as *mut _ as *mut c_void,
+                    &mut count_dptr as *mut _ as *mut c_void,
+                ],
+                (1, 1, 1),
+                (thread_count, 1, 1),
+                shared_size,
+            )
+            .unwrap();
+            self.stream.synchronize().unwrap();
+            let mut out_size: u32 = 0;
+            ctx.cuMemcpyDtoH_v2(&mut out_size as *mut _ as *mut c_void, count_dptr, 4)
+                .check()
+                .unwrap();
+            ctx.cuMemFree_v2(count_dptr).check().unwrap();
+            dbg!(out_size);
+            out_size as usize
         }
-        todo!()
     }
 }
 

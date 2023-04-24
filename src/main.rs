@@ -13,23 +13,16 @@ fn main() {
     let ir = Trace::default();
     ir.set_backend("cuda");
 
-    let x = ir.literal_f32(0.5);
-    let y = ir.literal_f32(0.5);
+    let bools = ir.buffer_bool(&[true, true, true, true, true, true, true, true]);
 
-    let data = ir.buffer_f32(&[1.; 400]);
+    dbg!(bools.to_host_bool());
 
-    let tex = data.to_texture(&[10, 10], 4);
-
-    let res = tex.tex_lookup(&[&x, &y]);
-
-    let r = res[0].clone();
-
-    r.schedule();
+    let idx = bools.compress();
 
     let mut jit = Jit::default();
     jit.eval(&mut ir.borrow_mut());
 
     println!("{}", jit.kernel_debug());
 
-    dbg!(r.to_host_f32());
+    dbg!(idx.to_host_u32());
 }
