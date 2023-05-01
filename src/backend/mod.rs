@@ -1,4 +1,5 @@
 pub mod cuda;
+pub mod optix;
 
 use std::any::Any;
 use std::fmt::Debug;

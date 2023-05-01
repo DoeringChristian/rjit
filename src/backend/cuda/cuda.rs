@@ -189,7 +189,6 @@ impl backend::Backend for Backend {
 
             let func = self.kernels.function("compress_small").unwrap();
             let mut size = src.size as u32;
-            let mut count_dptr = 0;
             let mut src_dptr = src.ptr();
             let mut dst_dptr = dst.ptr();
 
@@ -203,9 +202,10 @@ impl backend::Backend for Backend {
             dbg!(shared_size);
             dbg!(size);
 
-            let mut count_dptr = std::ptr::null_mut();
-            ctx.cuMemAllocHost_v2(&mut count_dptr, 4).check().unwrap();
-            // ctx.cuMemAlloc_v2(&mut count_dptr, 4).check().unwrap();
+            // let mut count_dptr = std::ptr::null_mut();
+            let mut count_dptr = 0;
+            // ctx.cuMemAllocHost_v2(&mut count_dptr, 4).check().unwrap();
+            ctx.cuMemAlloc_v2(&mut count_dptr, 4).check().unwrap();
 
             if trailer > 0 {
                 dbg!(size);
@@ -228,13 +228,13 @@ impl backend::Backend for Backend {
             )
             .unwrap();
             self.stream.synchronize().unwrap();
-            // let mut out_size: u32 = 0;
-            // ctx.cuMemcpyDtoH_v2(&mut out_size as *mut _ as *mut c_void, count_dptr, 4)
-            //     .check()
-            //     .unwrap();
-            // ctx.cuMemFree_v2(count_dptr).check().unwrap();
-            let out_size: u32 = *(count_dptr as *mut _);
-            ctx.cuMemFreeHost(count_dptr).check().unwrap();
+            let mut out_size: u32 = 0;
+            ctx.cuMemcpyDtoH_v2(&mut out_size as *mut _ as *mut c_void, count_dptr, 4)
+                .check()
+                .unwrap();
+            ctx.cuMemFree_v2(count_dptr).check().unwrap();
+            // let out_size: u32 = *(count_dptr as *mut _);
+            // ctx.cuMemFreeHost(count_dptr).check().unwrap();
             dbg!(out_size);
             out_size as usize
         }
