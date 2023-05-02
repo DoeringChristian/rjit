@@ -238,7 +238,7 @@ impl backend::Kernel for Kernel {
                     }
                 }
                 ParamType::Output => {
-                    let param_offst = (var.buf.unwrap() + 1) * 8;
+                    let param_offset = (var.buf.unwrap() + 1) * 8;
                     self.assemble_var(ir, env, id);
                     // let offset = param_idx * 8;
                     write!(
@@ -247,7 +247,7 @@ impl backend::Kernel for Kernel {
                        \tld.const.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
                            \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
                            params[offset]\n",
-                        param_offst,
+                        param_offset,
                         var.ty.size(),
                     );
 
