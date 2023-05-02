@@ -1,4 +1,4 @@
-mod codegen;
+pub mod codegen;
 pub mod cuda;
 pub mod cuda_core;
 pub use cuda::*;

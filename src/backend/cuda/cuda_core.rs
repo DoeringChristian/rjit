@@ -531,7 +531,7 @@ impl Function {
     }
 }
 
-pub struct KernelSize(u32, u32, u32);
+pub struct KernelSize(pub u32, pub u32, pub u32);
 
 impl From<u32> for KernelSize {
     fn from(value: u32) -> Self {

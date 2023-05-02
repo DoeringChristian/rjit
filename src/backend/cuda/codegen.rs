@@ -20,6 +20,7 @@ pub fn assemble_var(
     id: SVarId,
     buf_offset: usize,
     tex_offset: usize,
+    params_type: &'static str,
 ) {
     let var = ir.var(id);
     writeln!(asm, "");
@@ -812,7 +813,11 @@ pub fn assemble_var(
             // Load buffer ptr:
             let param_offset = (src.buf.unwrap() + buf_offset) * 8;
 
-            writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
+            writeln!(
+                asm,
+                "\tld.{params_type}.u64 %rd0, [params+{}];",
+                param_offset,
+            );
 
             // Perform actual gather:
 
@@ -878,7 +883,11 @@ pub fn assemble_var(
 
             let param_offset = (dst.buf.unwrap() + buf_offset) * 8;
 
-            writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
+            writeln!(
+                asm,
+                "\tld.{params_type}.u64 %rd0, [params+{}];",
+                param_offset,
+            );
 
             if src.ty.size() == 1 {
                 write!(
@@ -927,7 +936,11 @@ pub fn assemble_var(
             // Load texture ptr:
             let param_offset = (src.tex.unwrap() + tex_offset) * 8;
 
-            writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset,);
+            writeln!(
+                asm,
+                "\tld.{params_type}.u64 %rd0, [params+{}];",
+                param_offset,
+            );
 
             writeln!(asm, "\t.reg.f32 {}_out_<4>;", var.reg());
             if dim == 3 {

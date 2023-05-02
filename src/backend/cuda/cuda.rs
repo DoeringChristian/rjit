@@ -415,7 +415,7 @@ impl Kernel {
     const FIRST_REGISTER: usize = 4;
     #[allow(unused_must_use)]
     fn assemble_var(&mut self, ir: &ScheduleIr, env: &Env, id: SVarId) {
-        super::codegen::assemble_var(&mut self.asm, ir, id, 1, 1 + env.buffers().len());
+        super::codegen::assemble_var(&mut self.asm, ir, id, 1, 1 + env.buffers().len(), "param");
     }
 }
 

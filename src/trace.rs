@@ -76,6 +76,9 @@ impl Trace {
         if backend == "cuda" {
             self.borrow_mut().backend =
                 Some(Box::new(crate::backend::cuda::Backend::new().unwrap()));
+        } else if backend == "optix" {
+            self.borrow_mut().backend =
+                Some(Box::new(crate::backend::optix::Backend::new().unwrap()));
         }
     }
     pub fn schedule(&self, refs: &[&VarRef]) {

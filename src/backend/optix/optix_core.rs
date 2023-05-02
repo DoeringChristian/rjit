@@ -1,4 +1,5 @@
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
+use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -41,6 +42,13 @@ pub struct Instance {
     cuda: Arc<cuda_core::Instance>,
     optix: OptixApi,
 }
+impl Debug for Instance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Instance")
+            .field("cuda", &self.cuda)
+            .finish()
+    }
+}
 
 impl Instance {
     pub fn new() -> Result<Self, Error> {
@@ -52,13 +60,14 @@ impl Instance {
     }
 }
 
+#[derive(Debug)]
 pub struct InternalDevice {
     cuda_device: cuda_core::Device,
     ctx: OptixDeviceContext,
     instance: Arc<Instance>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Device(Arc<InternalDevice>);
 impl Deref for Device {
     type Target = Arc<InternalDevice>;
@@ -91,6 +100,12 @@ impl Device {
             })))
         }
     }
+    pub fn cuda_ctx(&self) -> cuda_core::CtxRef {
+        self.cuda_device.ctx()
+    }
+    pub fn cuda_device(&self) -> &cuda_core::Device {
+        &self.cuda_device
+    }
 }
 
 impl Drop for InternalDevice {
@@ -119,11 +134,11 @@ impl Module {
     ) -> Result<Self, Error> {
         unsafe {
             let ptx_cstring = CString::new(ptx).unwrap();
-            let mut log = [0i8; 128];
+            let mut log = vec![0u8; 2048];
             let mut log_size = log.len();
             let mut module = std::ptr::null_mut();
 
-            device
+            let result = device
                 .instance
                 .optix
                 .optixModuleCreateFromPTX(
@@ -132,11 +147,18 @@ impl Module {
                     &pipeline_compile_options,
                     ptx_cstring.as_ptr() as *const _,
                     ptx.len(),
-                    log.as_mut_ptr(),
+                    log.as_mut_ptr() as *mut _,
                     &mut log_size,
                     &mut module,
                 )
-                .check()?;
+                .check()
+                .or_else(|err| {
+                    log::trace!(
+                        "Detailed linker output: {}",
+                        CStr::from_bytes_until_nul(&log).unwrap().to_str().unwrap()
+                    );
+                    Err(err)
+                })?;
             Ok(Self {
                 device: device.clone(),
                 module,
@@ -209,23 +231,24 @@ impl ProgramGroup {
                 module,
                 entry_point,
             } => {
+                let entry_point = CString::new(entry_point).unwrap();
                 let desc = OptixProgramGroupDesc {
                     kind: OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_MISS,
                     flags: OptixProgramGroupFlags::OPTIX_PROGRAM_GROUP_FLAGS_NONE as _,
                     __bindgen_anon_1: optix_rs::OptixProgramGroupDesc__bindgen_ty_1 {
                         miss: optix_rs::OptixProgramGroupSingleModule {
                             module: module.module,
-                            entryFunctionName: entry_point.as_ptr() as *const _,
+                            entryFunctionName: entry_point.as_ptr(),
                         },
                     },
                 };
-                let mut log = [0i8; 128];
+                let mut log = vec![0u8; 2048];
                 let mut log_size = log.len();
 
                 let mut group = std::ptr::null_mut();
 
                 unsafe {
-                    module
+                    let result = module
                         .device
                         .instance
                         .optix
@@ -240,7 +263,14 @@ impl ProgramGroup {
                             &mut log_size,
                             &mut group,
                         )
-                        .check()?;
+                        .check()
+                        .or_else(|err| {
+                            log::trace!(
+                                "Detailed linker output: {}",
+                                CStr::from_bytes_until_nul(&log).unwrap().to_str().unwrap()
+                            );
+                            Err(err)
+                        })?;
                 }
                 Ok(Self {
                     device: device.clone(),
@@ -251,13 +281,14 @@ impl ProgramGroup {
                 module,
                 entry_point,
             } => {
+                let entry_point = CString::new(entry_point).unwrap();
                 let desc = OptixProgramGroupDesc {
                     kind: OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_RAYGEN,
                     flags: OptixProgramGroupFlags::OPTIX_PROGRAM_GROUP_FLAGS_NONE as _,
                     __bindgen_anon_1: optix_rs::OptixProgramGroupDesc__bindgen_ty_1 {
                         raygen: optix_rs::OptixProgramGroupSingleModule {
                             module: module.module,
-                            entryFunctionName: entry_point.as_ptr() as *const _,
+                            entryFunctionName: entry_point.as_ptr(),
                         },
                     },
                 };
@@ -298,6 +329,12 @@ impl ProgramGroup {
                 mut module_is,
                 entry_point_is,
             } => {
+                let entry_point_ch =
+                    entry_point_ch.map(|entry_point| CString::new(entry_point).unwrap());
+                let entry_point_ah =
+                    entry_point_ah.map(|entry_point| CString::new(entry_point).unwrap());
+                let entry_point_is =
+                    entry_point_is.map(|entry_point| CString::new(entry_point).unwrap());
                 let desc = OptixProgramGroupDesc {
                     kind: OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_MISS,
                     flags: OptixProgramGroupFlags::OPTIX_PROGRAM_GROUP_FLAGS_NONE as _,
@@ -479,6 +516,35 @@ impl Pipeline {
                 device: device.clone(),
             })
         }
+    }
+    pub unsafe fn launch(
+        &self,
+        stream: &cuda_core::Stream,
+        params: &[u64],
+        size: impl Into<cuda_core::KernelSize>,
+    ) -> Result<(), Error> {
+        let mut d_params = 0;
+        let ctx = self.device.cuda_device.ctx();
+        ctx.cuMemAlloc_v2(&mut d_params, 8 * params.len()).check()?;
+        ctx.cuMemcpyHtoD_v2(d_params, params.as_ptr() as *const _, params.len() * 8)
+            .check()?; // TODO: Free somehow...
+
+        let size = size.into();
+        self.device
+            .instance
+            .optix
+            .optixLaunch(
+                self.pipeline,
+                stream.raw(),
+                d_params,
+                params.len() / 8,
+                &self.sbt,
+                size.0,
+                size.1,
+                size.2,
+            )
+            .check()?;
+        Ok(())
     }
 }
 
