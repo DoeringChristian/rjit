@@ -6,62 +6,35 @@ use crate::backend;
 use crate::backend::cuda::cuda_core;
 use optix_rs::{
     OptixApi, OptixDeviceContext, OptixDeviceContextOptions, OptixExceptionFlags,
-    OptixModuleCompileOptions, OptixPipelineCompileOptions,
+    OptixModuleCompileOptions, OptixPipelineCompileOptions, OptixProgramGroup,
+    OptixProgramGroupDesc,
 };
 use thiserror::Error;
+
+use super::optix_core;
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("{}", .0)]
-    CoreError(#[from] cuda_core::Error),
-    #[error("{}", .0)]
-    OptixError(#[from] optix_rs::OptixError),
-}
-
-pub struct BackendInternal {
-    device: cuda_core::Device,
-    ctx: OptixDeviceContext,
-    api: OptixApi,
-    stream: Arc<cuda_core::Stream>,
+    OptixError(#[from] optix_core::Error),
 }
 
 #[derive(Clone)]
-pub struct Backend(Arc<BackendInternal>);
+pub struct Backend {
+    instance: Arc<optix_core::Instance>,
+    device: optix_core::Device,
+}
 impl Debug for Backend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Backend")
-            .field("device", &self.0.device)
-            .field("ctx", &self.0.ctx)
-            .field("stream", &self.0.stream)
-            .finish()
+        f.debug_struct("Backend").finish()
     }
 }
 
 impl Backend {
     pub fn new() -> Result<Self, Error> {
-        let instance = Arc::new(cuda_core::Instance::new()?);
-        let device = cuda_core::Device::create(&instance, 0)?;
-        let stream =
-            Arc::new(device.create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)?);
-        unsafe {
-            let optix = optix_rs::OptixApi::find_and_load()?;
-            let mut optix_ctx = std::ptr::null_mut();
-            optix
-                .optixDeviceContextCreate(
-                    device.ctx().raw(),
-                    &OptixDeviceContextOptions {
-                        ..Default::default()
-                    },
-                    &mut optix_ctx,
-                )
-                .check()?;
-            Ok(Self(Arc::new(BackendInternal {
-                device,
-                stream,
-                ctx: optix_ctx,
-                api: optix,
-            })))
-        }
+        let instance = Arc::new(optix_core::Instance::new()?);
+        let device = optix_core::Device::create(&instance, 0)?;
+        Ok(Self { device, instance })
     }
 }
 
@@ -100,17 +73,6 @@ impl backend::Backend for Backend {
     }
 }
 
-impl Drop for BackendInternal {
-    fn drop(&mut self) {
-        unsafe {
-            self.api
-                .optixDeviceContextDestroy(self.ctx)
-                .check()
-                .unwrap();
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Kernel {
     backend: Backend,
@@ -145,24 +107,6 @@ impl backend::Kernel for Kernel {
 
             let mut log = [0i8; 128];
             let mut log_size = log.len();
-
-            let mut module = std::ptr::null_mut();
-
-            self.backend
-                .0
-                .api
-                .optixModuleCreateFromPTX(
-                    self.backend.0.ctx,
-                    &mco,
-                    &pco,
-                    ptx_cstring.as_ptr() as *mut _,
-                    self.asm.len(),
-                    log.as_mut_ptr(),
-                    &mut log_size,
-                    &mut module,
-                )
-                .check()
-                .unwrap();
         }
     }
 

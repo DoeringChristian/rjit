@@ -1,2 +1,2 @@
 pub mod optix;
-mod optix_core;
+pub mod optix_core;
