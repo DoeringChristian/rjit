@@ -5,8 +5,9 @@ use std::sync::Arc;
 use cuda_rs::CudaError;
 use optix_rs::{
     OptixApi, OptixDeviceContext, OptixDeviceContextOptions, OptixError, OptixModule,
-    OptixModuleCompileOptions, OptixPipelineCompileOptions, OptixProgramGroup,
-    OptixProgramGroupDesc, OptixProgramGroupFlags, OptixProgramGroupKind, OptixProgramGroupOptions,
+    OptixModuleCompileOptions, OptixPipeline, OptixPipelineCompileOptions,
+    OptixPipelineLinkOptions, OptixProgramGroup, OptixProgramGroupDesc, OptixProgramGroupFlags,
+    OptixProgramGroupKind, OptixProgramGroupOptions,
 };
 use smallvec::{smallvec, SmallVec};
 use thiserror::Error;
@@ -197,10 +198,11 @@ impl<'a> From<ProgramGroupDesc<'a>> for OptixProgramGroupDesc {
 
 pub struct ProgramGroup {
     group: OptixProgramGroup,
+    device: Device,
 }
 
 impl ProgramGroup {
-    pub fn create<'a>(desc: ProgramGroupDesc<'a>) -> Result<Self, Error> {
+    pub fn create<'a>(device: &Device, desc: ProgramGroupDesc<'a>) -> Result<Self, Error> {
         match desc {
             ProgramGroupDesc::Miss {
                 module,
@@ -240,7 +242,7 @@ impl ProgramGroup {
                         .check()?;
                 }
                 Ok(Self {
-                    // modules: smallvec![module],
+                    device: device.clone(),
                     group,
                 })
             }
@@ -283,6 +285,7 @@ impl ProgramGroup {
                 }
                 Ok(Self {
                     // modules: smallvec![module],
+                    device: device.clone(),
                     group,
                 })
             }
@@ -331,16 +334,6 @@ impl ProgramGroup {
 
                 let mut group = std::ptr::null_mut();
 
-                let device = module_ch
-                    .map(|module| module.device.clone())
-                    .unwrap_or_else(|| {
-                        module_ah
-                            .map(|module| module.device.clone())
-                            .unwrap_or_else(|| {
-                                module_is.map(|module| module.device.clone()).unwrap()
-                            })
-                    });
-
                 unsafe {
                     device
                         .instance
@@ -358,47 +351,67 @@ impl ProgramGroup {
                         )
                         .check()?;
                 }
-                Ok(Self { group })
+                Ok(Self {
+                    group,
+                    device: device.clone(),
+                })
             }
-            ProgramGroupDesc::RayGen {
-                module,
-                entry_point,
-            } => {
-                let desc = OptixProgramGroupDesc {
-                    kind: OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_RAYGEN,
-                    flags: OptixProgramGroupFlags::OPTIX_PROGRAM_GROUP_FLAGS_NONE as _,
-                    __bindgen_anon_1: optix_rs::OptixProgramGroupDesc__bindgen_ty_1 {
-                        raygen: optix_rs::OptixProgramGroupSingleModule {
-                            module: module.module,
-                            entryFunctionName: entry_point.as_ptr() as *const _,
-                        },
-                    },
-                };
-                let mut log = [0i8; 128];
-                let mut log_size = log.len();
+        }
+    }
+}
 
-                let mut group = std::ptr::null_mut();
+impl Drop for ProgramGroup {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .instance
+                .optix
+                .optixProgramGroupDestroy(self.group)
+                .check()
+                .unwrap();
+        }
+    }
+}
 
-                unsafe {
-                    module
-                        .device
-                        .instance
-                        .optix
-                        .optixProgramGroupCreate(
-                            module.device.ctx,
-                            &desc,
-                            1,
-                            &OptixProgramGroupOptions {
-                                ..Default::default()
-                            },
-                            log.as_mut_ptr() as *mut _,
-                            &mut log_size,
-                            &mut group,
-                        )
-                        .check()?;
-                }
-                Ok(Self { group })
-            }
+pub struct Pipeline {
+    pipeline: OptixPipeline,
+    device: Device,
+}
+
+impl Pipeline {
+    pub fn create(
+        device: &Device,
+        pipeline_compile_options: &OptixPipelineCompileOptions,
+        pipeline_link_options: &OptixPipelineLinkOptions,
+        groups: &[&ProgramGroup],
+    ) -> Result<Self, Error> {
+        unsafe {
+            let mut log = [0i8; 128];
+            let mut log_size = log.len();
+            let groups = groups
+                .iter()
+                .map(|group| group.group)
+                .collect::<SmallVec<[_; 10]>>();
+
+            let mut pipeline = std::ptr::null_mut();
+            device
+                .instance
+                .optix
+                .optixPipelineCreate(
+                    device.ctx,
+                    pipeline_compile_options,
+                    pipeline_link_options,
+                    groups.as_ptr(),
+                    groups.len() as _,
+                    log.as_mut_ptr(),
+                    &mut log_size,
+                    &mut pipeline,
+                )
+                .check()?;
+            Ok(Self {
+                pipeline,
+                device: device.clone(),
+            })
         }
     }
 }

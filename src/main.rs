@@ -33,11 +33,15 @@ fn main() {
     };
     let miss = optix_core::Module::create(&device, miss_minimal, mco, pco).unwrap();
 
-    let miss_group = optix_core::ProgramGroup::create(optix_core::ProgramGroupDesc::Miss {
-        module: &miss,
-        entry_point: "__miss__dr",
-    })
+    let miss_group = optix_core::ProgramGroup::create(
+        &device,
+        optix_core::ProgramGroupDesc::Miss {
+            module: &miss,
+            entry_point: "__miss__dr",
+        },
+    )
     .unwrap();
 
     drop(miss);
+    drop(miss_group);
 }
