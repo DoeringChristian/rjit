@@ -28,6 +28,9 @@ impl CtxRef {
             device: device.clone(),
         }
     }
+    pub fn raw(&self) -> CUcontext {
+        self.device.ctx
+    }
 }
 impl Deref for CtxRef {
     type Target = CudaApi;
