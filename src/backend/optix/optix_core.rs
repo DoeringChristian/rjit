@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use cuda_rs::CudaError;
 use optix_rs::{
-    OptixApi, OptixDeviceContext, OptixDeviceContextOptions, OptixError, OptixModule,
-    OptixModuleCompileOptions, OptixPipeline, OptixPipelineCompileOptions,
+    OptixApi, OptixDeviceContext, OptixDeviceContextOptions, OptixDeviceProperty, OptixError,
+    OptixModule, OptixModuleCompileOptions, OptixPipeline, OptixPipelineCompileOptions,
     OptixPipelineLinkOptions, OptixProgramGroup, OptixProgramGroupDesc, OptixProgramGroupFlags,
-    OptixProgramGroupKind, OptixProgramGroupOptions,
+    OptixProgramGroupKind, OptixProgramGroupOptions, OptixShaderBindingTable,
+    OPTIX_SBT_RECORD_HEADER_SIZE,
 };
 use smallvec::{smallvec, SmallVec};
 use thiserror::Error;
@@ -375,6 +376,10 @@ impl Drop for ProgramGroup {
 
 pub struct Pipeline {
     pipeline: OptixPipeline,
+    sbt: OptixShaderBindingTable,
+    rgen_group: ProgramGroup,
+    hit_groups: SmallVec<[ProgramGroup; 4]>,
+    miss_groups: SmallVec<[ProgramGroup; 4]>,
     device: Device,
 }
 
@@ -383,13 +388,70 @@ impl Pipeline {
         device: &Device,
         pipeline_compile_options: &OptixPipelineCompileOptions,
         pipeline_link_options: &OptixPipelineLinkOptions,
-        groups: &[&ProgramGroup],
+        rgen: ProgramGroup,
+        hit: impl IntoIterator<Item = ProgramGroup>,
+        miss: impl IntoIterator<Item = ProgramGroup>,
+        // groups: &[ProgramGroup],
     ) -> Result<Self, Error> {
+        let hit = hit.into_iter().collect::<SmallVec<[ProgramGroup; 4]>>();
+        let miss = miss.into_iter().collect::<SmallVec<[ProgramGroup; 4]>>();
         unsafe {
+            let new_header = |groups: &[ProgramGroup]| -> Result<u64, Error> {
+                if groups.len() == 0 {
+                    return Ok(0);
+                }
+                let mut header = vec![0u8; OPTIX_SBT_RECORD_HEADER_SIZE * groups.len()];
+                let mut record = 0;
+                device
+                    .cuda_device
+                    .ctx()
+                    .cuMemAlloc_v2(&mut record, OPTIX_SBT_RECORD_HEADER_SIZE)
+                    .check()?;
+
+                for (i, group) in groups.iter().enumerate() {
+                    device
+                        .instance
+                        .optix
+                        .optixSbtRecordPackHeader(
+                            group.group,
+                            &mut header[OPTIX_SBT_RECORD_HEADER_SIZE * i] as *mut _ as *mut _,
+                        )
+                        .check()?
+                }
+                device
+                    .cuda_device
+                    .ctx()
+                    .cuMemcpyHtoD_v2(
+                        record,
+                        header.as_ptr() as *const _,
+                        OPTIX_SBT_RECORD_HEADER_SIZE,
+                    )
+                    .check()?;
+                drop(header);
+                Ok(record)
+            };
+            let rgen_record = new_header(std::slice::from_ref(&rgen))?;
+            let hit_record = new_header(&hit)?;
+            let miss_record = new_header(&miss)?;
+
+            let sbt = OptixShaderBindingTable {
+                raygenRecord: rgen_record,
+                missRecordBase: miss_record,
+                missRecordStrideInBytes: OPTIX_SBT_RECORD_HEADER_SIZE as _,
+                missRecordCount: miss.len() as _,
+                hitgroupRecordBase: hit_record,
+                hitgroupRecordStrideInBytes: OPTIX_SBT_RECORD_HEADER_SIZE as _,
+                hitgroupRecordCount: hit.len() as _,
+                ..Default::default()
+            };
+
             let mut log = [0i8; 128];
             let mut log_size = log.len();
-            let groups = groups
+
+            let groups = std::slice::from_ref(&rgen)
                 .iter()
+                .chain(hit.iter())
+                .chain(miss.iter())
                 .map(|group| group.group)
                 .collect::<SmallVec<[_; 10]>>();
 
@@ -410,8 +472,37 @@ impl Pipeline {
                 .check()?;
             Ok(Self {
                 pipeline,
+                sbt,
+                rgen_group: rgen,
+                hit_groups: hit,
+                miss_groups: miss,
                 device: device.clone(),
             })
+        }
+    }
+}
+
+impl Drop for Pipeline {
+    fn drop(&mut self) {
+        unsafe {
+            let ctx = self.device.cuda_device.ctx();
+            if self.sbt.raygenRecord != 0 {
+                ctx.cuMemFree_v2(self.sbt.raygenRecord).check().unwrap();
+            }
+            if self.sbt.hitgroupRecordBase != 0 {
+                ctx.cuMemFree_v2(self.sbt.hitgroupRecordBase)
+                    .check()
+                    .unwrap();
+            }
+            if self.sbt.missRecordBase != 0 {
+                ctx.cuMemFree_v2(self.sbt.missRecordBase).check().unwrap();
+            }
+            self.device
+                .instance
+                .optix
+                .optixPipelineDestroy(self.pipeline)
+                .check()
+                .unwrap();
         }
     }
 }
