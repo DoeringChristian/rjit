@@ -598,9 +598,6 @@ impl VarRef {
             ..Default::default()
         });
         return ret;
-        // }
-
-        // unimplemented!();
     }
 }
 

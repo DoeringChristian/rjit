@@ -8,9 +8,11 @@ use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
 use optix_rs::{
-    OptixApi, OptixDeviceContext, OptixDeviceContextOptions, OptixExceptionFlags,
+    OptixAccelBuildOptions, OptixApi, OptixBuildFlags, OptixBuildInput,
+    OptixBuildInputTriangleArray, OptixBuildInputType, OptixBuildInput__bindgen_ty_1,
+    OptixBuildOperation, OptixDeviceContext, OptixDeviceContextOptions, OptixExceptionFlags,
     OptixModuleCompileOptions, OptixPipelineCompileOptions, OptixProgramGroup,
-    OptixProgramGroupDesc,
+    OptixProgramGroupDesc, OptixVertexFormat,
 };
 use thiserror::Error;
 
@@ -216,5 +218,58 @@ impl backend::Kernel for Kernel {
 
     fn assembly(&self) -> &str {
         &self.asm
+    }
+}
+
+pub struct Accel {
+    device: Device,
+}
+
+impl Accel {
+    pub fn create(device: &Device, vertices: &[&Arc<Buffer>]) -> Result<Self, Error> {
+        let build_options = OptixAccelBuildOptions {
+            buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_NONE as _,
+            operation: OptixBuildOperation::OPTIX_BUILD_OPERATION_BUILD,
+            ..Default::default()
+        };
+
+        let vertices = <Buffer as backend::Buffer>::as_any(vertices[0])
+            .downcast_ref::<Buffer>()
+            .unwrap();
+
+        let triangle_array = OptixBuildInputTriangleArray {
+            vertexBuffers: todo!(),
+            numVertices: todo!(),
+            vertexFormat: OptixVertexFormat::OPTIX_VERTEX_FORMAT_FLOAT3,
+            vertexStrideInBytes: todo!(),
+            indexBuffer: todo!(),
+            numIndexTriplets: todo!(),
+            indexFormat: todo!(),
+            indexStrideInBytes: todo!(),
+            preTransform: todo!(),
+            flags: todo!(),
+            numSbtRecords: todo!(),
+            sbtIndexOffsetBuffer: todo!(),
+            sbtIndexOffsetSizeInBytes: todo!(),
+            sbtIndexOffsetStrideInBytes: todo!(),
+            primitiveIndexOffset: todo!(),
+            transformFormat: todo!(),
+        };
+
+        let mut build_input = OptixBuildInput {
+            type_: OptixBuildInputType::OPTIX_BUILD_INPUT_TYPE_TRIANGLES,
+            __bindgen_anon_1: OptixBuildInput__bindgen_ty_1::default(),
+        };
+
+        unsafe {
+            <[u64]>::copy_from_slice(
+                &mut build_input.__bindgen_anon_1.bindgen_union_field,
+                std::slice::from_raw_parts(
+                    &triangle_array as *const _ as *const _,
+                    std::mem::size_of::<OptixBuildInputTriangleArray>() / 8,
+                ),
+            )
+        };
+        todo!()
     }
 }

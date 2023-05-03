@@ -1,6 +1,102 @@
-use crate::schedule::{Env, ScheduleIr};
-use crate::trace::VarType;
+use crate::schedule::{Env, SVarId, ScheduleIr};
+use crate::trace::{Op, VarType};
 use crate::var::ParamType;
+
+pub fn assemble_var_rt(
+    asm: &mut impl std::fmt::Write,
+    ir: &ScheduleIr,
+    id: SVarId,
+    buf_offset: usize,
+    tex_offset: usize,
+    params_type: &'static str,
+) -> std::fmt::Result {
+    let var = ir.var(id);
+    match var.op {
+        Op::TraceRay => {
+            writeln!(asm, "")?;
+            writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
+            let valid = ir.var(var.deps[0]);
+            let pipeline = ir.var(var.deps[1]);
+            let sbt = ir.var(var.deps[2]);
+
+            writeln!(asm, "\t.reg.u32 {}_out_<32>;", var.reg())?;
+
+            let masked = !valid.is_literal() || valid.literal == 0;
+            if masked {
+                writeln!(asm, "\t@!{} bra l_masked_{};", valid.reg(), var.reg_idx())?;
+            }
+
+            let payload_count = 0;
+
+            write!(
+                asm,
+                "\t.reg.u32 {v}_payload_type, {v}_payload_count;\n\
+                \tmov.u32 {v}_payload_type, 0;\n\
+                \tmov.u32 {v}_payload_count, {};\n",
+                payload_count,
+                v = var.reg(),
+            )?;
+
+            writeln!(asm, "call (")?;
+
+            for i in 0..32 {
+                writeln!(
+                    asm,
+                    "{}_out_{}{}",
+                    var.reg(),
+                    i,
+                    if i + 1 < 32 { ", " } else { "" }
+                )?;
+            }
+
+            writeln!(asm, "), _optix_trace_typed_32, (")?;
+
+            writeln!(asm, "{}_payload_type, ", var.reg())?;
+
+            for i in 0..15 {
+                writeln!(asm, "{},", ir.reg(var.deps[i + 3]))?;
+            }
+
+            writeln!(asm, "{}_payload_count, ", var.reg())?;
+
+            for i in 0..payload_count {
+                writeln!(
+                    asm,
+                    "{}{}",
+                    ir.reg(var.deps[i + 15 + 3]),
+                    if i < 32 { "," } else { "" }
+                )?;
+            }
+
+            for i in payload_count..32 {
+                writeln!(
+                    asm,
+                    "{}_out_{}{}",
+                    var.reg(),
+                    i,
+                    if i + 1 < 32 { "," } else { "" }
+                )?;
+            }
+
+            writeln!(asm, ");")?;
+
+            if masked {
+                writeln!(asm, "\nl_masked_{}:", var.reg_idx())?;
+            }
+        }
+        _ => {
+            crate::backend::cuda::codegen::assemble_var(
+                asm,
+                ir,
+                id,
+                buf_offset,
+                tex_offset,
+                params_type,
+            )?;
+        }
+    }
+    Ok(())
+}
 
 pub fn assemble_entry(
     asm: &mut impl std::fmt::Write,

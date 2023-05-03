@@ -87,6 +87,7 @@ pub enum Op {
         offset: usize,
     },
     TexUpload,
+    TraceRay,
     Idx,
 }
 
