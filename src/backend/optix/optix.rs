@@ -1,4 +1,4 @@
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::fmt::{Debug, Write};
 use std::sync::Arc;
 
@@ -107,7 +107,7 @@ impl backend::Backend for Backend {
     }
 
     fn synchronize(&self) {
-        self.stream.synchronize();
+        self.stream.synchronize().unwrap();
     }
 
     fn compress(&self, src: &dyn backend::Buffer, dst: &dyn backend::Buffer) -> usize {
@@ -147,7 +147,7 @@ impl Debug for Kernel {
 
 impl backend::Kernel for Kernel {
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     #[allow(unused_must_use)]
@@ -244,7 +244,7 @@ impl backend::Kernel for Kernel {
                     write!(
                         self.asm,
                         "\n\t// Store:\n\
-                       \tld.const.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
+                           \tld.const.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
                            \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
                            params[offset]\n",
                         param_offset,
@@ -285,7 +285,7 @@ impl backend::Kernel for Kernel {
         };
         let pco = OptixPipelineCompileOptions {
             numAttributeValues: 2,
-            pipelineLaunchParamsVariableName: b"params" as *const _ as *const _,
+            pipelineLaunchParamsVariableName: b"params\0" as *const _ as *const _,
             exceptionFlags: optix_rs::OptixExceptionFlags::OPTIX_EXCEPTION_FLAG_NONE as _,
             ..Default::default()
         };
@@ -327,7 +327,8 @@ impl backend::Kernel for Kernel {
     }
 
     fn execute_async(&mut self, env: &mut crate::schedule::Env, size: usize) {
-        let mut params = vec![size as u64];
+        let params = [size as u32, 0u32];
+        let mut params = Vec::from(bytemuck::cast_slice(&params));
         params.extend(
             env.buffers()
                 .iter()
@@ -338,13 +339,29 @@ impl backend::Kernel for Kernel {
         //         .iter()
         //         .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
         // );
+
+        log::trace!("params: {:02x?}", bytemuck::cast_slice::<_, u8>(&params));
+        log::trace!("Optix Kernel Launch with {size} threads.");
+
         unsafe {
+            let mut d_params = 0;
+            let ctx = self.device.cuda_ctx();
+            ctx.cuMemAlloc_v2(&mut d_params, 8 * params.len())
+                .check()
+                .unwrap();
+            ctx.cuMemcpyHtoD_v2(d_params, params.as_ptr() as *const _, params.len() * 8)
+                .check()
+                .unwrap(); // TODO: Free somehow...
+
             self.pipeline
                 .as_ref()
                 .unwrap()
-                .launch(&self.stream, &params, size as u32)
-                .unwrap()
-        };
+                .launch(&self.stream, d_params, params.len() * 8, size as u32)
+                .unwrap();
+            self.stream.synchronize().unwrap();
+
+            ctx.cuMemFree_v2(d_params).check().unwrap();
+        }
     }
 
     fn assembly(&self) -> &str {

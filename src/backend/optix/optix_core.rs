@@ -482,7 +482,7 @@ impl Pipeline {
                 ..Default::default()
             };
 
-            let mut log = [0i8; 128];
+            let mut log = vec![0u8; 1024];
             let mut log_size = log.len();
 
             let groups = std::slice::from_ref(&rgen)
@@ -502,11 +502,15 @@ impl Pipeline {
                     pipeline_link_options,
                     groups.as_ptr(),
                     groups.len() as _,
-                    log.as_mut_ptr(),
+                    log.as_mut_ptr() as *mut _,
                     &mut log_size,
                     &mut pipeline,
                 )
                 .check()?;
+            log::trace!(
+                "optixPipelineCreate log: {}",
+                CStr::from_bytes_until_nul(&log).unwrap().to_str().unwrap()
+            );
             Ok(Self {
                 pipeline,
                 sbt,
@@ -520,24 +524,20 @@ impl Pipeline {
     pub unsafe fn launch(
         &self,
         stream: &cuda_core::Stream,
-        params: &[u64],
+        params: cuda_rs::CUdeviceptr,
+        params_size: usize,
         size: impl Into<cuda_core::KernelSize>,
     ) -> Result<(), Error> {
-        let mut d_params = 0;
-        let ctx = self.device.cuda_device.ctx();
-        ctx.cuMemAlloc_v2(&mut d_params, 8 * params.len()).check()?;
-        ctx.cuMemcpyHtoD_v2(d_params, params.as_ptr() as *const _, params.len() * 8)
-            .check()?; // TODO: Free somehow...
-
         let size = size.into();
+
         self.device
             .instance
             .optix
             .optixLaunch(
                 self.pipeline,
                 stream.raw(),
-                d_params,
-                params.len() / 8,
+                params,
+                params_size,
                 &self.sbt,
                 size.0,
                 size.1,
