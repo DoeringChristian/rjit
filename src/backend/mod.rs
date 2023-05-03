@@ -37,7 +37,7 @@ pub trait Backend: Debug {
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn Buffer>;
     fn first_register(&self) -> usize;
     fn synchronize(&self);
-    fn compress(&self, src: &dyn Buffer, dst: &dyn Buffer) -> usize;
+    // fn compress(&self, src: &dyn Buffer, dst: &dyn Buffer) -> usize;
 }
 pub trait Accel: Debug {
     fn as_any(&self) -> &dyn Any;

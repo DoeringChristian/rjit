@@ -54,7 +54,118 @@ impl backend::Backend for Backend {
     }
 
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
+        Arc::new(Texture::create(&self.device, shape, n_channels))
+    }
+    fn buffer_uninit(&self, size: usize) -> Arc<dyn crate::backend::Buffer> {
+        Arc::new(Buffer::uninit(&self.device, size))
+    }
+    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn crate::backend::Buffer> {
+        Arc::new(Buffer::from_slice(&self.device, slice))
+    }
+
+    fn first_register(&self) -> usize {
+        Kernel::FIRST_REGISTER
+    }
+
+    fn synchronize(&self) {
+        self.stream.synchronize().unwrap();
+    }
+}
+
+impl Drop for Backend {
+    fn drop(&mut self) {}
+}
+
+#[derive(Debug)]
+pub struct Buffer {
+    device: Device,
+    dptr: u64,
+    size: usize,
+}
+impl Buffer {
+    pub fn ptr(&self) -> u64 {
+        self.dptr
+    }
+    pub fn uninit(device: &Device, size: usize) -> Self {
+        unsafe {
+            let ctx = device.ctx();
+            let mut dptr = 0;
+            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
+            Self {
+                device: device.clone(),
+                dptr,
+                size,
+            }
+        }
+    }
+    pub fn from_slice(device: &Device, slice: &[u8]) -> Self {
+        unsafe {
+            let size = slice.len();
+
+            let ctx = device.ctx();
+
+            let mut dptr = 0;
+            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
+            ctx.cuMemcpyHtoD_v2(dptr, slice.as_ptr() as _, size)
+                .check()
+                .unwrap();
+            Self {
+                device: device.clone(),
+                dptr,
+                size,
+            }
+        }
+    }
+}
+impl backend::Buffer for Buffer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn copy_to_host(&self, dst: &mut [u8]) {
+        unsafe {
+            let ctx = self.device.ctx();
+            assert!(dst.len() <= self.size);
+
+            ctx.cuMemcpyDtoH_v2(dst.as_mut_ptr() as *mut _, self.dptr, self.size)
+                .check()
+                .unwrap();
+        }
+    }
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.ctx().cuMemFree_v2(self.dptr).check().unwrap();
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Texture {
+    tex: u64,
+    array: cuda_rs::CUarray,
+    n_channels: usize,
+    shape: smallvec::SmallVec<[usize; 4]>,
+    device: Device,
+}
+
+impl Drop for Texture {
+    fn drop(&mut self) {
         let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuArrayDestroy(self.array).check().unwrap();
+            ctx.cuTexObjectDestroy(self.tex).check().unwrap();
+        }
+    }
+}
+impl Texture {
+    pub fn ptr(&self) -> u64 {
+        self.tex
+    }
+    pub fn create(device: &Device, shape: &[usize], n_channels: usize) -> Self {
+        let ctx = device.ctx();
         dbg!(shape);
         dbg!(n_channels);
         unsafe {
@@ -124,184 +235,14 @@ impl backend::Backend for Backend {
             ctx.cuTexObjectCreate(&mut tex, &res_desc, &tex_desc, &view_desc)
                 .check()
                 .unwrap();
-            Arc::new(Texture {
+            Self {
                 n_channels,
                 shape: smallvec::SmallVec::from(shape),
                 array,
                 tex,
-                device: self.device.clone(),
-            })
-        }
-    }
-    fn buffer_uninit(&self, size: usize) -> Arc<dyn crate::backend::Buffer> {
-        unsafe {
-            let ctx = self.device.ctx();
-            let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
-            Arc::new(Buffer {
-                device: self.device.clone(),
-                dptr,
-                size,
-            })
-        }
-    }
-    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn crate::backend::Buffer> {
-        unsafe {
-            let size = slice.len();
-
-            let ctx = self.device.ctx();
-
-            let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
-            ctx.cuMemcpyHtoD_v2(dptr, slice.as_ptr() as _, size)
-                .check()
-                .unwrap();
-            Arc::new(Buffer {
-                device: self.device.clone(),
-                dptr,
-                size,
-            })
-        }
-    }
-
-    fn first_register(&self) -> usize {
-        Kernel::FIRST_REGISTER
-    }
-
-    fn synchronize(&self) {
-        self.stream.synchronize().unwrap();
-    }
-
-    fn compress(&self, src: &dyn backend::Buffer, dst: &dyn backend::Buffer) -> usize {
-        let src = src.as_any().downcast_ref::<Buffer>().unwrap();
-        let dst = dst.as_any().downcast_ref::<Buffer>().unwrap();
-        let ctx = self.device.ctx();
-        unsafe {
-            fn round_pow2(mut x: u32) -> u32 {
-                x -= 1;
-                x |= x.wrapping_shr(1);
-                x |= x.wrapping_shr(2);
-                x |= x.wrapping_shr(4);
-                x |= x.wrapping_shr(8);
-                x |= x.wrapping_shr(16);
-                x + 1
+                device: device.clone(),
             }
-
-            let func = self.kernels.function("compress_small").unwrap();
-            let mut size = src.size as u32;
-            let mut src_dptr = src.ptr();
-            let mut dst_dptr = dst.ptr();
-
-            let items_per_thread = 4;
-            let thread_count = round_pow2((size + items_per_thread - 1) / items_per_thread);
-            let shared_size = thread_count * 2 * std::mem::size_of::<u32>() as u32;
-
-            let trailer = thread_count * items_per_thread - size;
-
-            dbg!(thread_count);
-            dbg!(shared_size);
-            dbg!(size);
-
-            // let mut count_dptr = std::ptr::null_mut();
-            let mut count_dptr = 0;
-            // ctx.cuMemAllocHost_v2(&mut count_dptr, 4).check().unwrap();
-            ctx.cuMemAlloc_v2(&mut count_dptr, 4).check().unwrap();
-
-            if trailer > 0 {
-                dbg!(size);
-                ctx.cuMemsetD8Async(src_dptr + size as u64, 0, trailer as _, self.stream.raw())
-                    .check()
-                    .unwrap();
-            }
-
-            func.launch(
-                &self.stream,
-                &mut [
-                    &mut src_dptr as *mut _ as *mut c_void,
-                    &mut dst_dptr as *mut _ as *mut c_void,
-                    &mut size as *mut _ as *mut c_void,
-                    &mut count_dptr as *mut _ as *mut c_void,
-                ],
-                1,
-                thread_count,
-                shared_size,
-            )
-            .unwrap();
-            self.stream.synchronize().unwrap();
-            let mut out_size: u32 = 0;
-            ctx.cuMemcpyDtoH_v2(&mut out_size as *mut _ as *mut c_void, count_dptr, 4)
-                .check()
-                .unwrap();
-            ctx.cuMemFree_v2(count_dptr).check().unwrap();
-            // let out_size: u32 = *(count_dptr as *mut _);
-            // ctx.cuMemFreeHost(count_dptr).check().unwrap();
-            dbg!(out_size);
-            out_size as usize
         }
-    }
-}
-
-impl Drop for Backend {
-    fn drop(&mut self) {}
-}
-
-#[derive(Debug)]
-pub struct Buffer {
-    device: Device,
-    dptr: u64,
-    size: usize,
-}
-impl Buffer {
-    fn ptr(&self) -> u64 {
-        self.dptr
-    }
-}
-impl backend::Buffer for Buffer {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn copy_to_host(&self, dst: &mut [u8]) {
-        unsafe {
-            let ctx = self.device.ctx();
-            assert!(dst.len() <= self.size);
-
-            ctx.cuMemcpyDtoH_v2(dst.as_mut_ptr() as *mut _, self.dptr, self.size)
-                .check()
-                .unwrap();
-        }
-    }
-}
-
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.ctx().cuMemFree_v2(self.dptr).check().unwrap();
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Texture {
-    tex: u64,
-    array: cuda_rs::CUarray,
-    n_channels: usize,
-    shape: smallvec::SmallVec<[usize; 4]>,
-    device: Device,
-}
-
-impl Drop for Texture {
-    fn drop(&mut self) {
-        let ctx = self.device.ctx();
-        unsafe {
-            ctx.cuArrayDestroy(self.array).check().unwrap();
-            ctx.cuTexObjectDestroy(self.tex).check().unwrap();
-        }
-    }
-}
-impl Texture {
-    fn ptr(&self) -> u64 {
-        self.tex
     }
 }
 

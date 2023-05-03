@@ -373,39 +373,6 @@ impl VarRef {
     uop!(Exp2);
     uop!(Log2);
 
-    pub fn compress(&self) -> Self {
-        assert_eq!(self.var().ty, VarType::Bool);
-        let size = self.var().size;
-        let mut var = Var {
-            op: Op::Data,
-            ty: VarType::U32,
-            ..Default::default()
-        };
-
-        let dst = self
-            .ir
-            .borrow()
-            .backend
-            .as_ref()
-            .unwrap()
-            .buffer_uninit(size * 4);
-
-        let src = self.var().data.buffer().unwrap().clone();
-
-        let size = self
-            .ir
-            .borrow()
-            .backend
-            .as_ref()
-            .unwrap()
-            .compress(src.as_ref(), dst.as_ref());
-
-        var.data = Data::Buffer(dst);
-        var.size = size;
-
-        self.ir.push_var(var)
-    }
-
     pub fn and(&self, rhs: &VarRef) -> VarRef {
         assert!(Rc::ptr_eq(&self.ir, &rhs.ir));
         let info = self.ir.var_info(&[self, &rhs]);

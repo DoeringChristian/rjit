@@ -3,7 +3,7 @@ use std::fmt::{Debug, Write};
 use std::sync::Arc;
 
 use crate::backend;
-use crate::backend::cuda::cuda_core;
+use crate::backend::cuda::{cuda_core, Buffer, Texture};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
@@ -67,39 +67,19 @@ impl backend::Backend for Backend {
     }
 
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
-        todo!()
+        Arc::new(Texture::create(
+            self.device.cuda_device(),
+            shape,
+            n_channels,
+        ))
     }
 
     fn buffer_uninit(&self, size: usize) -> Arc<dyn backend::Buffer> {
-        unsafe {
-            let ctx = self.device.cuda_ctx();
-            let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
-            Arc::new(Buffer {
-                device: self.device.clone(),
-                dptr,
-                size,
-            })
-        }
+        Arc::new(Buffer::uninit(self.device.cuda_device(), size))
     }
 
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn backend::Buffer> {
-        unsafe {
-            let size = slice.len();
-
-            let ctx = self.device.cuda_ctx();
-
-            let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
-            ctx.cuMemcpyHtoD_v2(dptr, slice.as_ptr() as _, size)
-                .check()
-                .unwrap();
-            Arc::new(Buffer {
-                device: self.device.clone(),
-                dptr,
-                size,
-            })
-        }
+        Arc::new(Buffer::from_slice(self.device.cuda_device(), slice))
     }
 
     fn first_register(&self) -> usize {
@@ -108,10 +88,6 @@ impl backend::Backend for Backend {
 
     fn synchronize(&self) {
         self.stream.synchronize().unwrap();
-    }
-
-    fn compress(&self, src: &dyn backend::Buffer, dst: &dyn backend::Buffer) -> usize {
-        todo!()
     }
 }
 
@@ -240,45 +216,5 @@ impl backend::Kernel for Kernel {
 
     fn assembly(&self) -> &str {
         &self.asm
-    }
-}
-
-#[derive(Debug)]
-pub struct Buffer {
-    device: Device,
-    dptr: u64,
-    size: usize,
-}
-impl Buffer {
-    fn ptr(&self) -> u64 {
-        self.dptr
-    }
-}
-impl backend::Buffer for Buffer {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn copy_to_host(&self, dst: &mut [u8]) {
-        unsafe {
-            let ctx = self.device.cuda_ctx();
-            assert!(dst.len() <= self.size);
-
-            ctx.cuMemcpyDtoH_v2(dst.as_mut_ptr() as *mut _, self.dptr, self.size)
-                .check()
-                .unwrap();
-        }
-    }
-}
-
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        unsafe {
-            self.device
-                .cuda_ctx()
-                .cuMemFree_v2(self.dptr)
-                .check()
-                .unwrap();
-        }
     }
 }
