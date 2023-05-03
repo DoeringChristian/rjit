@@ -18,16 +18,16 @@ fn main() {
     let ir = Trace::default();
     ir.set_backend("optix");
 
-    let x = ir.buffer_u32(&[1, 2, 3]);
-    // let i = ir.index(3);
-    let x = x.add(&x);
-    // let y = x.add(&x);
+    let indices = ir.buffer_u32(&[1, 2, 3]);
+    let vertices = ir.buffer_f32(&[1., 0., 0., 0., 1., 0., 1., 1., 0.]);
 
-    ir.schedule(&[&x]);
+    let accel = ir.accel(&vertices, &indices);
+
+    // ir.schedule(&[&x]);
     let mut jit = Jit::default();
     jit.eval(&mut ir.borrow_mut());
 
-    assert_eq!(x.to_host_u32(), vec![2, 4, 6]);
+    // assert_eq!(x.to_host_u32(), vec![2, 4, 6]);
 
     // // let backend = backend::optix::optix::Backend::new().unwrap();
     // let instance = Arc::new(optix_core::Instance::new().unwrap());

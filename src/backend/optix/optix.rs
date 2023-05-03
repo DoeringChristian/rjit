@@ -12,8 +12,9 @@ use optix_rs::{
     OptixAccelBufferSizes, OptixAccelBuildOptions, OptixAccelEmitDesc, OptixApi, OptixBuildFlags,
     OptixBuildInput, OptixBuildInputTriangleArray, OptixBuildInputType,
     OptixBuildInput__bindgen_ty_1, OptixBuildOperation, OptixDeviceContext,
-    OptixDeviceContextOptions, OptixExceptionFlags, OptixGeometryFlags, OptixModuleCompileOptions,
-    OptixPipelineCompileOptions, OptixProgramGroup, OptixProgramGroupDesc, OptixVertexFormat,
+    OptixDeviceContextOptions, OptixExceptionFlags, OptixGeometryFlags, OptixIndicesFormat,
+    OptixModuleCompileOptions, OptixPipelineCompileOptions, OptixProgramGroup,
+    OptixProgramGroupDesc, OptixVertexFormat,
 };
 use thiserror::Error;
 
@@ -254,13 +255,16 @@ impl Accel {
         let vertex_buffer = vertices.as_any().downcast_ref::<Buffer>().unwrap();
         let indices_buffer = indices.as_any().downcast_ref::<Buffer>().unwrap();
 
+        let flags = [OptixGeometryFlags::OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT];
         let triangle_array = OptixBuildInputTriangleArray {
             vertexBuffers: &vertex_buffer.ptr(),
             numVertices: (vertex_buffer.size() / (4 * 3)) as _,
             vertexFormat: OptixVertexFormat::OPTIX_VERTEX_FORMAT_FLOAT3,
-            vertexStrideInBytes: 0,
-            indexBuffer: indices_buffer.ptr(),
-            flags: [OptixGeometryFlags::OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT].as_ptr() as *const _,
+            // vertexStrideInBytes: 0,
+            // indexBuffer: indices_buffer.ptr(),
+            // indexFormat: OptixIndicesFormat::OPTIX_INDICES_FORMAT_UNSIGNED_INT3,
+            // numIndexTriplets: (indices_buffer.size() / (4 * 3)) as _,
+            flags: &flags as *const _ as *const _,
             numSbtRecords: 1,
             ..Default::default()
         };
@@ -269,14 +273,12 @@ impl Accel {
             __bindgen_anon_1: OptixBuildInput__bindgen_ty_1::default(),
         };
         unsafe {
-            <[u64]>::copy_from_slice(
-                &mut build_input.__bindgen_anon_1.bindgen_union_field,
-                std::slice::from_raw_parts(
-                    &triangle_array as *const _ as *const _,
-                    std::mem::size_of::<OptixBuildInputTriangleArray>() / 8,
-                ),
-            )
-        };
+            std::ptr::copy_nonoverlapping(
+                &triangle_array,
+                &mut build_input.__bindgen_anon_1 as *mut _ as *mut _,
+                std::mem::size_of::<OptixBuildInputTriangleArray>(),
+            );
+        }
 
         let build_inputs = [build_input];
 
@@ -321,7 +323,7 @@ impl Accel {
                     *device.ctx(),
                     stream.raw(),
                     &build_options,
-                    build_inputs.as_ptr(),
+                    &build_inputs as *const _,
                     1,
                     d_gas_tmp,
                     buffer_size.tempSizeInBytes,
@@ -333,6 +335,10 @@ impl Accel {
                 )
                 .check()
                 .unwrap();
+        }
+
+        unsafe {
+            device.cuda_ctx().cuMemFree_v2(d_gas_tmp).check().unwrap();
         }
 
         let buffers = vec![vertices.clone(), indices.clone()];
