@@ -1,0 +1,51 @@
+---
+source: src/backend/optix/test.rs
+expression: jit.kernel_debug()
+---
+===============================================
+Kernel 9446354654952152027:
+
+.version 8.0
+.target sm_86
+.address_size 64
+
+.const .align 8 .b8 params[40];
+.entry __raygen__cujit(){
+
+	.reg.b8   %b <9>; .reg.b16 %w<9>; .reg.b32 %r<9>;
+	.reg.b64  %rd<9>; .reg.f32 %f<9>; .reg.f64 %d<9>;
+	.reg.pred %p <9>;
+
+	call (%r0), _optix_get_launch_index_x, ();
+	ld.const.u32 %r1, [params + 4];
+	add.u32 %r0, %r0, %r1;
+
+body:
+
+	// [0]: ScheduleVar { op: Data, deps: [], ty: Void, param_ty: None, reg: 6, buf: None, tex: Some(0), literal: 0, size: 0 } =>
+
+	// [1]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 7, buf: Some(0), tex: None, literal: 0, size: 1 } =>
+	ld.const.u64 %rd0, [params+8];
+	ld.global.cs.f32 %f7, [%rd0];
+
+	// [2]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 8, buf: Some(1), tex: None, literal: 0, size: 1 } =>
+	ld.const.u64 %rd0, [params+16];
+	ld.global.cs.f32 %f8, [%rd0];
+
+	// [3]: ScheduleVar { op: TexLookup { dim: 2 }, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: F32, param_ty: None, reg: 5, buf: None, tex: None, literal: 0, size: 1 } =>
+	ld.const.u64 %rd0, [params+32];
+	.reg.f32 %f5_out_<4>;
+	tex.2d.v4.f32.f32 {%f5_out_0, %f5_out_1, %f5_out_2,
+                             %f5_out_3}, [%rd0, {%f7, %f8}];
+
+	// [4]: ScheduleVar { op: Extract { offset: 0 }, deps: [SVarId(3)], ty: F32, param_ty: Output, reg: 4, buf: Some(2), tex: None, literal: 0, size: 1 } =>
+	mov.b32 %f4, %f5_out_0;
+
+	// Store:
+	ld.const.u64 %rd0, [params + 24]; // rd0 <- params[offset]
+	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
+	st.global.cs.f32 [%rd0], %f4; // (Index * ty.size() + params[offset])[Index] <- var
+
+	ret;
+}
+

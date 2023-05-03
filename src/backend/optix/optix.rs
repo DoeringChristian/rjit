@@ -184,11 +184,11 @@ impl backend::Kernel for Kernel {
                 .iter()
                 .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().ptr()),
         );
-        // params.extend(
-        //     env.textures()
-        //         .iter()
-        //         .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
-        // );
+        params.extend(
+            env.textures()
+                .iter()
+                .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
+        );
 
         log::trace!("params: {:02x?}", bytemuck::cast_slice::<_, u8>(&params));
         log::trace!("Optix Kernel Launch with {size} threads.");
