@@ -246,7 +246,8 @@ impl Accel {
         indices: &Arc<dyn backend::Buffer>,
     ) -> Result<Self, Error> {
         let build_options = OptixAccelBuildOptions {
-            buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_PREFER_FAST_TRACE as u32,
+            buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_NONE as u32,
+            // buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_PREFER_FAST_TRACE as u32,
             // | OptixBuildFlags::OPTIX_BUILD_FLAG_ALLOW_COMPACTION as u32,
             operation: OptixBuildOperation::OPTIX_BUILD_OPERATION_BUILD,
             ..Default::default()
@@ -254,6 +255,8 @@ impl Accel {
 
         let vertex_buffer = vertices.as_any().downcast_ref::<Buffer>().unwrap();
         let indices_buffer = indices.as_any().downcast_ref::<Buffer>().unwrap();
+
+        dbg!(vertex_buffer.size() / (4 * 3));
 
         let flags = [OptixGeometryFlags::OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT];
         let triangle_array = OptixBuildInputTriangleArray {
@@ -268,6 +271,7 @@ impl Accel {
             numSbtRecords: 1,
             ..Default::default()
         };
+        dbg!(&triangle_array);
         let mut build_input = OptixBuildInput {
             type_: OptixBuildInputType::OPTIX_BUILD_INPUT_TYPE_TRIANGLES,
             __bindgen_anon_1: OptixBuildInput__bindgen_ty_1::default(),
@@ -280,7 +284,7 @@ impl Accel {
             );
         }
 
-        let build_inputs = [build_input];
+        let build_inputs = vec![build_input];
 
         let mut buffer_size = OptixAccelBufferSizes::default();
         unsafe {
@@ -290,12 +294,13 @@ impl Accel {
                     *device.ctx(),
                     &build_options,
                     build_inputs.as_ptr(),
-                    1,
+                    build_inputs.len() as _,
                     &mut buffer_size,
                 )
                 .check()
                 .unwrap()
         };
+        dbg!(&buffer_size);
 
         let mut d_gas_tmp = 0;
         unsafe {
@@ -323,8 +328,8 @@ impl Accel {
                     *device.ctx(),
                     stream.raw(),
                     &build_options,
-                    &build_inputs as *const _,
-                    1,
+                    build_inputs.as_ptr(),
+                    build_inputs.len() as _,
                     d_gas_tmp,
                     buffer_size.tempSizeInBytes,
                     d_gas,
