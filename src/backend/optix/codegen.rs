@@ -16,8 +16,8 @@ pub fn assemble_var_rt(
             writeln!(asm, "")?;
             writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
             let valid = ir.var(var.deps[0]);
-            let pipeline = ir.var(var.deps[1]);
-            let sbt = ir.var(var.deps[2]);
+            // let pipeline = ir.var(var.deps[1]);
+            // let sbt = ir.var(var.deps[2]);
 
             writeln!(asm, "\t.reg.u32 {}_out_<32>;", var.reg())?;
 
@@ -54,7 +54,7 @@ pub fn assemble_var_rt(
             writeln!(asm, "{}_payload_type, ", var.reg())?;
 
             for i in 0..15 {
-                writeln!(asm, "{},", ir.reg(var.deps[i + 3]))?;
+                writeln!(asm, "{},", ir.reg(var.deps[i + 1]))?;
             }
 
             writeln!(asm, "{}_payload_count, ", var.reg())?;
@@ -63,7 +63,7 @@ pub fn assemble_var_rt(
                 writeln!(
                     asm,
                     "{}{}",
-                    ir.reg(var.deps[i + 15 + 3]),
+                    ir.reg(var.deps[i + 15 + 1]),
                     if i < 32 { "," } else { "" }
                 )?;
             }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use slotmap::DefaultKey;
 use smallvec::SmallVec;
 
-use crate::backend::{Buffer, Texture};
+use crate::backend::{Accel, Buffer, Texture};
 ///
 /// TODO: better param enum
 ///
@@ -252,6 +252,7 @@ pub enum Data {
     Literal(u64),
     Buffer(Arc<dyn Buffer>),
     Texture(Arc<dyn Texture>),
+    Accel(Box<dyn Accel>),
 }
 impl Data {
     pub fn is_none(&self) -> bool {
@@ -278,6 +279,12 @@ impl Data {
             _ => false,
         }
     }
+    pub fn is_accel(&self) -> bool {
+        match self {
+            Self::Accel(_) => true,
+            _ => false,
+        }
+    }
     pub fn is_storage(&self) -> bool {
         self.is_buffer() || self.is_texture()
     }
@@ -296,6 +303,12 @@ impl Data {
     pub fn texture(&self) -> Option<&Arc<dyn Texture>> {
         match self {
             Self::Texture(tex) => Some(tex),
+            _ => None,
+        }
+    }
+    pub fn accel(&self) -> Option<&Box<dyn Accel>> {
+        match self {
+            Self::Accel(accel) => Some(accel),
             _ => None,
         }
     }

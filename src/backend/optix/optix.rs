@@ -3,16 +3,17 @@ use std::fmt::{Debug, Write};
 use std::sync::Arc;
 
 use crate::backend;
+use crate::backend::cuda::cuda_core::Stream;
 use crate::backend::cuda::{cuda_core, Buffer, Texture};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
 use optix_rs::{
-    OptixAccelBuildOptions, OptixApi, OptixBuildFlags, OptixBuildInput,
-    OptixBuildInputTriangleArray, OptixBuildInputType, OptixBuildInput__bindgen_ty_1,
-    OptixBuildOperation, OptixDeviceContext, OptixDeviceContextOptions, OptixExceptionFlags,
-    OptixModuleCompileOptions, OptixPipelineCompileOptions, OptixProgramGroup,
-    OptixProgramGroupDesc, OptixVertexFormat,
+    OptixAccelBufferSizes, OptixAccelBuildOptions, OptixAccelEmitDesc, OptixApi, OptixBuildFlags,
+    OptixBuildInput, OptixBuildInputTriangleArray, OptixBuildInputType,
+    OptixBuildInput__bindgen_ty_1, OptixBuildOperation, OptixDeviceContext,
+    OptixDeviceContextOptions, OptixExceptionFlags, OptixGeometryFlags, OptixModuleCompileOptions,
+    OptixPipelineCompileOptions, OptixProgramGroup, OptixProgramGroupDesc, OptixVertexFormat,
 };
 use thiserror::Error;
 
@@ -90,6 +91,14 @@ impl backend::Backend for Backend {
 
     fn synchronize(&self) {
         self.stream.synchronize().unwrap();
+    }
+
+    fn create_accel(
+        &self,
+        vertices: &Arc<dyn backend::Buffer>,
+        indices: &Arc<dyn backend::Buffer>,
+    ) -> Box<dyn backend::Accel> {
+        Box::new(Accel::create(&self.device, &self.stream, vertices, indices).unwrap())
     }
 }
 
@@ -221,46 +230,44 @@ impl backend::Kernel for Kernel {
     }
 }
 
+#[derive(Debug)]
 pub struct Accel {
     device: Device,
+    accel: u64,
+    buffers: Vec<Arc<dyn backend::Buffer>>, // Keep buffers arround
 }
 
 impl Accel {
-    pub fn create(device: &Device, vertices: &[&Arc<Buffer>]) -> Result<Self, Error> {
+    pub fn create(
+        device: &Device,
+        stream: &Stream,
+        vertices: &Arc<dyn backend::Buffer>,
+        indices: &Arc<dyn backend::Buffer>,
+    ) -> Result<Self, Error> {
         let build_options = OptixAccelBuildOptions {
-            buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_NONE as _,
+            buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_PREFER_FAST_TRACE as u32,
+            // | OptixBuildFlags::OPTIX_BUILD_FLAG_ALLOW_COMPACTION as u32,
             operation: OptixBuildOperation::OPTIX_BUILD_OPERATION_BUILD,
             ..Default::default()
         };
 
-        let vertices = <Buffer as backend::Buffer>::as_any(vertices[0])
-            .downcast_ref::<Buffer>()
-            .unwrap();
+        let vertex_buffer = vertices.as_any().downcast_ref::<Buffer>().unwrap();
+        let indices_buffer = indices.as_any().downcast_ref::<Buffer>().unwrap();
 
         let triangle_array = OptixBuildInputTriangleArray {
-            vertexBuffers: todo!(),
-            numVertices: todo!(),
+            vertexBuffers: &vertex_buffer.ptr(),
+            numVertices: (vertex_buffer.size() / (4 * 3)) as _,
             vertexFormat: OptixVertexFormat::OPTIX_VERTEX_FORMAT_FLOAT3,
-            vertexStrideInBytes: todo!(),
-            indexBuffer: todo!(),
-            numIndexTriplets: todo!(),
-            indexFormat: todo!(),
-            indexStrideInBytes: todo!(),
-            preTransform: todo!(),
-            flags: todo!(),
-            numSbtRecords: todo!(),
-            sbtIndexOffsetBuffer: todo!(),
-            sbtIndexOffsetSizeInBytes: todo!(),
-            sbtIndexOffsetStrideInBytes: todo!(),
-            primitiveIndexOffset: todo!(),
-            transformFormat: todo!(),
+            vertexStrideInBytes: 0,
+            indexBuffer: indices_buffer.ptr(),
+            flags: [OptixGeometryFlags::OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT].as_ptr() as *const _,
+            numSbtRecords: 1,
+            ..Default::default()
         };
-
         let mut build_input = OptixBuildInput {
             type_: OptixBuildInputType::OPTIX_BUILD_INPUT_TYPE_TRIANGLES,
             __bindgen_anon_1: OptixBuildInput__bindgen_ty_1::default(),
         };
-
         unsafe {
             <[u64]>::copy_from_slice(
                 &mut build_input.__bindgen_anon_1.bindgen_union_field,
@@ -270,6 +277,76 @@ impl Accel {
                 ),
             )
         };
-        todo!()
+
+        let build_inputs = [build_input];
+
+        let mut buffer_size = OptixAccelBufferSizes::default();
+        unsafe {
+            device
+                .api()
+                .optixAccelComputeMemoryUsage(
+                    *device.ctx(),
+                    &build_options,
+                    build_inputs.as_ptr(),
+                    1,
+                    &mut buffer_size,
+                )
+                .check()
+                .unwrap()
+        };
+
+        let mut d_gas_tmp = 0;
+        unsafe {
+            device
+                .cuda_ctx()
+                .cuMemAlloc_v2(&mut d_gas_tmp, buffer_size.tempSizeInBytes)
+                .check()
+                .unwrap()
+        };
+
+        let mut d_gas = 0;
+        unsafe {
+            device
+                .cuda_ctx()
+                .cuMemAlloc_v2(&mut d_gas, buffer_size.outputSizeInBytes)
+                .check()
+                .unwrap()
+        };
+
+        let mut accel = 0;
+        unsafe {
+            device
+                .api()
+                .optixAccelBuild(
+                    *device.ctx(),
+                    stream.raw(),
+                    &build_options,
+                    build_inputs.as_ptr(),
+                    1,
+                    d_gas_tmp,
+                    buffer_size.tempSizeInBytes,
+                    d_gas,
+                    buffer_size.outputSizeInBytes,
+                    &mut accel,
+                    std::ptr::null(),
+                    0,
+                )
+                .check()
+                .unwrap();
+        }
+
+        let buffers = vec![vertices.clone(), indices.clone()];
+
+        Ok(Self {
+            device: device.clone(),
+            accel,
+            buffers,
+        })
+    }
+}
+
+impl backend::Accel for Accel {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

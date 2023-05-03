@@ -70,6 +70,14 @@ impl backend::Backend for Backend {
     fn synchronize(&self) {
         self.stream.synchronize().unwrap();
     }
+
+    fn create_accel(
+        &self,
+        vertices: &Arc<dyn backend::Buffer>,
+        indices: &Arc<dyn backend::Buffer>,
+    ) -> Box<dyn backend::Accel> {
+        todo!()
+    }
 }
 
 impl Drop for Backend {
@@ -85,6 +93,9 @@ pub struct Buffer {
 impl Buffer {
     pub fn ptr(&self) -> u64 {
         self.dptr
+    }
+    pub fn size(&self) -> usize {
+        self.size
     }
     pub fn uninit(device: &Device, size: usize) -> Self {
         unsafe {

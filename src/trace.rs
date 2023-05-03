@@ -183,6 +183,23 @@ impl Trace {
             ..Default::default()
         })
     }
+    pub fn accel(&self, vertices: &VarRef, indices: &VarRef) -> VarRef {
+        let vertices = vertices.var().data.buffer().unwrap().clone();
+        let indices = indices.var().data.buffer().unwrap().clone();
+        let accel = self
+            .borrow()
+            .backend
+            .as_ref()
+            .unwrap()
+            .create_accel(&vertices, &indices);
+        self.push_var(Var {
+            op: Op::Nop,
+            ty: VarType::Void,
+            size: 0,
+            data: Data::Accel(accel),
+            ..Default::default()
+        })
+    }
 }
 
 #[derive(Default, Debug)]
@@ -598,6 +615,23 @@ impl VarRef {
             ..Default::default()
         });
         return ret;
+    }
+
+    pub fn trace_ray(&self, mask: Option<&Self>) {
+        let mask: VarRef = mask
+            .map(|m| {
+                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                m.clone()
+            })
+            .unwrap_or(self.ir.literal_bool(true));
+
+        // let ret = self.ir.push_var(Var {
+        //     op: Op::TraceRay,
+        //     deps: smallvec![],
+        //     size,
+        //     ..Default::default()
+        // });
+        // ret
     }
 }
 

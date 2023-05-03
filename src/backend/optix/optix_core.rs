@@ -106,6 +106,12 @@ impl Device {
     pub fn cuda_device(&self) -> &cuda_core::Device {
         &self.cuda_device
     }
+    pub fn api(&self) -> &OptixApi {
+        &self.instance.optix
+    }
+    pub fn ctx(&self) -> &OptixDeviceContext {
+        &self.ctx
+    }
 }
 
 impl Drop for InternalDevice {
