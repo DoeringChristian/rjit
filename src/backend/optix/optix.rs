@@ -264,9 +264,9 @@ impl Accel {
             numVertices: (vertex_buffer.size() / (4 * 3)) as _,
             vertexFormat: OptixVertexFormat::OPTIX_VERTEX_FORMAT_FLOAT3,
             // vertexStrideInBytes: 0,
-            // indexBuffer: indices_buffer.ptr(),
-            // indexFormat: OptixIndicesFormat::OPTIX_INDICES_FORMAT_UNSIGNED_INT3,
-            // numIndexTriplets: (indices_buffer.size() / (4 * 3)) as _,
+            indexBuffer: indices_buffer.ptr(),
+            indexFormat: OptixIndicesFormat::OPTIX_INDICES_FORMAT_UNSIGNED_INT3,
+            numIndexTriplets: (indices_buffer.size() / (4 * 3)) as _,
             flags: &flags as *const _ as *const _,
             numSbtRecords: 1,
             ..Default::default()
@@ -277,11 +277,7 @@ impl Accel {
             __bindgen_anon_1: OptixBuildInput__bindgen_ty_1::default(),
         };
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                &triangle_array,
-                &mut build_input.__bindgen_anon_1 as *mut _ as *mut _,
-                std::mem::size_of::<OptixBuildInputTriangleArray>(),
-            );
+            *build_input.__bindgen_anon_1.triangleArray.as_mut() = triangle_array;
         }
 
         let build_inputs = vec![build_input];
