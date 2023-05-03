@@ -124,16 +124,6 @@ pub struct Kernel {
 }
 impl Kernel {
     const FIRST_REGISTER: usize = 4;
-    fn assemble_var(&mut self, ir: &ScheduleIr, env: &Env, id: SVarId) {
-        crate::backend::cuda::codegen::assemble_var(
-            &mut self.asm,
-            ir,
-            id,
-            1,
-            1 + env.buffers().len(),
-            "const",
-        );
-    }
 }
 impl Debug for Kernel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -153,124 +143,8 @@ impl backend::Kernel for Kernel {
     #[allow(unused_must_use)]
     fn assemble(&mut self, ir: &crate::schedule::ScheduleIr, env: &crate::schedule::Env) {
         self.asm.clear();
-        let n_params = 1 + env.buffers().len() + env.textures().len(); // Add 1 for size
-        let n_regs = ir.n_regs();
 
-        /* Special registers:
-             %r0   :  Index
-             %r1   :  Step
-             %r2   :  Size
-             %p0   :  Stopping predicate
-             %rd0  :  Temporary for parameter pointers
-             %rd1  :  Pointer to parameter table in global memory if too big
-             %b3, %w3, %r3, %rd3, %f3, %d3, %p3: reserved for use in compound
-             statements that must write a temporary result to a register.
-        */
-
-        writeln!(self.asm, ".version {}.{}", 8, 0);
-        writeln!(self.asm, ".target {}", "sm_86");
-        writeln!(self.asm, ".address_size 64");
-
-        writeln!(self.asm, "");
-
-        writeln!(self.asm, ".const .align 8 .b8 params[{}];", 8 * n_params);
-        writeln!(self.asm, ".entry {}(){{", self.entry_point);
-        writeln!(self.asm, "");
-
-        writeln!(
-            self.asm,
-            "\t.reg.b8   %b <{n_regs}>; .reg.b16 %w<{n_regs}>; .reg.b32 %r<{n_regs}>;"
-        );
-        writeln!(
-            self.asm,
-            "\t.reg.b64  %rd<{n_regs}>; .reg.f32 %f<{n_regs}>; .reg.f64 %d<{n_regs}>;"
-        );
-        writeln!(self.asm, "\t.reg.pred %p <{n_regs}>;");
-        writeln!(self.asm, "");
-
-        write!(
-            self.asm,
-            "\tcall (%r0), _optix_get_launch_index_x, ();\n\
-            \tld.const.u32 %r1, [params + 4];\n\
-            \tadd.u32 %r0, %r0, %r1;\n\n\
-            body:\n"
-        );
-
-        for id in ir.ids() {
-            let var = ir.var(id);
-            match var.param_ty {
-                ParamType::None => self.assemble_var(ir, env, id),
-                ParamType::Input => {
-                    let param_offset = (var.buf.unwrap() + 1) * 8;
-                    // Load from params
-                    writeln!(self.asm, "");
-                    writeln!(self.asm, "\t// [{}]: {:?} =>", id, var);
-                    if var.is_literal() {
-                        writeln!(
-                            self.asm,
-                            "\tld.param.{} {}, [params+{}];",
-                            var.ty.name_cuda(),
-                            var.reg(),
-                            param_offset
-                        );
-                        continue;
-                    } else {
-                        writeln!(self.asm, "\tld.const.u64 %rd0, [params+{}];", param_offset);
-                    }
-                    if var.size > 1 {
-                        writeln!(
-                            self.asm,
-                            "\tmad.wide.u32 %rd0, %r0, {}, %rd0;",
-                            var.ty.size()
-                        );
-                    }
-
-                    if var.ty == VarType::Bool {
-                        writeln!(self.asm, "\tld.global.cs.u8 %w0, [%rd0];");
-                        writeln!(self.asm, "\tsetp.ne.u16 {}, %w0, 0;", var.reg());
-                    } else {
-                        writeln!(
-                            self.asm,
-                            "\tld.global.cs.{} {}, [%rd0];",
-                            var.ty.name_cuda(),
-                            var.reg(),
-                        );
-                    }
-                }
-                ParamType::Output => {
-                    let param_offset = (var.buf.unwrap() + 1) * 8;
-                    self.assemble_var(ir, env, id);
-                    // let offset = param_idx * 8;
-                    write!(
-                        self.asm,
-                        "\n\t// Store:\n\
-                           \tld.const.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
-                           \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
-                           params[offset]\n",
-                        param_offset,
-                        var.ty.size(),
-                    );
-
-                    if var.ty == VarType::Bool {
-                        writeln!(self.asm, "\tselp.u16 %w0, 1, 0, {};", var.reg());
-                        writeln!(self.asm, "\tst.global.cs.u8 [%rd0], %w0;");
-                    } else {
-                        writeln!(
-                               self.asm,
-                               "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
-                               var.ty.name_cuda(),
-                               var.reg(),
-                           );
-                    }
-                }
-            }
-        }
-
-        write!(
-            self.asm,
-            "\n\tret;\n\
-       }}\n"
-        );
+        super::codegen::assemble_entry(&mut self.asm, ir, env, &self.entry_point).unwrap();
 
         std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
 
