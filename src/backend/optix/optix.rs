@@ -246,17 +246,15 @@ impl Accel {
         indices: &Arc<dyn backend::Buffer>,
     ) -> Result<Self, Error> {
         let build_options = OptixAccelBuildOptions {
-            buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_NONE as u32,
-            // buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_PREFER_FAST_TRACE as u32,
-            // | OptixBuildFlags::OPTIX_BUILD_FLAG_ALLOW_COMPACTION as u32,
+            // buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_NONE as u32,
+            buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_PREFER_FAST_TRACE as u32
+                | OptixBuildFlags::OPTIX_BUILD_FLAG_ALLOW_COMPACTION as u32,
             operation: OptixBuildOperation::OPTIX_BUILD_OPERATION_BUILD,
             ..Default::default()
         };
 
         let vertex_buffer = vertices.as_any().downcast_ref::<Buffer>().unwrap();
         let indices_buffer = indices.as_any().downcast_ref::<Buffer>().unwrap();
-
-        dbg!(vertex_buffer.size() / (4 * 3));
 
         let flags = [OptixGeometryFlags::OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT];
         let triangle_array = OptixBuildInputTriangleArray {
@@ -271,7 +269,6 @@ impl Accel {
             numSbtRecords: 1,
             ..Default::default()
         };
-        dbg!(&triangle_array);
         let mut build_input = OptixBuildInput {
             type_: OptixBuildInputType::OPTIX_BUILD_INPUT_TYPE_TRIANGLES,
             __bindgen_anon_1: OptixBuildInput__bindgen_ty_1::default(),
