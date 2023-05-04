@@ -112,7 +112,7 @@ fn main() {
     v.schedule();
 
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     dbg!(valid.to_host_bool());
     dbg!(u.to_host_f32());

@@ -1,8 +1,10 @@
 use half::f16;
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::cell::{RefCell, RefMut};
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use bytemuck::cast_slice;
 use slotmap::{DefaultKey, SlotMap};
@@ -15,9 +17,9 @@ pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
 /// A wrapper arrund an Intermediate Representation.
 ///
 #[derive(Clone, Debug, Default)]
-pub struct Trace(Rc<RefCell<Internal>>);
+pub struct Trace(Arc<Mutex<Internal>>);
 impl Deref for Trace {
-    type Target = Rc<RefCell<Internal>>;
+    type Target = Arc<Mutex<Internal>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -28,16 +30,16 @@ impl Trace {
     fn push_var(&self, mut v: Var) -> VarRef {
         // Pus side effects of sources as extra dependencies
         for dep in v.deps.clone() {
-            if let Some(se) = self.borrow().var(dep).last_write {
+            if let Some(se) = self.lock().var(dep).last_write {
                 v.deps.push(se);
             }
         }
         // Inc rc for deps
         for dep in v.deps.iter() {
-            self.borrow_mut().inc_rc(*dep);
+            self.lock().inc_rc(*dep);
         }
         v.rc = 1;
-        let id = VarId(self.borrow_mut().vars.insert(v));
+        let id = VarId(self.lock().vars.insert(v));
         VarRef::steal_from(&self, id)
     }
     fn var_info(&self, refs: &[&VarRef]) -> VarInfo {
@@ -55,7 +57,7 @@ impl Trace {
         let mut deps: smallvec::SmallVec<[VarId; 4]> = deps
             .iter()
             .map(|r| {
-                assert!(Rc::ptr_eq(&self.0, &r.ir));
+                assert!(Arc::ptr_eq(&self.0, &r.ir));
                 r.id()
             })
             .collect();
@@ -69,25 +71,21 @@ impl Trace {
         ret
     }
     pub fn set_backend(&self, backend: impl AsRef<str>) {
-        if self.borrow().backend.is_some() {
+        if self.lock().backend.is_some() {
             return;
         }
         let backend = backend.as_ref();
         if backend == "cuda" {
-            self.borrow_mut().backend =
-                Some(Box::new(crate::backend::cuda::Backend::new().unwrap()));
+            self.lock().backend = Some(Box::new(crate::backend::cuda::Backend::new().unwrap()));
         } else if backend == "optix" {
-            self.borrow_mut().backend =
-                Some(Box::new(crate::backend::optix::Backend::new().unwrap()));
+            self.lock().backend = Some(Box::new(crate::backend::optix::Backend::new().unwrap()));
         }
     }
-    pub fn backend(&self) -> RefMut<dyn Backend> {
-        RefMut::map(self.0.borrow_mut(), |ir| {
-            ir.backend.as_mut().unwrap().as_mut()
-        })
+    pub fn backend(&self) -> MappedMutexGuard<dyn Backend> {
+        MutexGuard::map(self.0.lock(), |ir| ir.backend.as_mut().unwrap().as_mut())
     }
-    pub fn backend_as<T: Backend + 'static>(&self) -> RefMut<T> {
-        RefMut::map(self.0.borrow_mut(), |ir| {
+    pub fn backend_as<T: Backend + 'static>(&self) -> MappedMutexGuard<T> {
+        MutexGuard::map(self.0.lock(), |ir| {
             ir.backend
                 .as_mut()
                 .unwrap()
@@ -99,8 +97,8 @@ impl Trace {
     }
     pub fn schedule(&self, refs: &[&VarRef]) {
         for r in refs {
-            assert!(Rc::ptr_eq(&r.ir, &self.0));
-            self.borrow_mut().schedule(&[r.id()])
+            assert!(Arc::ptr_eq(&r.ir, &self.0));
+            self.lock().schedule(&[r.id()])
         }
     }
 }
@@ -108,7 +106,7 @@ macro_rules! buffer {
     ($TY:ident, $ty:ident) => {
         paste::paste! {
             pub fn [<buffer_$ty>](&self, slice: &[$ty]) -> VarRef {
-                let buffer = self.borrow()
+                let buffer = self.lock()
                         .backend
                         .as_ref()
                         .unwrap()
@@ -186,7 +184,7 @@ impl Trace {
         let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
         let texture = self
             .0
-            .borrow_mut()
+            .lock()
             .backend
             .as_ref()
             .unwrap()
@@ -203,7 +201,7 @@ impl Trace {
         let vertices = vertices.var().data.buffer().unwrap().clone();
         let indices = indices.var().data.buffer().unwrap().clone();
         let accel = self
-            .borrow()
+            .lock()
             .backend
             .as_ref()
             .unwrap()
@@ -281,7 +279,7 @@ impl VarRef {
         self.id
     }
     fn borrow_from(trace: &Trace, id: VarId) -> Self {
-        trace.borrow_mut().inc_rc(id);
+        trace.lock().inc_rc(id);
 
         Self {
             id,
@@ -294,8 +292,8 @@ impl VarRef {
             ir: trace.clone(),
         }
     }
-    pub(crate) fn var(&self) -> RefMut<Var> {
-        RefMut::map(self.ir.borrow_mut(), |ir| &mut ir.vars[self.id().0])
+    pub(crate) fn var(&self) -> MappedMutexGuard<Var> {
+        MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
         // MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
     }
 }
@@ -343,7 +341,7 @@ impl VarRef {
         self.var().size
     }
     pub fn schedule(&self) {
-        self.ir.borrow_mut().schedule(&[self.id()])
+        self.ir.lock().schedule(&[self.id()])
     }
     // To Host functions:
     // to_host!(Bool, bool);
@@ -406,7 +404,7 @@ impl VarRef {
     uop!(Log2);
 
     pub fn and(&self, rhs: &VarRef) -> VarRef {
-        assert!(Rc::ptr_eq(&self.ir, &rhs.ir));
+        assert!(Arc::ptr_eq(&self.ir, &rhs.ir));
         let info = self.ir.var_info(&[self, &rhs]);
 
         let ty_lhs = self.var().ty.clone();
@@ -431,7 +429,7 @@ impl VarRef {
 
         let texture = self
             .ir
-            .borrow_mut()
+            .lock()
             .backend
             .as_ref()
             .unwrap()
@@ -492,7 +490,7 @@ impl VarRef {
     /// However, it should sometimes be possible to reuse the old ones.
     ///
     fn reindex(&self, new_idx: &VarRef, size: usize) -> Option<VarRef> {
-        assert!(Rc::ptr_eq(&self.ir, &new_idx.ir));
+        assert!(Arc::ptr_eq(&self.ir, &new_idx.ir));
         // let mut ir = self.ir.lock();
 
         let v = self.var();
@@ -551,7 +549,7 @@ impl VarRef {
 
         let mask: VarRef = mask
             .map(|m| {
-                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(self.ir.literal_bool(true));
@@ -566,7 +564,7 @@ impl VarRef {
         });
         res.schedule();
         dst.var().last_write = Some(res.id()); // Set side effect
-        dst.ir.borrow_mut().inc_rc(dst.id);
+        dst.ir.lock().inc_rc(dst.id);
     }
     pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
         self.scatter_reduce(dst, idx, mask, ReduceOp::None);
@@ -585,14 +583,14 @@ impl VarRef {
     /// is not yet implemented).
     ///
     pub fn gather(&self, index: &VarRef, mask: Option<&VarRef>) -> VarRef {
-        assert!(Rc::ptr_eq(&self.ir, &index.ir));
+        assert!(Arc::ptr_eq(&self.ir, &index.ir));
 
         let size = index.var().size;
         let ty = self.var().ty.clone();
 
         let mask: VarRef = mask
             .map(|m| {
-                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(self.ir.literal_bool(true));
@@ -650,37 +648,37 @@ impl VarRef {
         let null = self.ir.literal_u32(0);
         let mask: Self = mask
             .map(|m| {
-                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(self.ir.literal_bool(true));
         let vis_mask = vis_mask
             .map(|m| {
-                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(self.ir.literal_u32(255));
         let flags = flags
             .map(|m| {
-                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(null.clone());
         let sbt_offset = sbt_offset
             .map(|m| {
-                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(null.clone());
         let sbt_stride = sbt_stride
             .map(|m| {
-                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(null.clone());
         let miss_sbt = miss_sbt
             .map(|m| {
-                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(null.clone());
@@ -739,7 +737,7 @@ impl VarRef {
 
 impl Clone for VarRef {
     fn clone(&self) -> Self {
-        self.ir.borrow_mut().inc_rc(self.id);
+        self.ir.lock().inc_rc(self.id);
         Self {
             ir: self.ir.clone(),
             id: self.id,
@@ -749,7 +747,7 @@ impl Clone for VarRef {
 
 impl Drop for VarRef {
     fn drop(&mut self) {
-        self.ir.borrow_mut().dec_rc(self.id);
+        self.ir.lock().dec_rc(self.id);
     }
 }
 
@@ -781,7 +779,7 @@ mod test {
                     ir.schedule(&[&y]);
 
                     let mut jit = Jit::default();
-                    jit.eval(&mut ir.borrow_mut());
+                    jit.eval(&mut ir.lock());
 
 
                     for (i, calculated) in y.[<to_host_$ty>]().into_iter().enumerate(){

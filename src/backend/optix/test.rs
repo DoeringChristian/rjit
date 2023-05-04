@@ -30,7 +30,7 @@ fn refcounting() {
         "rc of y should be 2 (1 in y and 1 in schedule)"
     );
 
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     assert_eq!(
         x.var().rc,
@@ -58,7 +58,7 @@ fn load_add_f32() {
 
     ir.schedule(&[&y]);
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -75,7 +75,7 @@ fn load_gather_f32() {
 
     ir.schedule(&[&y]);
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -96,7 +96,7 @@ fn reindex() {
 
     ir.schedule(&[&y]);
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -111,7 +111,7 @@ fn index() {
 
     ir.schedule(&[&i]);
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -152,17 +152,17 @@ fn gather_eval() {
         r
     };
     assert_eq!(r.var().rc, 1);
-    assert_eq!(ir.borrow_mut().get_var(tmp_x).unwrap().rc, 1);
-    assert_eq!(ir.borrow_mut().get_var(tmp_y).unwrap().rc, 1);
-    assert_eq!(ir.borrow_mut().get_var(tmp_z).unwrap().rc, 2); // z is referenced by r and the
-                                                               // schedule
+    assert_eq!(ir.lock().get_var(tmp_x).unwrap().rc, 1);
+    assert_eq!(ir.lock().get_var(tmp_y).unwrap().rc, 1);
+    assert_eq!(ir.lock().get_var(tmp_z).unwrap().rc, 2); // z is referenced by r and the
+                                                         // schedule
 
     ir.schedule(&[&r]);
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     assert_eq!(r.var().rc, 1);
-    assert!(ir.borrow_mut().get_var(tmp_z).is_none());
+    assert!(ir.lock().get_var(tmp_z).is_none());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -179,7 +179,7 @@ fn paralell() {
 
     ir.schedule(&[&x, &y]);
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -196,7 +196,7 @@ fn load_gather() {
     ir.schedule(&[&x]);
 
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -220,7 +220,7 @@ fn eval_scatter() {
     y.scatter(&x, &i, None); // x: [1, 2, 2, 2]
 
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -248,7 +248,7 @@ fn scatter_twice() {
     y.scatter(&x, &i, None);
 
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -281,7 +281,7 @@ fn scatter_twice_add() {
     ir.schedule(&[&x]);
 
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -303,7 +303,7 @@ fn scatter_reduce() {
     ir.schedule(&[&x]);
 
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -328,7 +328,7 @@ fn tex_lookup() {
     r.schedule();
 
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
@@ -431,7 +431,7 @@ fn trace_ray() {
     v.schedule();
 
     let mut jit = Jit::default();
-    jit.eval(&mut ir.borrow_mut());
+    jit.eval(&mut ir.lock());
 
     insta::assert_snapshot!(jit.kernel_debug());
 
