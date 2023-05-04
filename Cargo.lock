@@ -204,36 +204,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cuda-test"
-version = "0.1.0"
-dependencies = [
- "approx",
- "bitflags 2.1.0",
- "bytemuck",
- "bytesize",
- "cuda-rs",
- "fasthash",
- "half",
- "insta",
- "itertools",
- "libloading",
- "log",
- "once_cell",
- "optix-rs",
- "parking_lot 0.12.1",
- "paste",
- "pretty_env_logger",
- "rayon",
- "rusty-hook",
- "slotmap",
- "smallvec",
- "thiserror",
- "thread_local",
- "tracing-mutex",
- "xxhash-c-sys",
-]
-
-[[package]]
 name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -725,6 +695,36 @@ name = "regex-syntax"
 version = "0.6.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
+
+[[package]]
+name = "rjit"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "bitflags 2.1.0",
+ "bytemuck",
+ "bytesize",
+ "cuda-rs",
+ "fasthash",
+ "half",
+ "insta",
+ "itertools",
+ "libloading",
+ "log",
+ "once_cell",
+ "optix-rs",
+ "parking_lot 0.12.1",
+ "paste",
+ "pretty_env_logger",
+ "rayon",
+ "rusty-hook",
+ "slotmap",
+ "smallvec",
+ "thiserror",
+ "thread_local",
+ "tracing-mutex",
+ "xxhash-c-sys",
+]
 
 [[package]]
 name = "rustc-demangle"
