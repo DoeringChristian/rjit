@@ -50,7 +50,7 @@ fn main() {
         backend.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
         backend.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
     }
-    let indices = ir.buffer_u32(&[1, 2, 3]);
+    let indices = ir.buffer_u32(&[0, 1, 2]);
     let vertices = ir.buffer_f32(&[1., 0., 1., 0., 1., 1., 1., 1., 1.]);
 
     let accel = ir.accel(&vertices, &indices);
@@ -58,8 +58,8 @@ fn main() {
     let payload = accel.trace_ray(
         1,
         [
-            &ir.buffer_f32(&[0.5, 0.5]),
-            &ir.literal_f32(0.5),
+            &ir.buffer_f32(&[0.6, 0.6]),
+            &ir.literal_f32(0.6),
             &ir.literal_f32(0.),
         ],
         [
