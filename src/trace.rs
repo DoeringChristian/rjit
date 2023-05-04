@@ -720,7 +720,7 @@ impl VarRef {
             .into_iter()
             .map(|i| {
                 self.ir
-                    .push_var_op(Op::Extract { offset: i }, &[&rt], VarType::F32, size)
+                    .push_var_op(Op::Extract { offset: i }, &[&rt], VarType::U32, size)
             })
             .collect::<Vec<_>>();
         ret

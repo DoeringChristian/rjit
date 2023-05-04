@@ -148,21 +148,6 @@ impl backend::Kernel for Kernel {
     }
 
     fn compile(&mut self) {
-        // let mco = OptixModuleCompileOptions {
-        //     optLevel: optix_rs::OptixCompileOptimizationLevel::OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,
-        //     debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
-        //     ..Default::default()
-        // };
-        // let pco = OptixPipelineCompileOptions {
-        //     numAttributeValues: 2,
-        //     pipelineLaunchParamsVariableName: b"params\0" as *const _ as *const _,
-        //     exceptionFlags: optix_rs::OptixExceptionFlags::OPTIX_EXCEPTION_FLAG_NONE as _,
-        //     numPayloadValues: 1,
-        //     ..Default::default()
-        // };
-
-        // let miss_minimal = ".version 6.0 .target sm_50 .address_size 64\n\
-        //                             .entry __miss__dr() { ret; }";
         let pipeline_desc = self.pipeline_desc.lock().unwrap();
 
         let rgen = Arc::new(

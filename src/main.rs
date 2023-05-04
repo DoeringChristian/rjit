@@ -24,16 +24,17 @@ fn main() {
 .address_size 64
 
 .entry __miss__ms() {
-	.reg .b32 %r<1>;
+	.reg .b32 %r<2>;
 	mov.b32 %r0, 0;
-	call _optix_set_payload, (%r0, %r0);
+	mov.b32 %r1, 1;
+	call _optix_set_payload, (%r0, %r1);
 	ret;
 }
 
 .entry __closesthit__ch() {
 	.reg .b32 %r<2>;
 	mov.b32 %r0, 0;
-	mov.b32 %r1, 1;
+	mov.b32 %r1, 2;
 	call _optix_set_payload, (%r0, %r1);
 	ret;
 }
@@ -50,7 +51,7 @@ fn main() {
         *backend_ref.pipeline_state.lock().unwrap() = backend::optix::PipelineDesc {
             mco: optix_rs::OptixModuleCompileOptions {
                 optLevel:
-                    optix_rs::OptixCompileOptimizationLevel::OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,
+                    optix_rs::OptixCompileOptimizationLevel::OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
                 debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
                 ..Default::default()
             },
@@ -99,37 +100,5 @@ fn main() {
     let mut jit = Jit::default();
     jit.eval(&mut ir.borrow_mut());
 
-    // assert_eq!(x.to_host_u32(), vec![2, 4, 6]);
-
-    // // let backend = backend::optix::optix::Backend::new().unwrap();
-    // let instance = Arc::new(optix_core::Instance::new().unwrap());
-    // let device = optix_core::Device::create(&instance, 0).unwrap();
-    //
-    // let miss_minimal = ".version 6.0 .target sm_50 .address_size 64 \
-    //                      .entry __miss__dr() { ret; }";
-    //
-    // let mco = optix_rs::OptixModuleCompileOptions {
-    //     optLevel: optix_rs::OptixCompileOptimizationLevel::OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
-    //     debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
-    //     ..Default::default()
-    // };
-    // let pco = optix_rs::OptixPipelineCompileOptions {
-    //     numAttributeValues: 2,
-    //     pipelineLaunchParamsVariableName: b"params" as *const _ as *const _,
-    //     exceptionFlags: optix_rs::OptixExceptionFlags::OPTIX_EXCEPTION_FLAG_NONE as _,
-    //     ..Default::default()
-    // };
-    // let miss = optix_core::Module::create(&device, miss_minimal, mco, pco).unwrap();
-    //
-    // let miss_group = optix_core::ProgramGroup::create(
-    //     &device,
-    //     optix_core::ProgramGroupDesc::Miss {
-    //         module: &miss,
-    //         entry_point: "__miss__dr",
-    //     },
-    // )
-    // .unwrap();
-    //
-    // drop(miss);
-    // drop(miss_group);
+    dbg!(&payload[0].to_host_u32());
 }

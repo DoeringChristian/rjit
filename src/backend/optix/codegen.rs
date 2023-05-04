@@ -16,7 +16,7 @@ pub fn assemble_var_rt(
         Op::TraceRay { payload_count } => {
             writeln!(asm, "")?;
             writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
-            let handle_offset = ir.var(var.deps[0]).accel.unwrap() * 8;
+            let handle_offset = (ir.var(var.deps[0]).accel.unwrap() + accel_offset) * 8;
 
             writeln!(
                 asm,
@@ -116,7 +116,8 @@ pub fn assemble_entry(
     env: &Env,
     entry_point: &str,
 ) -> std::fmt::Result {
-    let n_params = 1 + env.buffers().len() + env.textures().len(); // Add 1 for size
+    let n_params = 1 + env.buffers().len() + env.textures().len() + env.accels().len(); // Add 1 for size
+                                                                                        // dbg!(n_params);
     let n_regs = ir.n_regs();
 
     /* Special registers:
