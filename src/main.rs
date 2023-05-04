@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::backend::optix::CompileOptions;
 use crate::trace::Trace;
 use crate::var::ReduceOp;
 
@@ -48,23 +49,11 @@ fn main() {
             .downcast_mut::<backend::optix::Backend>()
             .unwrap();
 
-        *backend_ref.pipeline_state.lock().unwrap() = backend::optix::PipelineDesc {
-            mco: optix_rs::OptixModuleCompileOptions {
-                optLevel:
-                    optix_rs::OptixCompileOptimizationLevel::OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
-                debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
-                ..Default::default()
-            },
-            pco: optix_rs::OptixPipelineCompileOptions {
-                numAttributeValues: 0,
-                pipelineLaunchParamsVariableName: b"params\0" as *const _ as *const _,
-                exceptionFlags: optix_rs::OptixExceptionFlags::OPTIX_EXCEPTION_FLAG_NONE as _,
-                numPayloadValues: 1,
-                ..Default::default()
-            },
-            miss: ("__miss__ms".into(), miss_and_closesthit_ptx.into()),
-            hit: vec![("__closesthit__ch".into(), miss_and_closesthit_ptx.into())],
+        backend_ref.compile_options = CompileOptions {
+            num_payload_values: 1,
         };
+        backend_ref.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
+        backend_ref.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
     }
     let indices = ir.buffer_u32(&[1, 2, 3]);
     let vertices = ir.buffer_f32(&[1., 0., 1., 0., 1., 1., 1., 1., 1.]);

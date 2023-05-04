@@ -18,7 +18,7 @@ use optix_rs::{
 };
 use thiserror::Error;
 
-use super::optix_core::{self, Device, Pipeline, ProgramGroup};
+use super::optix_core::{self, Device, Module, Pipeline, ProgramGroup};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -30,7 +30,9 @@ pub struct Backend {
     instance: Arc<optix_core::Instance>,
     device: optix_core::Device,
     stream: Arc<cuda_core::Stream>,
-    pub pipeline_state: Arc<Mutex<PipelineDesc>>,
+    pub compile_options: CompileOptions,
+    pub miss: (String, Arc<Module>),
+    pub hit: Vec<(String, Arc<Module>)>,
 }
 impl Debug for Backend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -39,6 +41,36 @@ impl Debug for Backend {
 }
 
 impl Backend {
+    pub fn set_hit_from_strs(&mut self, hit: &[(&str, &str)]) {
+        self.hit.extend(hit.iter().map(|(ep, ptx)| {
+            (
+                String::from(*ep),
+                Arc::new(
+                    Module::create(
+                        &self.device,
+                        ptx,
+                        self.compile_options.mco(),
+                        self.compile_options.pco(),
+                    )
+                    .unwrap(),
+                ),
+            )
+        }));
+    }
+    pub fn set_miss_from_str(&mut self, miss: (&str, &str)) {
+        self.miss = (
+            String::from(miss.0),
+            Arc::new(
+                Module::create(
+                    &self.device,
+                    miss.1,
+                    self.compile_options.mco(),
+                    self.compile_options.pco(),
+                )
+                .unwrap(),
+            ),
+        );
+    }
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(optix_core::Instance::new()?);
         let device = optix_core::Device::create(&instance, 0)?;
@@ -48,11 +80,28 @@ impl Backend {
                 .create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)
                 .unwrap(),
         );
+
+        let miss_minimal = ".version 6.0 .target sm_50 .address_size 64\n\
+                                    .entry __miss__dr() { ret; }";
+
+        let compile_options = CompileOptions::default();
+
+        let miss = Arc::new(
+            Module::create(
+                &device,
+                &miss_minimal,
+                compile_options.mco(),
+                compile_options.pco(),
+            )
+            .unwrap(),
+        );
         Ok(Self {
-            pipeline_state: Arc::new(Mutex::new(PipelineDesc::create_default(&device))),
             device,
             instance,
             stream,
+            hit: vec![],
+            miss: ("__miss__dr".into(), miss),
+            compile_options,
         })
     }
 }
@@ -69,7 +118,9 @@ impl backend::Backend for Backend {
             asm: "".into(),
             entry_point: "__raygen__cujit".into(),
             pipeline: None,
-            pipeline_desc: self.pipeline_state.clone(),
+            hit: self.hit.clone(),
+            miss: self.miss.clone(),
+            compile_options: self.compile_options.clone(),
         })
     }
 
@@ -116,7 +167,9 @@ pub struct Kernel {
     entry_point: String,
     pipeline: Option<optix_core::Pipeline>,
     stream: Arc<cuda_core::Stream>,
-    pipeline_desc: Arc<Mutex<PipelineDesc>>,
+    compile_options: CompileOptions,
+    miss: (String, Arc<Module>),
+    hit: Vec<(String, Arc<Module>)>,
 }
 impl Kernel {
     const FIRST_REGISTER: usize = 4;
@@ -148,28 +201,17 @@ impl backend::Kernel for Kernel {
     }
 
     fn compile(&mut self) {
-        let pipeline_desc = self.pipeline_desc.lock().unwrap();
+        let compile_options = self.compile_options.clone();
 
         let rgen = Arc::new(
             optix_core::Module::create(
                 &self.device,
                 &self.asm,
-                pipeline_desc.mco,
-                pipeline_desc.pco,
+                compile_options.mco(),
+                compile_options.pco(),
             )
             .unwrap(),
         );
-        print!("{}", &pipeline_desc.miss.1);
-        let miss = Arc::new(
-            optix_core::Module::create(
-                &self.device,
-                &pipeline_desc.miss.1,
-                pipeline_desc.mco,
-                pipeline_desc.pco,
-            )
-            .unwrap(),
-        );
-
         let rgen_pg = optix_core::ProgramGroup::create(
             &self.device,
             optix_core::ProgramGroupDesc::RayGen {
@@ -181,29 +223,20 @@ impl backend::Kernel for Kernel {
         let miss_pg = optix_core::ProgramGroup::create(
             &self.device,
             optix_core::ProgramGroupDesc::Miss {
-                module: &miss,
-                entry_point: &pipeline_desc.miss.0,
+                entry_point: &self.miss.0,
+                module: &self.miss.1,
             },
         )
         .unwrap();
 
-        let hit_pgs = pipeline_desc
+        let hit_pgs = self
             .hit
             .iter()
             .map(|(ep, ptx)| {
-                let module = Arc::new(
-                    optix_core::Module::create(
-                        &self.device,
-                        &ptx,
-                        pipeline_desc.mco,
-                        pipeline_desc.pco,
-                    )
-                    .unwrap(),
-                );
                 let pg = optix_core::ProgramGroup::create(
                     &self.device,
                     optix_core::ProgramGroupDesc::HitGroup {
-                        module_ch: Some(&module),
+                        module_ch: Some(ptx),
                         entry_point_ch: Some(ep),
                         module_ah: None,
                         entry_point_ah: None,
@@ -218,7 +251,7 @@ impl backend::Kernel for Kernel {
 
         let pipeline = optix_core::Pipeline::create(
             &self.device,
-            &pipeline_desc.pco,
+            &compile_options.pco(),
             &optix_rs::OptixPipelineLinkOptions {
                 maxTraceDepth: 1,
                 debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
@@ -406,35 +439,26 @@ impl backend::Accel for Accel {
     }
 }
 
-pub struct PipelineDesc {
-    pub mco: OptixModuleCompileOptions,
-    pub pco: OptixPipelineCompileOptions,
-    pub miss: (String, String),
-    pub hit: Vec<(String, String)>,
+#[derive(Clone, Default)]
+pub struct CompileOptions {
+    pub num_payload_values: i32,
 }
-impl PipelineDesc {
-    pub fn create_default(device: &Device) -> Self {
-        let mco = OptixModuleCompileOptions {
-            optLevel: optix_rs::OptixCompileOptimizationLevel::OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,
-            debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
-            ..Default::default()
-        };
-        let pco = OptixPipelineCompileOptions {
+
+impl CompileOptions {
+    pub fn pco(&self) -> OptixPipelineCompileOptions {
+        OptixPipelineCompileOptions {
             numAttributeValues: 2,
             pipelineLaunchParamsVariableName: b"params\0" as *const _ as *const _,
             exceptionFlags: optix_rs::OptixExceptionFlags::OPTIX_EXCEPTION_FLAG_NONE as _,
-            numPayloadValues: 1,
+            numPayloadValues: self.num_payload_values,
             ..Default::default()
-        };
-
-        let miss_minimal = ".version 6.0 .target sm_50 .address_size 64\n\
-                                    .entry __miss__dr() { ret; }";
-
-        Self {
-            mco,
-            pco,
-            miss: ("__miss__dr".into(), miss_minimal.into()),
-            hit: Default::default(),
+        }
+    }
+    pub fn mco(&self) -> OptixModuleCompileOptions {
+        OptixModuleCompileOptions {
+            optLevel: optix_rs::OptixCompileOptimizationLevel::OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,
+            debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
+            ..Default::default()
         }
     }
 }
