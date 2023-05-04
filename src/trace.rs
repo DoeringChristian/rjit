@@ -383,15 +383,10 @@ impl VarRef {
     to_host!(F32);
     to_host!(F64);
     // Unarry operations:
-    pub fn cast(&self, ty: VarType) -> VarRef {
-        let v = self.var();
-        self.ir.push_var(Var {
-            op: Op::Cast,
-            deps: smallvec![self.id()],
-            ty,
-            size: v.size,
-            ..Default::default()
-        })
+    pub fn cast(&self, ty: &VarType) -> VarRef {
+        assert_eq!(self.var().ty.size(), ty.size());
+        self.ir
+            .push_var_op(Op::Bitcast, &[self], ty.clone(), self.size())
     }
     // Binarry operations:
     bop_arythmetic!(Add);
