@@ -42,18 +42,13 @@ fn main() {
 "##;
 
     {
-        let mut backend = ir.backend();
+        let mut backend = ir.backend_as::<backend::optix::Backend>();
 
-        let backend_ref = backend
-            .as_any_mut()
-            .downcast_mut::<backend::optix::Backend>()
-            .unwrap();
-
-        backend_ref.compile_options = CompileOptions {
+        backend.compile_options = CompileOptions {
             num_payload_values: 1,
         };
-        backend_ref.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
-        backend_ref.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
+        backend.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
+        backend.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
     }
     let indices = ir.buffer_u32(&[1, 2, 3]);
     let vertices = ir.buffer_f32(&[1., 0., 1., 0., 1., 1., 1., 1., 1.]);

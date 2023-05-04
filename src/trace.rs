@@ -86,6 +86,17 @@ impl Trace {
             ir.backend.as_mut().unwrap().as_mut()
         })
     }
+    pub fn backend_as<T: Backend + 'static>(&self) -> RefMut<T> {
+        RefMut::map(self.0.borrow_mut(), |ir| {
+            ir.backend
+                .as_mut()
+                .unwrap()
+                .as_mut()
+                .as_any_mut()
+                .downcast_mut::<T>()
+                .unwrap()
+        })
+    }
     pub fn schedule(&self, refs: &[&VarRef]) {
         for r in refs {
             assert!(Rc::ptr_eq(&r.ir, &self.0));
