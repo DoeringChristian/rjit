@@ -337,6 +337,9 @@ macro_rules! uop {
 }
 
 impl VarRef {
+    pub fn ty(&self) -> VarType {
+        self.var().ty.clone()
+    }
     pub fn size(&self) -> usize {
         self.var().size
     }
