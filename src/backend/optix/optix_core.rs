@@ -126,6 +126,7 @@ impl Drop for InternalDevice {
     }
 }
 
+#[derive(Debug)]
 pub struct Module {
     device: Device,
     module: OptixModule,
@@ -186,46 +187,29 @@ impl Drop for Module {
     }
 }
 
+#[derive(Debug)]
 pub enum ProgramGroupDesc<'a> {
     Miss {
-        module: &'a Module,
+        module: &'a Arc<Module>,
         entry_point: &'a str,
     },
     RayGen {
-        module: &'a Module,
+        module: &'a Arc<Module>,
         entry_point: &'a str,
     },
     HitGroup {
-        module_ch: Option<&'a Module>,
+        module_ch: Option<&'a Arc<Module>>,
         entry_point_ch: Option<&'a str>,
-        module_ah: Option<&'a Module>,
+        module_ah: Option<&'a Arc<Module>>,
         entry_point_ah: Option<&'a str>,
-        module_is: Option<&'a Module>,
+        module_is: Option<&'a Arc<Module>>,
         entry_point_is: Option<&'a str>,
     },
 }
 
-impl<'a> From<ProgramGroupDesc<'a>> for OptixProgramGroupDesc {
-    fn from(value: ProgramGroupDesc<'a>) -> Self {
-        Self {
-            kind: match value {
-                ProgramGroupDesc::Miss { .. } => {
-                    OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_MISS
-                }
-                ProgramGroupDesc::RayGen { .. } => {
-                    OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_RAYGEN
-                }
-                ProgramGroupDesc::HitGroup { .. } => {
-                    OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_HITGROUP
-                }
-            },
-            flags: todo!(),
-            __bindgen_anon_1: todo!(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct ProgramGroup {
+    modules: Vec<Arc<Module>>,
     group: OptixProgramGroup,
     device: Device,
 }
@@ -279,6 +263,7 @@ impl ProgramGroup {
                         })?;
                 }
                 Ok(Self {
+                    modules: vec![module.clone()],
                     device: device.clone(),
                     group,
                 })
@@ -298,7 +283,7 @@ impl ProgramGroup {
                         },
                     },
                 };
-                let mut log = [0i8; 128];
+                let mut log = vec![0u8; 1024];
                 let mut log_size = log.len();
 
                 let mut group = std::ptr::null_mut();
@@ -319,10 +304,17 @@ impl ProgramGroup {
                             &mut log_size,
                             &mut group,
                         )
-                        .check()?;
+                        .check()
+                        .or_else(|err| {
+                            log::trace!(
+                                "Detailed linker output: {}",
+                                CStr::from_bytes_until_nul(&log).unwrap().to_str().unwrap()
+                            );
+                            Err(err)
+                        })?;
                 }
                 Ok(Self {
-                    // modules: smallvec![module],
+                    modules: vec![module.clone()],
                     device: device.clone(),
                     group,
                 })
@@ -335,6 +327,7 @@ impl ProgramGroup {
                 mut module_is,
                 entry_point_is,
             } => {
+                dbg!(&desc);
                 let entry_point_ch =
                     entry_point_ch.map(|entry_point| CString::new(entry_point).unwrap());
                 let entry_point_ah =
@@ -342,7 +335,7 @@ impl ProgramGroup {
                 let entry_point_is =
                     entry_point_is.map(|entry_point| CString::new(entry_point).unwrap());
                 let desc = OptixProgramGroupDesc {
-                    kind: OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_MISS,
+                    kind: OptixProgramGroupKind::OPTIX_PROGRAM_GROUP_KIND_HITGROUP,
                     flags: OptixProgramGroupFlags::OPTIX_PROGRAM_GROUP_FLAGS_NONE as _,
                     __bindgen_anon_1: optix_rs::OptixProgramGroupDesc__bindgen_ty_1 {
                         hitgroup: optix_rs::OptixProgramGroupHitgroup {
@@ -373,7 +366,7 @@ impl ProgramGroup {
                         },
                     },
                 };
-                let mut log = [0i8; 128];
+                let mut log = vec![0u8; 1024];
                 let mut log_size = log.len();
 
                 let mut group = std::ptr::null_mut();
@@ -393,9 +386,30 @@ impl ProgramGroup {
                             &mut log_size,
                             &mut group,
                         )
-                        .check()?;
+                        .check()
+                        .or_else(|err| {
+                            log::trace!(
+                                "Detailed linker output: {}",
+                                CStr::from_bytes_until_nul(&log).unwrap().to_str().unwrap()
+                            );
+                            Err(err)
+                        })?;
                 }
+                let mut modules = vec![];
+                module_ch.and_then(|m| {
+                    modules.push(m.clone());
+                    Some(())
+                });
+                module_ah.and_then(|m| {
+                    modules.push(m.clone());
+                    Some(())
+                });
+                module_is.and_then(|m| {
+                    modules.push(m.clone());
+                    Some(())
+                });
                 Ok(Self {
+                    modules,
                     group,
                     device: device.clone(),
                 })
@@ -417,6 +431,7 @@ impl Drop for ProgramGroup {
     }
 }
 
+#[derive(Debug)]
 pub struct Pipeline {
     pipeline: OptixPipeline,
     sbt: OptixShaderBindingTable,
@@ -535,6 +550,12 @@ impl Pipeline {
         size: impl Into<cuda_core::KernelSize>,
     ) -> Result<(), Error> {
         let size = size.into();
+
+        dbg!(stream);
+        dbg!(&params);
+        dbg!(&params_size);
+        dbg!(&size);
+        dbg!(self);
 
         self.device
             .instance

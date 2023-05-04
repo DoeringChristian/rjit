@@ -8,25 +8,32 @@ pub fn assemble_var_rt(
     id: SVarId,
     buf_offset: usize,
     tex_offset: usize,
+    accel_offset: usize,
     params_type: &'static str,
 ) -> std::fmt::Result {
     let var = ir.var(id);
     match var.op {
-        Op::TraceRay => {
+        Op::TraceRay { payload_count } => {
             writeln!(asm, "")?;
             writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
-            let valid = ir.var(var.deps[0]);
+            let handle_offset = ir.var(var.deps[0]).accel.unwrap() * 8;
+
+            writeln!(
+                asm,
+                "\tld.{params_type}.u64 %rd0, [params+{}];",
+                handle_offset
+            )?;
+
+            let mask = ir.var(var.deps[1]);
             // let pipeline = ir.var(var.deps[1]);
             // let sbt = ir.var(var.deps[2]);
 
             writeln!(asm, "\t.reg.u32 {}_out_<32>;", var.reg())?;
 
-            let masked = !valid.is_literal() || valid.literal == 0;
+            let masked = !mask.is_literal() || mask.literal == 0;
             if masked {
-                writeln!(asm, "\t@!{} bra l_masked_{};", valid.reg(), var.reg_idx())?;
+                writeln!(asm, "\t@!{} bra l_masked_{};", mask.reg(), var.reg_idx())?;
             }
-
-            let payload_count = 0;
 
             write!(
                 asm,
@@ -52,23 +59,28 @@ pub fn assemble_var_rt(
             writeln!(asm, "), _optix_trace_typed_32, (")?;
 
             writeln!(asm, "{}_payload_type, ", var.reg())?;
+            writeln!(asm, "%rd0, ")?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[2]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[3]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[4]))?;
 
-            for i in 0..15 {
-                writeln!(asm, "{},", ir.reg(var.deps[i + 1]))?;
-            }
+            writeln!(asm, "{}, ", ir.reg(var.deps[5]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[6]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[7]))?;
+
+            writeln!(asm, "{}, ", ir.reg(var.deps[8]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[9]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[10]))?;
+
+            writeln!(asm, "{}, ", ir.reg(var.deps[11]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[12]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[13]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[14]))?;
+            writeln!(asm, "{}, ", ir.reg(var.deps[15]))?;
 
             writeln!(asm, "{}_payload_count, ", var.reg())?;
 
-            for i in 0..payload_count {
-                writeln!(
-                    asm,
-                    "{}{}",
-                    ir.reg(var.deps[i + 15 + 1]),
-                    if i < 32 { "," } else { "" }
-                )?;
-            }
-
-            for i in payload_count..32 {
+            for i in 0..32 {
                 writeln!(
                     asm,
                     "{}_out_{}{}",
@@ -150,12 +162,13 @@ pub fn assemble_entry(
     for id in ir.ids() {
         let var = ir.var(id);
         match var.param_ty {
-            ParamType::None => crate::backend::cuda::codegen::assemble_var(
+            ParamType::None => assemble_var_rt(
                 asm,
                 ir,
                 id,
                 1,
                 1 + env.buffers().len(),
+                1 + env.buffers().len() + env.textures().len(),
                 "const",
             )?,
             ParamType::Input => {
@@ -193,12 +206,13 @@ pub fn assemble_entry(
             }
             ParamType::Output => {
                 let param_offset = (var.buf.unwrap() + 1) * 8;
-                crate::backend::cuda::codegen::assemble_var(
+                assemble_var_rt(
                     asm,
                     ir,
                     id,
                     1,
                     1 + env.buffers().len(),
+                    1 + env.buffers().len() + env.textures().len(),
                     "const",
                 )?;
                 // let offset = param_idx * 8;

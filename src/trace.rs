@@ -81,6 +81,11 @@ impl Trace {
                 Some(Box::new(crate::backend::optix::Backend::new().unwrap()));
         }
     }
+    pub fn backend(&self) -> RefMut<dyn Backend> {
+        RefMut::map(self.0.borrow_mut(), |ir| {
+            ir.backend.as_mut().unwrap().as_mut()
+        })
+    }
     pub fn schedule(&self, refs: &[&VarRef]) {
         for r in refs {
             assert!(Rc::ptr_eq(&r.ir, &self.0));
@@ -617,21 +622,108 @@ impl VarRef {
         return ret;
     }
 
-    pub fn trace_ray(&self, mask: Option<&Self>) {
-        let mask: VarRef = mask
+    pub fn trace_ray(
+        &self,
+        payload_count: usize,
+        o: [&Self; 3],
+        d: [&Self; 3],
+        tmin: &Self,
+        tmax: &Self,
+        t: &Self,
+        vis_mask: Option<&Self>,
+        flags: Option<&Self>,
+        sbt_offset: Option<&Self>,
+        sbt_stride: Option<&Self>,
+        miss_sbt: Option<&Self>,
+        mask: Option<&Self>,
+    ) -> Vec<Self> {
+        let null = self.ir.literal_u32(0);
+        let mask: Self = mask
             .map(|m| {
                 assert!(Rc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
             .unwrap_or(self.ir.literal_bool(true));
+        let vis_mask = vis_mask
+            .map(|m| {
+                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                m.clone()
+            })
+            .unwrap_or(self.ir.literal_u32(255));
+        let flags = flags
+            .map(|m| {
+                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                m.clone()
+            })
+            .unwrap_or(null.clone());
+        let sbt_offset = sbt_offset
+            .map(|m| {
+                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                m.clone()
+            })
+            .unwrap_or(null.clone());
+        let sbt_stride = sbt_stride
+            .map(|m| {
+                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                m.clone()
+            })
+            .unwrap_or(null.clone());
+        let miss_sbt = miss_sbt
+            .map(|m| {
+                assert!(Rc::ptr_eq(&self.ir, &m.ir));
+                m.clone()
+            })
+            .unwrap_or(null.clone());
 
-        // let ret = self.ir.push_var(Var {
-        //     op: Op::TraceRay,
-        //     deps: smallvec![],
-        //     size,
-        //     ..Default::default()
-        // });
-        // ret
+        // assert_eq!(o[0].size(), o[1].size());
+        // assert_eq!(o[0].size(), o[2].size());
+        // assert_eq!(d[0].size(), d[1].size());
+        // assert_eq!(d[0].size(), d[2].size());
+
+        let size = o[0]
+            .size()
+            .max(o[1].size())
+            .max(o[2].size())
+            .max(d[0].size())
+            .max(d[1].size())
+            .max(d[2].size())
+            .max(tmin.size())
+            .max(tmax.size())
+            .max(t.size());
+
+        let rt = self.ir.push_var(Var {
+            op: Op::TraceRay { payload_count },
+            ty: VarType::Void,
+            deps: smallvec![
+                self.id(),
+                mask.id(),
+                o[0].id(),
+                o[1].id(),
+                o[2].id(),
+                d[0].id(),
+                d[1].id(),
+                d[2].id(),
+                tmin.id(),
+                tmax.id(),
+                t.id(),
+                vis_mask.id(),
+                flags.id(),
+                sbt_offset.id(),
+                sbt_stride.id(),
+                miss_sbt.id(),
+            ],
+            size,
+            ..Default::default()
+        });
+
+        let ret = (0..payload_count)
+            .into_iter()
+            .map(|i| {
+                self.ir
+                    .push_var_op(Op::Extract { offset: i }, &[&rt], VarType::F32, size)
+            })
+            .collect::<Vec<_>>();
+        ret
     }
 }
 

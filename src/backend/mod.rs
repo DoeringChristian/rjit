@@ -31,6 +31,7 @@ pub trait Buffer: Debug {
 
 pub trait Backend: Debug {
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
     fn new_kernel(&self) -> Box<dyn Kernel>;
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn Texture>;
     fn buffer_uninit(&self, size: usize) -> Arc<dyn Buffer>;
@@ -38,7 +39,7 @@ pub trait Backend: Debug {
     fn first_register(&self) -> usize;
     fn synchronize(&self);
     fn create_accel(&self, vertices: &Arc<dyn Buffer>, indices: &Arc<dyn Buffer>)
-        -> Box<dyn Accel>;
+        -> Arc<dyn Accel>;
     // fn compress(&self, src: &dyn Buffer, dst: &dyn Buffer) -> usize;
 }
 pub trait Accel: Debug {

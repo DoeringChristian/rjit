@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use smallvec::{smallvec, SmallVec};
 
-use crate::backend::{Buffer, Texture};
+use crate::backend::{Accel, Buffer, Texture};
 use crate::trace::Internal;
 use crate::var::{Data, Op, ParamType, VarId, VarType};
 
@@ -32,6 +32,7 @@ pub struct ScheduleVar {
     pub reg: usize,
     pub buf: Option<usize>, // Index into literal/buffer/texture vec
     pub tex: Option<usize>,
+    pub accel: Option<usize>,
     pub literal: u64,
     pub size: usize,
 }
@@ -73,6 +74,7 @@ pub struct Env {
     literals: Vec<u64>,
     buffers: Vec<Arc<dyn Buffer>>,
     textures: Vec<Arc<dyn Texture>>,
+    accels: Vec<Arc<dyn Accel>>,
 }
 
 impl Env {
@@ -91,11 +93,19 @@ impl Env {
         self.textures.push(tex.clone());
         idx
     }
+    fn push_accel(&mut self, accel: &Arc<dyn Accel>) -> usize {
+        let idx = self.buffers.len();
+        self.accels.push(accel.clone());
+        idx
+    }
     pub fn buffers(&self) -> &[Arc<dyn Buffer>] {
         &self.buffers
     }
     pub fn textures(&self) -> &[Arc<dyn Texture>] {
         &self.textures
+    }
+    pub fn accels(&self) -> &[Arc<dyn Accel>] {
+        &self.accels
     }
 }
 
@@ -179,6 +189,7 @@ impl ScheduleIr {
             param_ty: ParamType::None,
             buf: None,
             tex: None,
+            accel: None,
             literal: 0,
             size: var.size,
         };
@@ -214,6 +225,15 @@ impl ScheduleIr {
                 dbg!(ir.var(var.deps[0]));
                 sv.deps.extend(
                     var.deps[1..(dim as usize + 1)]
+                        .iter()
+                        .map(|dep| self.collect(env, ir, *dep)),
+                );
+            }
+            Op::TraceRay { .. } => {
+                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0]),];
+                dbg!(ir.var(var.deps[0]));
+                sv.deps.extend(
+                    var.deps[1..16]
                         .iter()
                         .map(|dep| self.collect(env, ir, *dep)),
                 );
@@ -261,6 +281,7 @@ impl ScheduleIr {
             let reg = self.next_reg();
             let buf = var.data.buffer().map(|buf| env.push_buffer(&buf));
             let tex = var.data.texture().map(|tex| env.push_texture(&tex));
+            let accel = var.data.accel().map(|accel| env.push_accel(&accel));
             // dbg!(&var.data);
             let svid = self.push_var(ScheduleVar {
                 op: Op::Data,
@@ -268,6 +289,7 @@ impl ScheduleIr {
                 reg,
                 buf,
                 tex,
+                accel,
                 ..Default::default()
             });
             self.visited.insert(id, svid);

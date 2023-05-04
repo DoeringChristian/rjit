@@ -531,6 +531,7 @@ impl Function {
     }
 }
 
+#[derive(Debug)]
 pub struct KernelSize(pub u32, pub u32, pub u32);
 
 impl From<u32> for KernelSize {

@@ -87,7 +87,9 @@ pub enum Op {
         offset: usize,
     },
     TexUpload,
-    TraceRay,
+    TraceRay {
+        payload_count: usize,
+    },
     Idx,
 }
 
@@ -114,7 +116,7 @@ impl VarType {
     // Returns the register prefix for this variable
     pub fn prefix(&self) -> &'static str {
         match self {
-            Self::Void => "???",
+            Self::Void => "%u",
             Self::Bool => "%p",
             Self::I8 => "%b",
             Self::U8 => "%b",
@@ -252,7 +254,7 @@ pub enum Data {
     Literal(u64),
     Buffer(Arc<dyn Buffer>),
     Texture(Arc<dyn Texture>),
-    Accel(Box<dyn Accel>),
+    Accel(Arc<dyn Accel>),
 }
 impl Data {
     pub fn is_none(&self) -> bool {
@@ -306,7 +308,7 @@ impl Data {
             _ => None,
         }
     }
-    pub fn accel(&self) -> Option<&Box<dyn Accel>> {
+    pub fn accel(&self) -> Option<&Arc<dyn Accel>> {
         match self {
             Self::Accel(accel) => Some(accel),
             _ => None,
