@@ -106,6 +106,8 @@ impl Backend {
     }
 }
 
+unsafe impl Sync for Backend {}
+unsafe impl Send for Backend {}
 impl backend::Backend for Backend {
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -184,6 +186,8 @@ impl Debug for Kernel {
     }
 }
 
+unsafe impl Sync for Kernel {}
+unsafe impl Send for Kernel {}
 impl backend::Kernel for Kernel {
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -311,6 +315,9 @@ impl backend::Kernel for Kernel {
         &self.asm
     }
 }
+
+unsafe impl Sync for Accel {}
+unsafe impl Send for Accel {}
 
 #[derive(Debug)]
 pub struct Accel {

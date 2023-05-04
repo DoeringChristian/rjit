@@ -38,6 +38,8 @@ impl Backend {
     }
 }
 
+unsafe impl Sync for Backend {}
+unsafe impl Send for Backend {}
 impl backend::Backend for Backend {
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -257,6 +259,8 @@ impl Texture {
     }
 }
 
+unsafe impl Sync for Texture {}
+unsafe impl Send for Texture {}
 impl backend::Texture for Texture {
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -371,6 +375,8 @@ impl Kernel {
     }
 }
 
+unsafe impl Sync for Kernel {}
+unsafe impl Send for Kernel {}
 impl backend::Kernel for Kernel {
     fn as_any(&self) -> &dyn std::any::Any {
         self

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::schedule::{Env, ScheduleIr};
 
-pub trait Texture: Debug {
+pub trait Texture: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
     fn channels(&self) -> usize;
     fn dimensions(&self) -> usize;
@@ -16,7 +16,7 @@ pub trait Texture: Debug {
     fn copy_to_buffer(&self, buf: &dyn Buffer);
 }
 
-pub trait Kernel: Debug {
+pub trait Kernel: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
     fn assemble(&mut self, ir: &ScheduleIr, env: &Env);
     fn compile(&mut self);
@@ -24,12 +24,12 @@ pub trait Kernel: Debug {
     fn assembly(&self) -> &str;
 }
 
-pub trait Buffer: Debug {
+pub trait Buffer: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
     fn copy_to_host(&self, dst: &mut [u8]);
 }
 
-pub trait Backend: Debug {
+pub trait Backend: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn new_kernel(&self) -> Box<dyn Kernel>;
@@ -42,6 +42,6 @@ pub trait Backend: Debug {
         -> Arc<dyn Accel>;
     // fn compress(&self, src: &dyn Buffer, dst: &dyn Buffer) -> usize;
 }
-pub trait Accel: Debug {
+pub trait Accel: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
 }
