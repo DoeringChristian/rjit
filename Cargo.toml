@@ -25,7 +25,7 @@ paste = "1.0.12"
 half = { version = "2.2.1", features = ["bytemuck"]}
 approx = "0.5.1"
 cuda-rs = { git = "https://github.com/DoeringChristian/cuda-rs.git" }
-optix-rs = { path = "../optix-rs/" }
+optix-rs = { git = "https://github.com/DoeringChristian/optix-rs.git" }
 bytesize = "1.2.0"
 libloading = "0.8.0"
 thiserror = "1.0.40"

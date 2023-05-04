@@ -503,6 +503,7 @@ checksum = "b7e5500299e16ebb147ae15a00a942af264cf3688f47923b8fc2cd5858f23ad3"
 [[package]]
 name = "optix-rs"
 version = "0.1.0"
+source = "git+https://github.com/DoeringChristian/optix-rs.git#92b72f903c45862f08c26850953fcf5e9e133b6f"
 dependencies = [
  "cuda-rs",
  "glob",
