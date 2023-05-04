@@ -181,8 +181,6 @@ impl Texture {
     }
     pub fn create(device: &Device, shape: &[usize], n_channels: usize) -> Self {
         let ctx = device.ctx();
-        dbg!(shape);
-        dbg!(n_channels);
         unsafe {
             let mut tex = 0;
             let mut array = std::ptr::null_mut();
@@ -245,8 +243,6 @@ impl Texture {
                 depth: if shape.len() == 3 { shape[2] } else { 0 },
                 ..Default::default()
             };
-            dbg!(&tex_desc);
-            dbg!(&view_desc);
             ctx.cuTexObjectCreate(&mut tex, &res_desc, &tex_desc, &view_desc)
                 .check()
                 .unwrap();

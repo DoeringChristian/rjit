@@ -75,7 +75,6 @@ impl ExecutionGraph {
                     .map(|dep| id2pass[&dep])
                     .collect();
                 let op = if ir.var(*id).op == Op::TexUpload {
-                    dbg!("test");
                     PassOp::TexUpload
                 } else {
                     PassOp::KernelLaunch(0, Env::default())

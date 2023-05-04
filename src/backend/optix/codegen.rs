@@ -117,7 +117,6 @@ pub fn assemble_entry(
     entry_point: &str,
 ) -> std::fmt::Result {
     let n_params = 1 + env.buffers().len() + env.textures().len() + env.accels().len(); // Add 1 for size
-                                                                                        // dbg!(n_params);
     let n_regs = ir.n_regs();
 
     /* Special registers:

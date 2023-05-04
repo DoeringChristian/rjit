@@ -327,7 +327,6 @@ impl ProgramGroup {
                 mut module_is,
                 entry_point_is,
             } => {
-                dbg!(&desc);
                 let entry_point_ch =
                     entry_point_ch.map(|entry_point| CString::new(entry_point).unwrap());
                 let entry_point_ah =
@@ -550,12 +549,6 @@ impl Pipeline {
         size: impl Into<cuda_core::KernelSize>,
     ) -> Result<(), Error> {
         let size = size.into();
-
-        dbg!(stream);
-        dbg!(&params);
-        dbg!(&params_size);
-        dbg!(&size);
-        dbg!(self);
 
         self.device
             .instance

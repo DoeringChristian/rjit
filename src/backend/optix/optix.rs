@@ -377,7 +377,6 @@ impl Accel {
                 .check()
                 .unwrap()
         };
-        dbg!(&buffer_size);
 
         let mut d_gas_tmp = 0;
         unsafe {

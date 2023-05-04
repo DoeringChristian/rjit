@@ -384,6 +384,10 @@ impl VarRef {
     to_host!(F64);
     // Unarry operations:
     pub fn cast(&self, ty: &VarType) -> VarRef {
+        self.ir
+            .push_var_op(Op::Cast, &[self], ty.clone(), self.size())
+    }
+    pub fn bitcast(&self, ty: &VarType) -> VarRef {
         assert_eq!(self.var().ty.size(), ty.size());
         self.ir
             .push_var_op(Op::Bitcast, &[self], ty.clone(), self.size())
