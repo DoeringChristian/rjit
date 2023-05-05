@@ -40,13 +40,15 @@ pub trait Backend: Debug + Sync + Send {
     fn synchronize(&self);
     fn create_accel(&self, vertices: &Arc<dyn Buffer>, indices: &Arc<dyn Buffer>)
         -> Arc<dyn Accel>;
-    fn set_compile_options(&mut self, compile_options: &dyn CompileOptions);
+    fn set_compile_options(&mut self, compile_options: &CompileOptions);
     fn set_miss_from_str(&mut self, entry_point: &str, source: &str);
     fn push_hit_from_str(&mut self, entry_point: &str, source: &str);
 }
-pub trait CompileOptions {
-    fn as_any(&self) -> &dyn Any;
+#[derive(Clone, Default)]
+pub struct CompileOptions {
+    pub num_payload_values: i32,
 }
+
 pub trait Accel: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
 }

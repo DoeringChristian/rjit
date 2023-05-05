@@ -30,7 +30,7 @@ pub struct Backend {
     instance: Arc<optix_core::Instance>,
     device: optix_core::Device,
     stream: Arc<cuda_core::Stream>,
-    pub compile_options: CompileOptions,
+    pub compile_options: backend::CompileOptions,
     pub miss: Option<(String, Arc<Module>)>,
     pub hit: Vec<(String, Arc<Module>)>,
 }
@@ -84,7 +84,7 @@ impl Backend {
         let miss_minimal = ".version 6.0 .target sm_50 .address_size 64\n\
                                     .entry __miss__dr() { ret; }";
 
-        let compile_options = CompileOptions::default();
+        let compile_options = backend::CompileOptions::default();
 
         let miss = Arc::new(
             Module::create(
@@ -162,13 +162,9 @@ impl backend::Backend for Backend {
         Arc::new(Accel::create(&self.device, &self.stream, vertices, indices).unwrap())
     }
 
-    fn set_compile_options(&mut self, compile_options: &dyn backend::CompileOptions) {
+    fn set_compile_options(&mut self, compile_options: &backend::CompileOptions) {
         self.hit.clear();
-        self.compile_options = compile_options
-            .as_any()
-            .downcast_ref::<CompileOptions>()
-            .unwrap()
-            .clone();
+        self.compile_options = compile_options.clone();
     }
 
     fn set_miss_from_str(&mut self, entry_point: &str, source: &str) {
@@ -208,7 +204,7 @@ pub struct Kernel {
     entry_point: String,
     pipeline: Option<optix_core::Pipeline>,
     stream: Arc<cuda_core::Stream>,
-    compile_options: CompileOptions,
+    compile_options: backend::CompileOptions,
     miss: (String, Arc<Module>),
     hit: Vec<(String, Arc<Module>)>,
 }
@@ -484,12 +480,7 @@ impl backend::Accel for Accel {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct CompileOptions {
-    pub num_payload_values: i32,
-}
-
-impl CompileOptions {
+impl backend::CompileOptions {
     pub fn pco(&self) -> OptixPipelineCompileOptions {
         OptixPipelineCompileOptions {
             numAttributeValues: 2,
@@ -505,11 +496,5 @@ impl CompileOptions {
             debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
             ..Default::default()
         }
-    }
-}
-
-impl backend::CompileOptions for CompileOptions {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }

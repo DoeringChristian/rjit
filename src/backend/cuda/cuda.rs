@@ -85,7 +85,7 @@ impl backend::Backend for Backend {
         self
     }
 
-    fn set_compile_options(&mut self, compile_options: &dyn backend::CompileOptions) {
+    fn set_compile_options(&mut self, compile_options: &backend::CompileOptions) {
         todo!()
     }
 

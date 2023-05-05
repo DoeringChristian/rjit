@@ -1,5 +1,5 @@
 use crate::backend;
-use crate::backend::optix::CompileOptions;
+use crate::backend::CompileOptions;
 use crate::jit::Jit;
 use crate::trace::{ReduceOp, Trace, VarType};
 
