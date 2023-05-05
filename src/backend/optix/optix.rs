@@ -31,7 +31,7 @@ pub struct Backend {
     device: optix_core::Device,
     stream: Arc<cuda_core::Stream>,
     pub compile_options: CompileOptions,
-    pub miss: (String, Arc<Module>),
+    pub miss: Option<(String, Arc<Module>)>,
     pub hit: Vec<(String, Arc<Module>)>,
 }
 impl Debug for Backend {
@@ -58,7 +58,7 @@ impl Backend {
         }));
     }
     pub fn set_miss_from_str(&mut self, miss: (&str, &str)) {
-        self.miss = (
+        self.miss = Some((
             String::from(miss.0),
             Arc::new(
                 Module::create(
@@ -69,7 +69,7 @@ impl Backend {
                 )
                 .unwrap(),
             ),
-        );
+        ));
     }
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(optix_core::Instance::new()?);
@@ -100,7 +100,7 @@ impl Backend {
             instance,
             stream,
             hit: vec![],
-            miss: ("__miss__dr".into(), miss),
+            miss: Some(("__miss__dr".into(), miss)),
             compile_options,
         })
     }
@@ -113,6 +113,10 @@ impl backend::Backend for Backend {
         self
     }
 
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     fn new_kernel(&self) -> Box<dyn backend::Kernel> {
         Box::new(Kernel {
             device: self.device.clone(),
@@ -121,7 +125,7 @@ impl backend::Backend for Backend {
             entry_point: "__raygen__cujit".into(),
             pipeline: None,
             hit: self.hit.clone(),
-            miss: self.miss.clone(),
+            miss: self.miss.as_ref().unwrap().clone(),
             compile_options: self.compile_options.clone(),
         })
     }
@@ -158,8 +162,43 @@ impl backend::Backend for Backend {
         Arc::new(Accel::create(&self.device, &self.stream, vertices, indices).unwrap())
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
+    fn set_compile_options(&mut self, compile_options: &dyn backend::CompileOptions) {
+        self.hit.clear();
+        self.compile_options = compile_options
+            .as_any()
+            .downcast_ref::<CompileOptions>()
+            .unwrap()
+            .clone();
+    }
+
+    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) {
+        self.miss = Some((
+            String::from(entry_point),
+            Arc::new(
+                Module::create(
+                    &self.device,
+                    source,
+                    self.compile_options.mco(),
+                    self.compile_options.pco(),
+                )
+                .unwrap(),
+            ),
+        ));
+    }
+
+    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) {
+        self.hit.push((
+            String::from(entry_point),
+            Arc::new(
+                Module::create(
+                    &self.device,
+                    source,
+                    self.compile_options.mco(),
+                    self.compile_options.pco(),
+                )
+                .unwrap(),
+            ),
+        ))
     }
 }
 
@@ -466,5 +505,11 @@ impl CompileOptions {
             debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
             ..Default::default()
         }
+    }
+}
+
+impl backend::CompileOptions for CompileOptions {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

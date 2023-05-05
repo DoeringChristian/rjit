@@ -84,6 +84,18 @@ impl backend::Backend for Backend {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
+
+    fn set_compile_options(&mut self, compile_options: &dyn backend::CompileOptions) {
+        todo!()
+    }
+
+    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) {
+        todo!()
+    }
+
+    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) {
+        todo!()
+    }
 }
 
 impl Drop for Backend {

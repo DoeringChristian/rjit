@@ -40,7 +40,12 @@ pub trait Backend: Debug + Sync + Send {
     fn synchronize(&self);
     fn create_accel(&self, vertices: &Arc<dyn Buffer>, indices: &Arc<dyn Buffer>)
         -> Arc<dyn Accel>;
-    // fn compress(&self, src: &dyn Buffer, dst: &dyn Buffer) -> usize;
+    fn set_compile_options(&mut self, compile_options: &dyn CompileOptions);
+    fn set_miss_from_str(&mut self, entry_point: &str, source: &str);
+    fn push_hit_from_str(&mut self, entry_point: &str, source: &str);
+}
+pub trait CompileOptions {
+    fn as_any(&self) -> &dyn Any;
 }
 pub trait Accel: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
