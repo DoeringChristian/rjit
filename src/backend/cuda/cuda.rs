@@ -3,7 +3,7 @@ use std::fmt::{Debug, Write};
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::cuda_core::{Device, Function, Instance, Module, Stream};
+use super::cuda_core::{Device, Event, Function, Instance, Module, Stream};
 use crate::backend;
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
@@ -411,7 +411,11 @@ impl backend::Kernel for Kernel {
         self
     }
 
-    fn execute_async(&mut self, env: &mut crate::schedule::Env, size: usize) {
+    fn execute_async(
+        &mut self,
+        env: &mut crate::schedule::Env,
+        size: usize,
+    ) -> Arc<dyn backend::DeviceFuture> {
         let ctx = self.device.ctx();
         unsafe {
             let mut unused = 0;
@@ -457,10 +461,32 @@ impl backend::Kernel for Kernel {
             )
             .check()
             .unwrap();
+
+            let mut event = Event::create(&self.device).unwrap();
+            event.record(&self.stream).unwrap();
+            Arc::new(DeviceFuture { event })
         }
     }
 
     fn assembly(&self) -> &str {
         &self.asm
+    }
+}
+
+unsafe impl Sync for DeviceFuture {}
+unsafe impl Send for DeviceFuture {}
+#[derive(Debug)]
+pub struct DeviceFuture {
+    event: Event,
+}
+
+impl backend::DeviceFuture for DeviceFuture {
+    fn wait(&self) {
+        self.event.synchronize();
+    }
+}
+impl Drop for DeviceFuture {
+    fn drop(&mut self) {
+        self.event.synchronize();
     }
 }

@@ -2,7 +2,7 @@ use std::ffi::{CStr, CString};
 use std::fmt::{Debug, Write};
 use std::sync::{Arc, Mutex};
 
-use crate::backend::cuda::cuda_core::Stream;
+use crate::backend::cuda::cuda_core::{Event, Stream};
 use crate::backend::cuda::{cuda_core, Buffer, Texture};
 use crate::backend::{self, CompileOptions};
 use crate::schedule::{Env, SVarId, ScheduleIr};
@@ -321,82 +321,11 @@ impl backend::Kernel for Kernel {
         self
     }
 
-    // #[allow(unused_must_use)]
-    // fn assemble(&mut self, ir: &crate::schedule::ScheduleIr, env: &crate::schedule::Env) {
-    //     self.asm.clear();
-    //
-    //     super::codegen::assemble_entry(&mut self.asm, ir, env, &self.entry_point).unwrap();
-    //
-    //     std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
-    //
-    //     log::trace!("{}", self.asm);
-    // }
-    //
-    // fn compile(&mut self) {
-    //     let compile_options = self.compile_options.clone();
-    //
-    //     let rgen = Arc::new(
-    //         optix_core::Module::create(
-    //             &self.device,
-    //             &self.asm,
-    //             compile_options.mco(),
-    //             compile_options.pco(),
-    //         )
-    //         .unwrap(),
-    //     );
-    //     let rgen_pg = optix_core::ProgramGroup::create(
-    //         &self.device,
-    //         optix_core::ProgramGroupDesc::RayGen {
-    //             module: &rgen,
-    //             entry_point: &self.entry_point,
-    //         },
-    //     )
-    //     .unwrap();
-    //     let miss_pg = optix_core::ProgramGroup::create(
-    //         &self.device,
-    //         optix_core::ProgramGroupDesc::Miss {
-    //             entry_point: &self.miss.0,
-    //             module: &self.miss.1,
-    //         },
-    //     )
-    //     .unwrap();
-    //
-    //     let hit_pgs = self
-    //         .hit
-    //         .iter()
-    //         .map(|(ep, ptx)| {
-    //             let pg = optix_core::ProgramGroup::create(
-    //                 &self.device,
-    //                 optix_core::ProgramGroupDesc::HitGroup {
-    //                     module_ch: Some(ptx),
-    //                     entry_point_ch: Some(ep),
-    //                     module_ah: None,
-    //                     entry_point_ah: None,
-    //                     module_is: None,
-    //                     entry_point_is: None,
-    //                 },
-    //             )
-    //             .unwrap();
-    //             pg
-    //         })
-    //         .collect::<Vec<_>>();
-    //
-    //     let pipeline = optix_core::Pipeline::create(
-    //         &self.device,
-    //         &compile_options.pco(),
-    //         &optix_rs::OptixPipelineLinkOptions {
-    //             maxTraceDepth: 1,
-    //             debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
-    //         },
-    //         rgen_pg,
-    //         hit_pgs,
-    //         [miss_pg],
-    //     )
-    //     .unwrap();
-    //     self.pipeline = Some(pipeline);
-    // }
-
-    fn execute_async(&mut self, env: &mut crate::schedule::Env, size: usize) {
+    fn execute_async(
+        &mut self,
+        env: &mut crate::schedule::Env,
+        size: usize,
+    ) -> Arc<dyn backend::DeviceFuture> {
         let params = [size as u32, 0u32];
         let mut params = Vec::from(bytemuck::cast_slice(&params));
         params.extend(
@@ -418,25 +347,41 @@ impl backend::Kernel for Kernel {
         log::trace!("params: {:02x?}", bytemuck::cast_slice::<_, u8>(&params));
         log::trace!("Optix Kernel Launch with {size} threads.");
 
+        let params_buf =
+            Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params));
+        // let params = Buffer::uninit(&self.device.cuda_device(), 8 * params.len());
+
         unsafe {
-            let mut d_params = 0;
-            let ctx = self.device.cuda_ctx();
-            ctx.cuMemAlloc_v2(&mut d_params, 8 * params.len())
-                .check()
-                .unwrap();
-            ctx.cuMemcpyHtoD_v2(d_params, params.as_ptr() as *const _, params.len() * 8)
-                .check()
-                .unwrap(); // TODO: Free somehow...
+            // let mut d_params = 0;
+            // let ctx = self.device.cuda_ctx();
+            // ctx.cuMemAlloc_v2(&mut d_params, 8 * params.len())
+            //     .check()
+            //     .unwrap();
+            // ctx.cuMemcpyHtoD_v2(d_params, params.as_ptr() as *const _, params.len() * 8)
+            //     .check()
+            //     .unwrap(); // TODO: Free somehow...
 
             self.pipeline
                 // .as_ref()
                 // .unwrap()
-                .launch(&self.stream, d_params, params.len() * 8, size as u32)
+                .launch(
+                    &self.stream,
+                    params_buf.ptr(),
+                    params_buf.size(),
+                    size as u32,
+                )
                 .unwrap();
-            self.stream.synchronize().unwrap();
+            // self.stream.synchronize().unwrap();
 
-            ctx.cuMemFree_v2(d_params).check().unwrap();
+            // ctx.cuMemFree_v2(d_params).check().unwrap();
         }
+
+        let mut event = Event::create(&self.device.cuda_device()).unwrap();
+        event.record(&self.stream).unwrap();
+        Arc::new(DeviceFuture {
+            event,
+            params: params_buf,
+        })
     }
 
     fn assembly(&self) -> &str {
@@ -589,5 +534,25 @@ impl backend::CompileOptions {
             debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
             ..Default::default()
         }
+    }
+}
+
+unsafe impl Sync for DeviceFuture {}
+unsafe impl Send for DeviceFuture {}
+#[derive(Debug)]
+pub struct DeviceFuture {
+    event: Event,
+    params: Buffer,
+}
+
+impl backend::DeviceFuture for DeviceFuture {
+    fn wait(&self) {
+        self.event.synchronize();
+    }
+}
+
+impl Drop for DeviceFuture {
+    fn drop(&mut self) {
+        self.event.synchronize();
     }
 }

@@ -240,15 +240,19 @@ impl Jit {
             return;
         };
 
+        let mut futures = vec![];
         for mut pass in graph.passes {
             match &mut pass.op {
                 PassOp::KernelLaunch(hash, env) => {
-                    self.kernels
-                        .get_mut(&hash)
-                        .unwrap()
-                        .execute_async(env, pass.size);
+                    futures.push(
+                        self.kernels
+                            .get_mut(&hash)
+                            .unwrap()
+                            .execute_async(env, pass.size),
+                    );
                 }
                 PassOp::TexUpload => {
+                    // TODO: Device futures for texture upload
                     for id in pass.ids.iter() {
                         let dep = ir.var(*id).deps[0];
                         let buf = ir.var(dep).data.buffer().unwrap().clone();
@@ -259,10 +263,14 @@ impl Jit {
                             .copy_from_buffer(buf.as_ref());
                     }
                 }
+                // TODO: Defferred Accel creation
                 _ => {
                     todo!()
                 }
             }
+        }
+        for future in futures {
+            future.wait();
         }
         ir.backend.as_ref().unwrap().synchronize();
 

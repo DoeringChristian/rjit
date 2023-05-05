@@ -3,7 +3,9 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use cuda_rs::{CUcontext, CUdevice_attribute, CUstream, CudaApi, CudaError};
+use cuda_rs::{
+    CUcontext, CUdevice_attribute, CUevent, CUevent_flags, CUstream, CudaApi, CudaError,
+};
 
 use thiserror::Error;
 
@@ -339,6 +341,13 @@ impl Stream {
     pub unsafe fn raw(&self) -> CUstream {
         self.raw
     }
+    pub fn enent(&self) -> Result<Event, Error> {
+        let ctx = self.device.ctx();
+        unsafe {
+            // ctx.cuEventCreate
+        }
+        todo!()
+    }
 }
 
 impl Deref for Stream {
@@ -547,5 +556,52 @@ impl From<(u32, u32)> for KernelSize {
 impl From<(u32, u32, u32)> for KernelSize {
     fn from(value: (u32, u32, u32)) -> Self {
         Self(value.0, value.1, value.2)
+    }
+}
+
+#[derive(Debug)]
+pub struct Event {
+    stream: Option<Arc<Stream>>,
+    device: Device,
+    event: CUevent,
+}
+
+impl Event {
+    pub fn create(device: &Device) -> Result<Self, Error> {
+        let ctx = device.ctx();
+        unsafe {
+            let mut event = std::ptr::null_mut();
+            ctx.cuEventCreate(&mut event, CUevent_flags::CU_EVENT_DEFAULT as _)
+                .check()?;
+            Ok(Self {
+                device: device.clone(),
+                stream: None,
+                event,
+            })
+        }
+    }
+    pub fn record(&mut self, stream: &Arc<Stream>) -> Result<(), Error> {
+        let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuEventRecord(self.event, stream.raw()).check()?;
+        }
+        self.stream = Some(stream.clone());
+        Ok(())
+    }
+    pub fn synchronize(&self) -> Result<(), Error> {
+        let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuEventSynchronize(self.event).check()?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for Event {
+    fn drop(&mut self) {
+        let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuEventDestroy_v2(self.event).check().unwrap();
+        }
     }
 }
