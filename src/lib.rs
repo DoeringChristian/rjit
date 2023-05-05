@@ -1,4 +1,4 @@
-mod backend;
+pub mod backend;
 mod jit;
 mod schedule;
 mod trace;
