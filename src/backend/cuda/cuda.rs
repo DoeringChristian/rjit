@@ -45,16 +45,6 @@ impl backend::Backend for Backend {
         self
     }
 
-    fn new_kernel(&self) -> Box<dyn backend::Kernel> {
-        Box::new(Kernel {
-            asm: Default::default(),
-            module: None,
-            func: None,
-            device: self.device.clone(),
-            stream: self.stream.clone(),
-        })
-    }
-
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
         Arc::new(Texture::create(&self.device, shape, n_channels))
     }
@@ -95,6 +85,10 @@ impl backend::Backend for Backend {
 
     fn push_hit_from_str(&mut self, entry_point: &str, source: &str) {
         todo!()
+    }
+
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn backend::Kernel> {
+        Box::new(Kernel::compile(&self.device, &self.stream, ir, env))
     }
 }
 
@@ -372,18 +366,41 @@ impl backend::Texture for Texture {
 #[derive(Debug)]
 pub struct Kernel {
     pub asm: String,
-    module: Option<Module>,
-    func: Option<Function>,
+    module: Module,
+    func: Function,
     device: Device,
     stream: Arc<Stream>,
 }
 
 impl Kernel {
-    const ENTRY_POINT: &str = "cujit";
-    const FIRST_REGISTER: usize = 4;
-    #[allow(unused_must_use)]
-    fn assemble_var(&mut self, ir: &ScheduleIr, env: &Env, id: SVarId) {
-        super::codegen::assemble_var(&mut self.asm, ir, id, 1, 1 + env.buffers().len(), "param");
+    pub const ENTRY_POINT: &str = "cujit";
+    pub const FIRST_REGISTER: usize = 4;
+}
+
+impl Kernel {
+    pub fn compile(device: &Device, stream: &Arc<Stream>, ir: &ScheduleIr, env: &Env) -> Self {
+        assert!(env.accels().is_empty());
+        // Assemble:
+
+        let mut asm = String::new();
+
+        super::codegen::assemble_entry(&mut asm, ir, env, Kernel::ENTRY_POINT).unwrap();
+
+        std::fs::write("/tmp/tmp.ptx", &asm).unwrap();
+
+        log::trace!("{}", asm);
+
+        // Compile module:
+        let module = Module::from_ptx(&device, &asm).unwrap();
+        let func = module.function(Kernel::ENTRY_POINT).unwrap();
+
+        Kernel {
+            asm,
+            module,
+            func,
+            device: device.clone(),
+            stream: stream.clone(),
+        }
     }
 }
 
@@ -392,27 +409,6 @@ unsafe impl Send for Kernel {}
 impl backend::Kernel for Kernel {
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
-    #[allow(unused_must_use)]
-    fn assemble(&mut self, ir: &ScheduleIr, env: &Env) {
-        self.asm.clear();
-
-        super::codegen::assemble_entry(&mut self.asm, ir, env, Self::ENTRY_POINT).unwrap();
-
-        std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
-
-        log::trace!("{}", self.asm);
-    }
-
-    fn compile(&mut self) {
-        self.module = Some(Module::from_ptx(&self.device, &self.asm).unwrap());
-        self.func = Some(
-            self.module
-                .as_ref()
-                .unwrap()
-                .function(Self::ENTRY_POINT)
-                .unwrap(),
-        );
     }
 
     fn execute_async(&mut self, env: &mut crate::schedule::Env, size: usize) {
@@ -423,7 +419,7 @@ impl backend::Kernel for Kernel {
             ctx.cuOccupancyMaxPotentialBlockSize(
                 &mut unused,
                 &mut block_size,
-                self.func.as_ref().unwrap().raw(),
+                self.func.raw(),
                 None,
                 0,
                 0,
@@ -447,7 +443,7 @@ impl backend::Kernel for Kernel {
             );
 
             ctx.cuLaunchKernel(
-                self.func.as_ref().unwrap().raw(),
+                self.func.raw(),
                 grid_size,
                 1,
                 1,

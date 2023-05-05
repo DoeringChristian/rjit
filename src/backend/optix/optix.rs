@@ -2,9 +2,9 @@ use std::ffi::{CStr, CString};
 use std::fmt::{Debug, Write};
 use std::sync::{Arc, Mutex};
 
-use crate::backend;
 use crate::backend::cuda::cuda_core::Stream;
 use crate::backend::cuda::{cuda_core, Buffer, Texture};
+use crate::backend::{self, CompileOptions};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
@@ -117,19 +117,6 @@ impl backend::Backend for Backend {
         self
     }
 
-    fn new_kernel(&self) -> Box<dyn backend::Kernel> {
-        Box::new(Kernel {
-            device: self.device.clone(),
-            stream: self.stream.clone(),
-            asm: "".into(),
-            entry_point: "__raygen__cujit".into(),
-            pipeline: None,
-            hit: self.hit.clone(),
-            miss: self.miss.as_ref().unwrap().clone(),
-            compile_options: self.compile_options.clone(),
-        })
-    }
-
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
         Arc::new(Texture::create(
             self.device.cuda_device(),
@@ -196,17 +183,38 @@ impl backend::Backend for Backend {
             ),
         ))
     }
+
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn backend::Kernel> {
+        if env.accels().is_empty() {
+            Box::new(crate::backend::cuda::Kernel::compile(
+                self.device.cuda_device(),
+                &self.stream,
+                ir,
+                env,
+            ))
+        } else {
+            Box::new(Kernel::compile(
+                &self.device,
+                &self.stream,
+                &self.compile_options,
+                self.miss.as_ref().unwrap(),
+                &self.hit,
+                ir,
+                env,
+            ))
+        }
+    }
 }
 
 pub struct Kernel {
     device: Device,
     pub asm: String,
-    entry_point: String,
-    pipeline: Option<optix_core::Pipeline>,
+    // entry_point: String,
+    pipeline: optix_core::Pipeline,
     stream: Arc<cuda_core::Stream>,
-    compile_options: backend::CompileOptions,
-    miss: (String, Arc<Module>),
-    hit: Vec<(String, Arc<Module>)>,
+    // compile_options: backend::CompileOptions,
+    // miss: (String, Arc<Module>),
+    // hit: Vec<(String, Arc<Module>)>,
 }
 impl Kernel {
     const FIRST_REGISTER: usize = 4;
@@ -215,65 +223,62 @@ impl Debug for Kernel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Kernel")
             .field("device", &self.device)
-            .field("asm", &self.asm)
-            .field("kernel_name", &self.entry_point)
+            // .field("asm", &self.asm)
+            // .field("kernel_name", &self.entry_point)
             .finish()
     }
 }
 
-unsafe impl Sync for Kernel {}
-unsafe impl Send for Kernel {}
-impl backend::Kernel for Kernel {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
+impl Kernel {
+    pub fn compile(
+        device: &Device,
+        stream: &Arc<Stream>,
+        compile_options: &CompileOptions,
+        miss: &(String, Arc<Module>),
+        hit: &[(String, Arc<Module>)],
+        ir: &ScheduleIr,
+        env: &Env,
+    ) -> Self {
+        let entry_point = "__raygen__cujit";
+        // Assemble
+        let mut asm = String::new();
 
-    #[allow(unused_must_use)]
-    fn assemble(&mut self, ir: &crate::schedule::ScheduleIr, env: &crate::schedule::Env) {
-        self.asm.clear();
+        super::codegen::assemble_entry(&mut asm, ir, env, entry_point).unwrap();
 
-        super::codegen::assemble_entry(&mut self.asm, ir, env, &self.entry_point).unwrap();
+        std::fs::write("/tmp/tmp.ptx", &asm).unwrap();
 
-        std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
+        log::trace!("{}", asm);
 
-        log::trace!("{}", self.asm);
-    }
+        // Compile
 
-    fn compile(&mut self) {
-        let compile_options = self.compile_options.clone();
+        // let compile_options = self.compile_options.clone();
 
         let rgen = Arc::new(
-            optix_core::Module::create(
-                &self.device,
-                &self.asm,
-                compile_options.mco(),
-                compile_options.pco(),
-            )
-            .unwrap(),
+            optix_core::Module::create(device, &asm, compile_options.mco(), compile_options.pco())
+                .unwrap(),
         );
         let rgen_pg = optix_core::ProgramGroup::create(
-            &self.device,
+            &device,
             optix_core::ProgramGroupDesc::RayGen {
                 module: &rgen,
-                entry_point: &self.entry_point,
+                entry_point,
             },
         )
         .unwrap();
         let miss_pg = optix_core::ProgramGroup::create(
-            &self.device,
+            &device,
             optix_core::ProgramGroupDesc::Miss {
-                entry_point: &self.miss.0,
-                module: &self.miss.1,
+                entry_point: &miss.0,
+                module: &miss.1,
             },
         )
         .unwrap();
 
-        let hit_pgs = self
-            .hit
+        let hit_pgs = hit
             .iter()
             .map(|(ep, ptx)| {
                 let pg = optix_core::ProgramGroup::create(
-                    &self.device,
+                    &device,
                     optix_core::ProgramGroupDesc::HitGroup {
                         module_ch: Some(ptx),
                         entry_point_ch: Some(ep),
@@ -289,7 +294,7 @@ impl backend::Kernel for Kernel {
             .collect::<Vec<_>>();
 
         let pipeline = optix_core::Pipeline::create(
-            &self.device,
+            &device,
             &compile_options.pco(),
             &optix_rs::OptixPipelineLinkOptions {
                 maxTraceDepth: 1,
@@ -300,8 +305,96 @@ impl backend::Kernel for Kernel {
             [miss_pg],
         )
         .unwrap();
-        self.pipeline = Some(pipeline);
+        Self {
+            pipeline,
+            device: device.clone(),
+            stream: stream.clone(),
+            asm,
+        }
     }
+}
+
+unsafe impl Sync for Kernel {}
+unsafe impl Send for Kernel {}
+impl backend::Kernel for Kernel {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    // #[allow(unused_must_use)]
+    // fn assemble(&mut self, ir: &crate::schedule::ScheduleIr, env: &crate::schedule::Env) {
+    //     self.asm.clear();
+    //
+    //     super::codegen::assemble_entry(&mut self.asm, ir, env, &self.entry_point).unwrap();
+    //
+    //     std::fs::write("/tmp/tmp.ptx", &self.asm).unwrap();
+    //
+    //     log::trace!("{}", self.asm);
+    // }
+    //
+    // fn compile(&mut self) {
+    //     let compile_options = self.compile_options.clone();
+    //
+    //     let rgen = Arc::new(
+    //         optix_core::Module::create(
+    //             &self.device,
+    //             &self.asm,
+    //             compile_options.mco(),
+    //             compile_options.pco(),
+    //         )
+    //         .unwrap(),
+    //     );
+    //     let rgen_pg = optix_core::ProgramGroup::create(
+    //         &self.device,
+    //         optix_core::ProgramGroupDesc::RayGen {
+    //             module: &rgen,
+    //             entry_point: &self.entry_point,
+    //         },
+    //     )
+    //     .unwrap();
+    //     let miss_pg = optix_core::ProgramGroup::create(
+    //         &self.device,
+    //         optix_core::ProgramGroupDesc::Miss {
+    //             entry_point: &self.miss.0,
+    //             module: &self.miss.1,
+    //         },
+    //     )
+    //     .unwrap();
+    //
+    //     let hit_pgs = self
+    //         .hit
+    //         .iter()
+    //         .map(|(ep, ptx)| {
+    //             let pg = optix_core::ProgramGroup::create(
+    //                 &self.device,
+    //                 optix_core::ProgramGroupDesc::HitGroup {
+    //                     module_ch: Some(ptx),
+    //                     entry_point_ch: Some(ep),
+    //                     module_ah: None,
+    //                     entry_point_ah: None,
+    //                     module_is: None,
+    //                     entry_point_is: None,
+    //                 },
+    //             )
+    //             .unwrap();
+    //             pg
+    //         })
+    //         .collect::<Vec<_>>();
+    //
+    //     let pipeline = optix_core::Pipeline::create(
+    //         &self.device,
+    //         &compile_options.pco(),
+    //         &optix_rs::OptixPipelineLinkOptions {
+    //             maxTraceDepth: 1,
+    //             debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
+    //         },
+    //         rgen_pg,
+    //         hit_pgs,
+    //         [miss_pg],
+    //     )
+    //     .unwrap();
+    //     self.pipeline = Some(pipeline);
+    // }
 
     fn execute_async(&mut self, env: &mut crate::schedule::Env, size: usize) {
         let params = [size as u32, 0u32];
@@ -336,8 +429,8 @@ impl backend::Kernel for Kernel {
                 .unwrap(); // TODO: Free somehow...
 
             self.pipeline
-                .as_ref()
-                .unwrap()
+                // .as_ref()
+                // .unwrap()
                 .launch(&self.stream, d_params, params.len() * 8, size as u32)
                 .unwrap();
             self.stream.synchronize().unwrap();

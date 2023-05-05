@@ -18,8 +18,8 @@ pub trait Texture: Debug + Sync + Send {
 
 pub trait Kernel: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
-    fn assemble(&mut self, ir: &ScheduleIr, env: &Env);
-    fn compile(&mut self);
+    // fn assemble(&mut self, ir: &ScheduleIr, env: &Env);
+    // fn compile(&mut self);
     fn execute_async(&mut self, ir: &mut Env, size: usize);
     fn assembly(&self) -> &str;
 }
@@ -32,7 +32,8 @@ pub trait Buffer: Debug + Sync + Send {
 pub trait Backend: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn new_kernel(&self) -> Box<dyn Kernel>;
+    // fn new_kernel(&self) -> Box<dyn Kernel>;
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn Kernel>;
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn Texture>;
     fn buffer_uninit(&self, size: usize) -> Arc<dyn Buffer>;
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn Buffer>;

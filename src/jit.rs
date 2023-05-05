@@ -313,10 +313,7 @@ impl Jit {
                     *hash = s.internal_hash();
                     if !self.kernels.contains_key(hash) {
                         self.kernels.insert(*hash, {
-                            let mut kernel = ir.backend.as_ref().unwrap().new_kernel();
-                            kernel.assemble(&s, env);
-                            kernel.compile();
-                            kernel
+                            ir.backend.as_ref().unwrap().compile_kernel(&s, env)
                         });
                     }
                 }

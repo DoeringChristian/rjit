@@ -9,21 +9,30 @@ Kernel 6633007026966159069:
 .target sm_86
 .address_size 64
 
-.const .align 8 .b8 params[24];
-.entry __raygen__cujit(){
+.entry cujit(
+	.param .align 8 .b8 params[32]) {
 
 	.reg.b8   %b <7>; .reg.b16 %w<7>; .reg.b32 %r<7>;
 	.reg.b64  %rd<7>; .reg.f32 %f<7>; .reg.f64 %d<7>;
 	.reg.pred %p <7>;
 
-	call (%r0), _optix_get_launch_index_x, ();
-	ld.const.u32 %r1, [params + 4];
-	add.u32 %r0, %r0, %r1;
+	mov.u32 %r0, %ctaid.x;
+	mov.u32 %r1, %ntid.x;
+	mov.u32 %r2, %tid.x;
+	mad.lo.u32 %r0, %r0, %r1, %r2; // r0 <- Index
 
-body:
+	// Index Conditional (jump to done if Index >= Size).
+	ld.param.u32 %r2, [params]; // r2 <- params[0] (Size)
+	setp.ge.u32 %p0, %r0, %r2; // p0 <- r0 >= r2
+	@%p0 bra done; // if p0 => done
+	
+	mov.u32 %r3, %nctaid.x; // r3 <- nctaid.x
+	mul.lo.u32 %r1, %r3, %r1; // r1 <- r3 * r1
+	
+body: // sm_86
 
 	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 5, buf: Some(0), tex: None, accel: None, literal: 0, size: 4 } =>
-	ld.const.u64 %rd0, [params+8];
+	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.u32 %r5, [%rd0];
 
@@ -35,9 +44,18 @@ body:
 	add.u32 %r4, %r5, %r6;
 
 	// Store:
-	ld.const.u64 %rd0, [params + 16]; // rd0 <- params[offset]
+	ld.param.u64 %rd0, [params + 16]; // rd0 <- params[offset]
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
 	st.global.cs.u32 [%rd0], %r4; // (Index * ty.size() + params[offset])[Index] <- var
+
+	//End of Kernel:
+
+	add.u32 %r0, %r0, %r1; // r0 <- r0 + r1
+	setp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2
+	@!%p0 bra body; // if p0 => body
+
+
+done:
 
 	ret;
 }
@@ -48,18 +66,27 @@ Kernel 12944709659818679191:
 .target sm_86
 .address_size 64
 
-.const .align 8 .b8 params[16];
-.entry __raygen__cujit(){
+.entry cujit(
+	.param .align 8 .b8 params[24]) {
 
 	.reg.b8   %b <11>; .reg.b16 %w<11>; .reg.b32 %r<11>;
 	.reg.b64  %rd<11>; .reg.f32 %f<11>; .reg.f64 %d<11>;
 	.reg.pred %p <11>;
 
-	call (%r0), _optix_get_launch_index_x, ();
-	ld.const.u32 %r1, [params + 4];
-	add.u32 %r0, %r0, %r1;
+	mov.u32 %r0, %ctaid.x;
+	mov.u32 %r1, %ntid.x;
+	mov.u32 %r2, %tid.x;
+	mad.lo.u32 %r0, %r0, %r1, %r2; // r0 <- Index
 
-body:
+	// Index Conditional (jump to done if Index >= Size).
+	ld.param.u32 %r2, [params]; // r2 <- params[0] (Size)
+	setp.ge.u32 %p0, %r0, %r2; // p0 <- r0 >= r2
+	@%p0 bra done; // if p0 => done
+	
+	mov.u32 %r3, %nctaid.x; // r3 <- nctaid.x
+	mul.lo.u32 %r1, %r3, %r1; // r1 <- r3 * r1
+	
+body: // sm_86
 
 	// [0]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, literal: 2, size: 1 } =>
 	mov.b32 %r5, 0x2;
@@ -85,10 +112,19 @@ body:
 	// [6]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5)], ty: Void, param_ty: None, reg: 4, buf: None, tex: None, accel: None, literal: 0, size: 3 } =>
 	@!%p10 bra l_4_done;
 
-	ld.const.u64 %rd0, [params+8];
+	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r7, 4, %rd0;
 	st.global.u32 [%rd3], %r5;
 	l_4_done:
+
+	//End of Kernel:
+
+	add.u32 %r0, %r0, %r1; // r0 <- r0 + r1
+	setp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2
+	@!%p0 bra body; // if p0 => body
+
+
+done:
 
 	ret;
 }
