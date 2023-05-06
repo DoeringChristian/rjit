@@ -213,7 +213,6 @@ impl Trace {
         })
     }
     pub fn accel(&self, desc: AccelDesc) -> VarRef {
-        dbg!("test");
         let gds = desc
             .geometries
             .iter()
@@ -225,7 +224,6 @@ impl Trace {
                 }
             })
             .collect::<Vec<_>>();
-        dbg!("test");
         let instances = desc
             .instances
             .iter()

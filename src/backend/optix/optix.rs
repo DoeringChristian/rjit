@@ -453,8 +453,6 @@ impl Accel {
                     .unwrap();
                 // TODO: Async construction needs to keep gas_tmp and gas buffers arround
                 stream.synchronize().unwrap();
-                dbg!(gas.ptr());
-                dbg!(accel);
                 (accel, gas)
             }
         };
