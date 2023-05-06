@@ -63,11 +63,7 @@ impl backend::Backend for Backend {
         self.stream.synchronize().unwrap();
     }
 
-    fn create_accel(
-        &self,
-        vertices: &Arc<dyn backend::Buffer>,
-        indices: &Arc<dyn backend::Buffer>,
-    ) -> Arc<dyn backend::Accel> {
+    fn create_accel(&self, desc: backend::AccelDesc) -> Arc<dyn backend::Accel> {
         todo!()
     }
 

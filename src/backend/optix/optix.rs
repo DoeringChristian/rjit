@@ -10,11 +10,12 @@ use crate::trace::VarType;
 use crate::var::ParamType;
 use optix_rs::{
     OptixAccelBufferSizes, OptixAccelBuildOptions, OptixAccelEmitDesc, OptixApi, OptixBuildFlags,
-    OptixBuildInput, OptixBuildInputTriangleArray, OptixBuildInputType,
-    OptixBuildInput__bindgen_ty_1, OptixBuildOperation, OptixDeviceContext,
+    OptixBuildInput, OptixBuildInputInstanceArray, OptixBuildInputTriangleArray,
+    OptixBuildInputType, OptixBuildInput__bindgen_ty_1, OptixBuildOperation, OptixDeviceContext,
     OptixDeviceContextOptions, OptixExceptionFlags, OptixGeometryFlags, OptixIndicesFormat,
-    OptixModuleCompileOptions, OptixPipelineCompileOptions, OptixProgramGroup,
-    OptixProgramGroupDesc, OptixProgramGroupOptions, OptixTraversableHandle, OptixVertexFormat,
+    OptixInstance, OptixInstanceFlags, OptixModuleCompileOptions, OptixPipelineCompileOptions,
+    OptixProgramGroup, OptixProgramGroupDesc, OptixProgramGroupOptions, OptixTraversableHandle,
+    OptixVertexFormat,
 };
 use thiserror::Error;
 
@@ -141,12 +142,8 @@ impl backend::Backend for Backend {
         self.stream.synchronize().unwrap();
     }
 
-    fn create_accel(
-        &self,
-        vertices: &Arc<dyn backend::Buffer>,
-        indices: &Arc<dyn backend::Buffer>,
-    ) -> Arc<dyn backend::Accel> {
-        Arc::new(Accel::create(&self.device, &self.stream, vertices, indices).unwrap())
+    fn create_accel(&self, desc: backend::AccelDesc) -> Arc<dyn backend::Accel> {
+        Arc::new(Accel::create(&self.device, &self.stream, desc).unwrap())
     }
 
     fn set_compile_options(&mut self, compile_options: &backend::CompileOptions) {
@@ -395,19 +392,19 @@ unsafe impl Send for Accel {}
 #[derive(Debug)]
 pub struct Accel {
     device: Device,
-    accel: u64,
+    tlas: (u64, Buffer),
+    blaccels: Vec<(u64, Buffer)>,
     buffers: Vec<Arc<dyn backend::Buffer>>, // Keep buffers arround
 }
 
 impl Accel {
     pub fn ptr(&self) -> u64 {
-        self.accel
+        self.tlas.0
     }
     pub fn create(
         device: &Device,
         stream: &Stream,
-        vertices: &Arc<dyn backend::Buffer>,
-        indices: &Arc<dyn backend::Buffer>,
+        desc: backend::AccelDesc,
     ) -> Result<Self, Error> {
         let build_options = OptixAccelBuildOptions {
             // buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_NONE as u32,
@@ -417,96 +414,131 @@ impl Accel {
             ..Default::default()
         };
 
-        let vertex_buffer = vertices.as_any().downcast_ref::<Buffer>().unwrap();
-        let indices_buffer = indices.as_any().downcast_ref::<Buffer>().unwrap();
-
-        let flags = [OptixGeometryFlags::OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT];
-        let triangle_array = OptixBuildInputTriangleArray {
-            vertexBuffers: &vertex_buffer.ptr(),
-            numVertices: (vertex_buffer.size() / (4 * 3)) as _,
-            vertexFormat: OptixVertexFormat::OPTIX_VERTEX_FORMAT_FLOAT3,
-            // vertexStrideInBytes: 0,
-            indexBuffer: indices_buffer.ptr(),
-            indexFormat: OptixIndicesFormat::OPTIX_INDICES_FORMAT_UNSIGNED_INT3,
-            numIndexTriplets: (indices_buffer.size() / (4 * 3)) as _,
-            flags: &flags as *const _ as *const _,
-            numSbtRecords: 1,
-            ..Default::default()
+        let build_accel = |build_inputs: &[OptixBuildInput]| {
+            let mut buffer_size = OptixAccelBufferSizes::default();
+            unsafe {
+                device
+                    .api()
+                    .optixAccelComputeMemoryUsage(
+                        *device.ctx(),
+                        &build_options,
+                        build_inputs.as_ptr(),
+                        build_inputs.len() as _,
+                        &mut buffer_size,
+                    )
+                    .check()
+                    .unwrap()
+            };
+            let gas_tmp = Buffer::uninit(device.cuda_device(), buffer_size.tempSizeInBytes);
+            let gas = Buffer::uninit(device.cuda_device(), buffer_size.outputSizeInBytes);
+            let mut accel = 0;
+            unsafe {
+                device
+                    .api()
+                    .optixAccelBuild(
+                        *device.ctx(),
+                        stream.raw(),
+                        &build_options,
+                        build_inputs.as_ptr(),
+                        build_inputs.len() as _,
+                        gas_tmp.ptr(),
+                        buffer_size.tempSizeInBytes,
+                        gas.ptr(),
+                        buffer_size.outputSizeInBytes,
+                        &mut accel,
+                        std::ptr::null(),
+                        0,
+                    )
+                    .check()
+                    .unwrap();
+                // TODO: Async construction needs to keep gas_tmp and gas buffers arround
+                stream.synchronize().unwrap();
+                dbg!(gas.ptr());
+                dbg!(accel);
+                (accel, gas)
+            }
         };
+
+        let mut blaccels = vec![];
+        let mut buffers: Vec<Arc<dyn backend::Buffer>> = vec![];
+        for geometry in desc.geometries.iter() {
+            let build_inputs = match geometry {
+                backend::GeometryDesc::Triangles { vertices, indices } => {
+                    buffers.push((*vertices).clone()); // Keep references to buffers
+                    buffers.push((*indices).clone());
+
+                    let vertex_buffer = vertices.as_any().downcast_ref::<Buffer>().unwrap();
+                    let indices_buffer = indices.as_any().downcast_ref::<Buffer>().unwrap();
+
+                    let flags = [OptixGeometryFlags::OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT];
+                    let triangle_array = OptixBuildInputTriangleArray {
+                        vertexBuffers: &vertex_buffer.ptr(),
+                        numVertices: (vertex_buffer.size() / (4 * 3)) as _,
+                        vertexFormat: OptixVertexFormat::OPTIX_VERTEX_FORMAT_FLOAT3,
+                        // vertexStrideInBytes: 0,
+                        indexBuffer: indices_buffer.ptr(),
+                        indexFormat: OptixIndicesFormat::OPTIX_INDICES_FORMAT_UNSIGNED_INT3,
+                        numIndexTriplets: (indices_buffer.size() / (4 * 3)) as _,
+                        flags: &flags as *const _ as *const _,
+                        numSbtRecords: 1,
+                        ..Default::default()
+                    };
+                    let mut build_input = OptixBuildInput {
+                        type_: OptixBuildInputType::OPTIX_BUILD_INPUT_TYPE_TRIANGLES,
+                        __bindgen_anon_1: OptixBuildInput__bindgen_ty_1::default(),
+                    };
+                    unsafe {
+                        *build_input.__bindgen_anon_1.triangleArray.as_mut() = triangle_array;
+                    }
+                    vec![build_input]
+                }
+            };
+
+            blaccels.push(build_accel(&build_inputs));
+        }
+
+        let instances = desc
+            .instances
+            .iter()
+            .enumerate()
+            .map(|(i, inst)| OptixInstance {
+                transform: inst.transform,
+                instanceId: i as _,
+                sbtOffset: 0,
+                visibilityMask: 255,
+                flags: OptixInstanceFlags::OPTIX_INSTANCE_FLAG_DISABLE_TRIANGLE_FACE_CULLING as _,
+                traversableHandle: blaccels[inst.geometry].0,
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+
+        let instance_buf = unsafe {
+            Buffer::from_slice(
+                device.cuda_device(),
+                std::slice::from_raw_parts(
+                    instances.as_ptr() as *const _,
+                    std::mem::size_of::<OptixInstance>() * instances.len(),
+                ),
+            )
+        };
+
         let mut build_input = OptixBuildInput {
-            type_: OptixBuildInputType::OPTIX_BUILD_INPUT_TYPE_TRIANGLES,
-            __bindgen_anon_1: OptixBuildInput__bindgen_ty_1::default(),
+            type_: OptixBuildInputType::OPTIX_BUILD_INPUT_TYPE_INSTANCES,
+            __bindgen_anon_1: Default::default(),
         };
         unsafe {
-            *build_input.__bindgen_anon_1.triangleArray.as_mut() = triangle_array;
-        }
-
-        let build_inputs = vec![build_input];
-
-        let mut buffer_size = OptixAccelBufferSizes::default();
-        unsafe {
-            device
-                .api()
-                .optixAccelComputeMemoryUsage(
-                    *device.ctx(),
-                    &build_options,
-                    build_inputs.as_ptr(),
-                    build_inputs.len() as _,
-                    &mut buffer_size,
-                )
-                .check()
-                .unwrap()
+            *build_input.__bindgen_anon_1.instanceArray.as_mut() = OptixBuildInputInstanceArray {
+                instances: instance_buf.ptr(),
+                numInstances: instances.len() as _,
+            }
         };
 
-        let mut d_gas_tmp = 0;
-        unsafe {
-            device
-                .cuda_ctx()
-                .cuMemAlloc_v2(&mut d_gas_tmp, buffer_size.tempSizeInBytes)
-                .check()
-                .unwrap()
-        };
-
-        let mut d_gas = 0;
-        unsafe {
-            device
-                .cuda_ctx()
-                .cuMemAlloc_v2(&mut d_gas, buffer_size.outputSizeInBytes)
-                .check()
-                .unwrap()
-        };
-
-        let mut accel = 0;
-        unsafe {
-            device
-                .api()
-                .optixAccelBuild(
-                    *device.ctx(),
-                    stream.raw(),
-                    &build_options,
-                    build_inputs.as_ptr(),
-                    build_inputs.len() as _,
-                    d_gas_tmp,
-                    buffer_size.tempSizeInBytes,
-                    d_gas,
-                    buffer_size.outputSizeInBytes,
-                    &mut accel,
-                    std::ptr::null(),
-                    0,
-                )
-                .check()
-                .unwrap();
-        }
-
-        unsafe {
-            device.cuda_ctx().cuMemFree_v2(d_gas_tmp).check().unwrap();
-        }
-
-        let buffers = vec![vertices.clone(), indices.clone()];
+        let tlas = build_accel(&[build_input]);
 
         Ok(Self {
             device: device.clone(),
-            accel,
+            blaccels,
+            tlas,
             buffers,
         })
     }

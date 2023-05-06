@@ -13,6 +13,21 @@ use smallvec::smallvec;
 use crate::backend::Backend;
 pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
 
+pub enum GeometryDesc<'a> {
+    Triangles {
+        vertices: &'a VarRef,
+        indices: &'a VarRef,
+    },
+}
+pub struct InstanceDesc {
+    pub geometry: usize,
+    pub transform: [f32; 12],
+}
+pub struct AccelDesc<'a> {
+    pub geometries: &'a [GeometryDesc<'a>],
+    pub instances: &'a [InstanceDesc],
+}
+
 ///
 /// A wrapper arrund an Intermediate Representation.
 ///
@@ -197,15 +212,35 @@ impl Trace {
             ..Default::default()
         })
     }
-    pub fn accel(&self, vertices: &VarRef, indices: &VarRef) -> VarRef {
-        let vertices = vertices.var().data.buffer().unwrap().clone();
-        let indices = indices.var().data.buffer().unwrap().clone();
-        let accel = self
-            .lock()
-            .backend
-            .as_ref()
-            .unwrap()
-            .create_accel(&vertices, &indices);
+    pub fn accel(&self, desc: AccelDesc) -> VarRef {
+        dbg!("test");
+        let gds = desc
+            .geometries
+            .iter()
+            .map(|g| match g {
+                GeometryDesc::Triangles { vertices, indices } => {
+                    let vertices = vertices.var().data.buffer().unwrap().clone();
+                    let indices = indices.var().data.buffer().unwrap().clone();
+                    crate::backend::GeometryDesc::Triangles { vertices, indices }
+                }
+            })
+            .collect::<Vec<_>>();
+        dbg!("test");
+        let instances = desc
+            .instances
+            .iter()
+            .map(|inst| crate::backend::InstanceDesc {
+                geometry: inst.geometry,
+                transform: inst.transform,
+            })
+            .collect::<Vec<_>>();
+        let desc = crate::backend::AccelDesc {
+            geometries: gds.as_slice(),
+            instances: instances.as_slice(),
+        };
+        // let vertices = vertices.var().data.buffer().unwrap().clone();
+        // let indices = indices.var().data.buffer().unwrap().clone();
+        let accel = self.lock().backend.as_ref().unwrap().create_accel(desc);
         self.push_var(Var {
             op: Op::Nop,
             ty: VarType::Void,

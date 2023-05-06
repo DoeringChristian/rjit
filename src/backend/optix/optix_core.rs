@@ -430,7 +430,6 @@ impl Drop for ProgramGroup {
     }
 }
 
-#[derive(Debug)]
 pub struct Pipeline {
     pipeline: OptixPipeline,
     sbt: OptixShaderBindingTable,
@@ -438,6 +437,18 @@ pub struct Pipeline {
     hit_groups: SmallVec<[ProgramGroup; 4]>,
     miss_groups: SmallVec<[ProgramGroup; 4]>,
     device: Device,
+}
+impl Debug for Pipeline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pipeline")
+            .field("pipeline", &self.pipeline)
+            // .field("sbt", &self.sbt)
+            .field("rgen_group", &self.rgen_group)
+            .field("hit_groups", &self.hit_groups)
+            .field("miss_groups", &self.miss_groups)
+            .field("device", &self.device)
+            .finish()
+    }
 }
 
 impl Pipeline {

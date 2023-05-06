@@ -1,7 +1,7 @@
-use crate::backend;
 use crate::backend::CompileOptions;
 use crate::jit::Jit;
 use crate::trace::{ReduceOp, Trace, VarType};
+use crate::{backend, AccelDesc, GeometryDesc, InstanceDesc};
 
 #[test]
 fn refcounting() {
@@ -394,7 +394,17 @@ fn trace_ray() {
     let indices = ir.buffer_u32(&[0, 1, 2]);
     let vertices = ir.buffer_f32(&[1., 0., 1., 0., 1., 1., 1., 1., 1.]);
 
-    let accel = ir.accel(&vertices, &indices);
+    let desc = AccelDesc {
+        geometries: &[GeometryDesc::Triangles {
+            vertices: &vertices,
+            indices: &indices,
+        }],
+        instances: &[InstanceDesc {
+            geometry: 0,
+            transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
+        }],
+    };
+    let accel = ir.accel(desc);
 
     let payload = accel.trace_ray(
         5,
