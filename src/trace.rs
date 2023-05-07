@@ -668,6 +668,7 @@ impl VarRef {
 
     pub fn trace_ray(
         &self,
+        payload: &[&Self],
         o: [&Self; 3],
         d: [&Self; 3],
         tmin: &Self,
@@ -679,7 +680,6 @@ impl VarRef {
         sbt_stride: Option<&Self>,
         miss_sbt: Option<&Self>,
         mask: Option<&Self>,
-        payload: &[&Self],
     ) -> Vec<Self> {
         let null = self.ir.literal_u32(0);
         let mask: Self = mask
