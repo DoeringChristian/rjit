@@ -335,7 +335,7 @@ impl VarRef {
     }
 }
 macro_rules! bop {
-    ($Op:ident $(, $ty:ident)?) => {
+    ($Op:ident $(-> $ty:ident)?) => {
         paste::paste! {
             pub fn [<$Op:lower>](&self, rhs: &VarRef) -> VarRef {
                 #[allow(unused_mut)]
@@ -484,12 +484,12 @@ impl VarRef {
     bop!(Min);
     bop!(Max);
 
-    bop!(Eq, Bool);
-    bop!(Neq, Bool);
-    bop!(Lt, Bool);
-    bop!(Le, Bool);
-    bop!(Gt, Bool);
-    bop!(Ge, Bool);
+    bop!(Eq -> Bool);
+    bop!(Neq -> Bool);
+    bop!(Lt -> Bool);
+    bop!(Le -> Bool);
+    bop!(Gt -> Bool);
+    bop!(Ge -> Bool);
 
     bop!(Or);
     bop!(Xor);
