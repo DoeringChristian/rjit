@@ -751,7 +751,7 @@ pub fn assemble_var(
             if var.ty.size() == 4 {
                 writeln!(
                     asm,
-                    "\tshl.{} {}, {}, {}",
+                    "\tshl.{} {}, {}, {};",
                     var.ty.name_cuda_bin(),
                     var.reg(),
                     ir.reg(var.deps[0]),
@@ -774,7 +774,7 @@ pub fn assemble_var(
             if var.ty.size() == 4 {
                 writeln!(
                     asm,
-                    "\tshr.{} {}, {}, {}",
+                    "\tshr.{} {}, {}, {};",
                     var.ty.name_cuda_bin(),
                     var.reg(),
                     ir.reg(var.deps[0]),
