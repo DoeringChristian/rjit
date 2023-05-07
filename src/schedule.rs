@@ -228,10 +228,10 @@ impl ScheduleIr {
                         .map(|dep| self.collect(env, ir, *dep)),
                 );
             }
-            Op::TraceRay { .. } => {
-                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0]),];
+            Op::TraceRay { payload_count } => {
+                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0])];
                 sv.deps.extend(
-                    var.deps[1..16]
+                    var.deps[1..(16 + payload_count)]
                         .iter()
                         .map(|dep| self.collect(env, ir, *dep)),
                 );

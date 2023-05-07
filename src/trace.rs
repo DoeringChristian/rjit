@@ -668,7 +668,6 @@ impl VarRef {
 
     pub fn trace_ray(
         &self,
-        payload_count: usize,
         o: [&Self; 3],
         d: [&Self; 3],
         tmin: &Self,
@@ -680,6 +679,7 @@ impl VarRef {
         sbt_stride: Option<&Self>,
         miss_sbt: Option<&Self>,
         mask: Option<&Self>,
+        payload: &[&Self],
     ) -> Vec<Self> {
         let null = self.ir.literal_u32(0);
         let mask: Self = mask
@@ -735,8 +735,10 @@ impl VarRef {
             .max(tmax.size())
             .max(t.size());
 
-        let rt = self.ir.push_var(Var {
-            op: Op::TraceRay { payload_count },
+        let mut v = Var {
+            op: Op::TraceRay {
+                payload_count: payload.len(),
+            },
             ty: VarType::Void,
             deps: smallvec![
                 self.id(),
@@ -758,9 +760,11 @@ impl VarRef {
             ],
             size,
             ..Default::default()
-        });
+        };
+        v.deps.extend(payload.iter().map(|i| i.id()));
+        let rt = self.ir.push_var(v);
 
-        let ret = (0..payload_count)
+        let ret = (0..payload.len())
             .into_iter()
             .map(|i| {
                 self.ir

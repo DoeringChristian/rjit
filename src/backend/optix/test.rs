@@ -407,7 +407,6 @@ fn trace_ray() {
     let accel = ir.accel(desc);
 
     let payload = accel.trace_ray(
-        5,
         [
             &ir.buffer_f32(&[0.6, 0.6]),
             &ir.literal_f32(0.6),
@@ -427,6 +426,13 @@ fn trace_ray() {
         None,
         None,
         None,
+        &[
+            &ir.literal_u32(0),
+            &ir.literal_u32(0),
+            &ir.literal_u32(0),
+            &ir.literal_u32(0),
+            &ir.literal_u32(0),
+        ],
     );
 
     // for p in payload.iter() {

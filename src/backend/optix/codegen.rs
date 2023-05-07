@@ -80,7 +80,16 @@ pub fn assemble_var_rt(
 
             writeln!(asm, "{}_payload_count, ", var.reg())?;
 
-            for i in 0..32 {
+            for i in 0..payload_count {
+                writeln!(
+                    asm,
+                    "{}{}",
+                    ir.reg(var.deps[16 + i]),
+                    if i + 1 < 32 { "," } else { "" }
+                )?;
+            }
+
+            for i in payload_count..32 {
                 writeln!(
                     asm,
                     "{}_out_{}{}",
