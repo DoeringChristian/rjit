@@ -927,26 +927,24 @@ pub fn assemble_var(
                     var.reg(),
                     d0.reg()
                 )?;
-            } else if var.ty.is_float() && d0.ty.is_float() {
-                if var.ty.size() < d0.ty.size() {
-                    writeln!(
-                        asm,
-                        "\tcvt.rn.{}.{} {}, {};",
-                        var.ty.name_cuda(),
-                        d0.ty.name_cuda(),
-                        var.reg(),
-                        d0.reg()
-                    )?;
-                } else {
-                    writeln!(
-                        asm,
-                        "\tcvt.{}.{} {}, {};",
-                        var.ty.name_cuda(),
-                        d0.ty.name_cuda(),
-                        var.reg(),
-                        d0.reg()
-                    )?;
-                }
+            } else if var.ty.is_float() && d0.ty.is_float() && var.ty.size() < d0.ty.size() {
+                writeln!(
+                    asm,
+                    "\tcvt.rn.{}.{} {}, {};",
+                    var.ty.name_cuda(),
+                    d0.ty.name_cuda(),
+                    var.reg(),
+                    d0.reg()
+                )?;
+            } else {
+                writeln!(
+                    asm,
+                    "\tcvt.{}.{} {}, {};",
+                    var.ty.name_cuda(),
+                    d0.ty.name_cuda(),
+                    var.reg(),
+                    d0.reg()
+                )?;
             }
         }
         Op::Bitcast => {

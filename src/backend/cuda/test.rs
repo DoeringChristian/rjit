@@ -153,7 +153,7 @@ fn gather_eval() {
     assert_eq!(ir.lock().get_var(tmp_x).unwrap().rc, 1);
     assert_eq!(ir.lock().get_var(tmp_y).unwrap().rc, 1);
     assert_eq!(ir.lock().get_var(tmp_z).unwrap().rc, 2); // z is referenced by r and the
-                                                               // schedule
+                                                         // schedule
 
     ir.schedule(&[&r]);
     let mut jit = Jit::default();
@@ -331,4 +331,21 @@ fn tex_lookup() {
     insta::assert_snapshot!(jit.kernel_debug());
 
     assert_eq!(r.to_host_f32(), vec![1.]);
+}
+#[test]
+fn cast() {
+    let ir = Trace::default();
+    ir.set_backend("cuda");
+
+    let x = ir.buffer_u32(&[1, 2, 3]);
+    let x = x.cast(&crate::VarType::U64);
+
+    x.schedule();
+
+    let mut jit = Jit::default();
+    jit.eval(&mut ir.lock());
+
+    insta::assert_snapshot!(jit.kernel_debug());
+
+    assert_eq!(x.to_host_u64(), vec![1, 2, 3]);
 }
