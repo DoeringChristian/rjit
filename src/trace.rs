@@ -44,7 +44,7 @@ impl Deref for Trace {
 
 impl Trace {
     fn push_var(&self, mut v: Var) -> VarRef {
-        // Pus side effects of sources as extra dependencies
+        // Push side effects of sources as extra dependencies
         for dep in v.deps.clone() {
             if let Some(se) = self.lock().var(dep).last_write {
                 v.deps.push(se);
@@ -260,6 +260,13 @@ pub struct Internal {
     // pub functions: Vec<VarId>,
     pub scheduled: Vec<VarId>,
 }
+impl Drop for Internal {
+    fn drop(&mut self) {
+        self.clear_schedule();
+        dbg!(&self);
+        assert_eq!(self.vars.len(), 0);
+    }
+}
 
 impl Internal {
     pub fn var(&self, id: VarId) -> &Var {
@@ -299,6 +306,17 @@ impl Internal {
             self.inc_rc(*id);
             self.scheduled.push(*id);
         }
+    }
+    pub fn clear_schedule(&mut self) {
+        for id in self.scheduled.clone() {
+            // let var = self.var_mut(id);
+            // let deps = var.deps.clone();
+            // for dep in deps {
+            //     self.dec_rc(dep);
+            // }
+            self.dec_rc(id);
+        }
+        self.scheduled.clear();
     }
 }
 
@@ -666,8 +684,15 @@ impl VarRef {
             ..Default::default()
         });
         res.schedule();
+        // Drop old `last_write`
+        {
+            let mut ir = self.ir.lock();
+            if let Some(se) = ir.var(dst.id()).last_write.clone() {
+                ir.dec_rc(se);
+            }
+        }
         dst.var().last_write = Some(res.id()); // Set side effect
-        dst.ir.lock().inc_rc(dst.id);
+        res.ir.lock().inc_rc(res.id);
     }
     pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
         self.scatter_reduce(dst, idx, mask, ReduceOp::None);

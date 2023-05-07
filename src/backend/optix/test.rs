@@ -300,10 +300,10 @@ fn scatter_reduce() {
 
     y.scatter_reduce(&x, &i, None, ReduceOp::Add);
 
-    ir.schedule(&[&x]);
-
     let mut jit = Jit::default();
     jit.eval(&mut ir.lock());
+
+    // dbg!(&ir);
 
     insta::assert_snapshot!(jit.kernel_debug());
 
