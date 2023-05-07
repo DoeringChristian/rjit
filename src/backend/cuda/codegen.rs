@@ -430,7 +430,7 @@ pub fn assemble_var(
                 )?;
             }
         }
-        Op::Cail => {
+        Op::Ceil => {
             writeln!(
                 asm,
                 "\tcvt.rpi.{0}.{0} {1}, {2};\n",

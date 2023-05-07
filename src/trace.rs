@@ -1,4 +1,5 @@
 use half::f16;
+use itertools::Itertools;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::cell::{RefCell, RefMut};
 use std::fmt::Debug;
@@ -58,6 +59,9 @@ impl Trace {
         VarRef::steal_from(&self, id)
     }
     fn var_info(&self, refs: &[&VarRef]) -> VarInfo {
+        for (a, b) in refs.iter().tuple_windows() {
+            assert!(Arc::ptr_eq(&a.ir.0, &b.ir.0))
+        }
         let ty = refs.first().unwrap().var().ty.clone(); // TODO: Fix (first non void)
 
         let size = refs
@@ -330,11 +334,13 @@ impl VarRef {
         // MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
     }
 }
-macro_rules! bop_arythmetic {
-    ($Op:ident) => {
+macro_rules! bop {
+    ($Op:ident $(, $ty:ident)?) => {
         paste::paste! {
             pub fn [<$Op:lower>](&self, rhs: &VarRef) -> VarRef {
-                let info = self.ir.var_info(&[self, &rhs]);
+                #[allow(unused_mut)]
+                let mut info = self.ir.var_info(&[self, &rhs]);
+                $(info.ty = VarType::$ty;)?
                 self.ir
                     .push_var_op(Op::$Op, &[self, &rhs], info.ty, info.size)
             }
@@ -364,6 +370,28 @@ macro_rules! uop {
             pub fn [<$Op:lower>](&self) -> Self {
                 let info = self.ir.var_info(&[self]);
                 self.ir.push_var_op(Op::$Op, &[self], info.ty, info.size)
+            }
+        }
+    };
+}
+macro_rules! top {
+    ($Op:ident) => {
+        paste::paste! {
+            pub fn [<$Op:lower>](&self, d1: &VarRef, d2: &VarRef) -> VarRef {
+                let info = self.ir.var_info(&[self, &d1, &d2]);
+                self.ir
+                    .push_var_op(Op::$Op, &[self, &d1, &d2], info.ty, info.size)
+            }
+        }
+    };
+}
+macro_rules! qop {
+    ($Op:ident) => {
+        paste::paste! {
+            pub fn [<$Op:lower>](&self, d1: &VarRef, d2: &VarRef, d3: &VarRef) -> VarRef {
+                let info = self.ir.var_info(&[self, &d1, &d2, &d3]);
+                self.ir
+                    .push_var_op(Op::$Op, &[self, &d1, &d2, &d3], info.ty, info.size)
             }
         }
     };
@@ -426,18 +454,57 @@ impl VarRef {
         self.ir
             .push_var_op(Op::Bitcast, &[self], ty.clone(), self.size())
     }
-    // Binarry operations:
-    bop_arythmetic!(Add);
-    bop_arythmetic!(Sub);
-    bop_arythmetic!(Mul);
-    bop_arythmetic!(Div);
 
+    // Unarry Operations
     uop!(Rcp);
     uop!(Rsqrt);
     uop!(Sin);
     uop!(Cos);
     uop!(Exp2);
     uop!(Log2);
+
+    uop!(Neg);
+    uop!(Not);
+    uop!(Abs);
+
+    uop!(Ceil);
+    uop!(Floor);
+    uop!(Trunc);
+
+    uop!(Popc);
+    uop!(Clz);
+    uop!(Ctz);
+
+    // Binarry operations:
+    bop!(Add);
+    bop!(Sub);
+    bop!(Mul);
+    bop!(Div);
+
+    bop!(Min);
+    bop!(Max);
+
+    bop!(Eq, Bool);
+    bop!(Neq, Bool);
+    bop!(Lt, Bool);
+    bop!(Le, Bool);
+    bop!(Gt, Bool);
+    bop!(Ge, Bool);
+
+    bop!(Or);
+    bop!(Xor);
+    bop!(Shl);
+    bop!(Shr);
+
+    top!(Fma);
+    top!(Select);
+
+    pub fn modulo(&self, rhs: &VarRef) -> VarRef {
+        let info = self.ir.var_info(&[self, &rhs]);
+        self.ir
+            .push_var_op(Op::Mod, &[self, &rhs], info.ty, info.size)
+    }
+    bop!(Mulhi);
 
     pub fn and(&self, rhs: &VarRef) -> VarRef {
         assert!(Arc::ptr_eq(&self.ir, &rhs.ir));

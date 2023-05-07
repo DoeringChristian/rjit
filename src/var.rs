@@ -49,7 +49,7 @@ pub enum Op {
     Fma,
     Min,
     Max,
-    Cail,
+    Ceil,
     Floor,
     Round,
     Trunc,
