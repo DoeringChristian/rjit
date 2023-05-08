@@ -138,6 +138,20 @@ macro_rules! buffer {
                     ..Default::default()
                 })
             }
+            pub fn [<uninit_buffer_$ty>](&self, size: usize) -> VarRef {
+                let buffer = self.lock()
+                        .backend
+                        .as_ref()
+                        .unwrap()
+                        .buffer_uninit(size * VarType::$TY.size());
+                self.push_var(Var {
+                    data: Data::Buffer(buffer),
+                    size,
+                    ty: VarType::$TY,
+                    op: Op::Data,
+                    ..Default::default()
+                })
+            }
         }
     };
 }
@@ -155,7 +169,7 @@ macro_rules! literal {
                     ..Default::default()
                 })
             }
-            pub fn [<literal_$ty _sized>](&self, val: $ty, size: usize) -> VarRef {
+            pub fn [<sized_literal_$ty>](&self, val: $ty, size: usize) -> VarRef {
                 self.push_var(Var {
                     op: Op::Literal,
                     deps: smallvec![],
