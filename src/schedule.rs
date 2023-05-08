@@ -202,7 +202,7 @@ impl ScheduleIr {
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
-                dbg!(&var);
+                // TODO: cannot evaluate a literal (maybe neccesarry for tensors)
                 // sv.param_offset = self.push_param(var.literal);
                 sv.literal = var.data.literal().unwrap();
             }
