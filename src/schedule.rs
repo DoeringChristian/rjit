@@ -202,6 +202,7 @@ impl ScheduleIr {
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
+                dbg!(sv.literal);
                 // sv.param_offset = self.push_param(var.literal);
                 sv.literal = var.data.literal().unwrap();
             }
