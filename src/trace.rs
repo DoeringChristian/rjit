@@ -161,24 +161,10 @@ macro_rules! literal {
     ($TY:ident, $i:ident, $ty:ident) => {
         paste::paste! {
             pub fn [<literal_$ty>](&self, val: $ty) -> VarRef {
-                self.push_var(Var {
-                    op: Op::Literal,
-                    deps: smallvec![],
-                    ty: VarType::$TY,
-                    data: Data::Literal(bytemuck::cast::<_, $i>(val) as _),
-                    size: 1,
-                    ..Default::default()
-                })
+                self.literal::<$ty>(val)
             }
             pub fn [<sized_literal_$ty>](&self, val: $ty, size: usize) -> VarRef {
-                self.push_var(Var {
-                    op: Op::Literal,
-                    deps: smallvec![],
-                    ty: VarType::$TY,
-                    data: Data::Literal(bytemuck::cast::<_, $i>(val) as _),
-                    size,
-                    ..Default::default()
-                })
+                self.sized_literal::<$ty>(val, size)
             }
         }
     };
@@ -254,13 +240,15 @@ impl Trace {
         self.sized_literal(val, 1)
     }
     pub fn sized_literal<T: AsVarType>(&self, val: T, size: usize) -> VarRef {
+        let ty = T::as_var_type();
+        assert_eq!(ty.size(), std::mem::size_of::<T>());
+        let mut data: u64 = 0;
+        unsafe { *(&mut data as *mut _ as *mut T) = val };
         self.push_var(Var {
             op: Op::Literal,
             deps: smallvec![],
-            ty: T::as_var_type(),
-            data: Data::Literal(unsafe {
-                std::mem::transmute_copy::<_, u64>(&std::mem::ManuallyDrop::new(val))
-            } as _),
+            ty,
+            data: Data::Literal(data),
             size,
             ..Default::default()
         })
