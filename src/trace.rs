@@ -466,7 +466,7 @@ impl VarRef {
         }
         dst
     }
-    pub fn to_slice_u8(&self, slice: &mut [u8]) {
+    pub fn to_slice(&self, slice: &mut [u8]) {
         let var = self.var();
         assert_eq!(self.size() * self.ty().size(), slice.len());
         var.data
