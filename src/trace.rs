@@ -160,6 +160,22 @@ macro_rules! literal {
 }
 
 impl Trace {
+    pub unsafe fn buffer_ty(&self, slice: &[u8], ty: &VarType) -> VarRef {
+        assert!(slice.len() % ty.size() == 0);
+        let buffer = self
+            .lock()
+            .backend
+            .as_ref()
+            .unwrap()
+            .buffer_from_slice(cast_slice(slice));
+        self.push_var(Var {
+            data: Data::Buffer(buffer),
+            size: slice.len() / ty.size(),
+            ty: ty.clone(),
+            op: Op::Data,
+            ..Default::default()
+        })
+    }
     // Buffer initializers:
     buffer!(Bool, bool);
     buffer!(I8, i8);
