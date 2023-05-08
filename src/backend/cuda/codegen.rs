@@ -348,7 +348,7 @@ pub fn assemble_var(
         Op::Mulhi => {
             writeln!(
                 asm,
-                "\tmul.hi.{} {}, {}, {}",
+                "\tmul.hi.{} {}, {}, {};",
                 var.ty.name_cuda(),
                 var.reg(),
                 ir.reg(var.deps[0]),
@@ -359,7 +359,7 @@ pub fn assemble_var(
             if var.ty.is_single() {
                 writeln!(
                     asm,
-                    "\tfma.rn.ftz.{} {}, {}, {}, {}",
+                    "\tfma.rn.ftz.{} {}, {}, {}, {};",
                     var.ty.name_cuda(),
                     var.reg(),
                     ir.reg(var.deps[0]),
@@ -369,7 +369,7 @@ pub fn assemble_var(
             } else if var.ty.is_double() {
                 writeln!(
                     asm,
-                    "\tfma.rn.{} {}, {}, {}, {}",
+                    "\tfma.rn.{} {}, {}, {}, {};",
                     var.ty.name_cuda(),
                     var.reg(),
                     ir.reg(var.deps[0]),
@@ -379,7 +379,7 @@ pub fn assemble_var(
             } else {
                 writeln!(
                     asm,
-                    "\tmad.lo.{} {}, {}, {}, {}",
+                    "\tmad.lo.{} {}, {}, {}, {};",
                     var.ty.name_cuda(),
                     var.reg(),
                     ir.reg(var.deps[0]),
