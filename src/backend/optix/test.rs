@@ -459,3 +459,19 @@ fn trace_ray() {
     approx::assert_ulps_eq!(v[0], 0.20000005);
     approx::assert_ulps_eq!(v[1], 0.);
 }
+#[test]
+fn sized_literal() {
+    let ir = Trace::default();
+    ir.set_backend("optix");
+
+    let x = ir.sized_literal(0f32, 10);
+    let x = x.add(&ir.literal(0f32));
+    x.schedule();
+
+    let mut jit = Jit::default();
+    jit.eval(&mut ir.lock());
+
+    // insta::assert_snapshot!(jit.kernel_debug());
+
+    assert_eq!(x.to_host_f32(), vec![0f32; 10]);
+}
