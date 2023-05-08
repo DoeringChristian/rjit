@@ -466,6 +466,14 @@ impl VarRef {
         }
         dst
     }
+    pub fn to_slice_u8(&self, slice: &mut [u8]) {
+        let var = self.var();
+        assert_eq!(self.size() * self.ty().size(), slice.len());
+        var.data
+            .buffer()
+            .unwrap()
+            .copy_to_host(bytemuck::cast_slice_mut(slice));
+    }
 
     to_host!(I8);
     to_host!(U8);
