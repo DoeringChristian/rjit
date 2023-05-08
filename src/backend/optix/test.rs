@@ -8,7 +8,7 @@ fn refcounting() {
     let ir = Trace::default();
     ir.set_backend("optix");
 
-    let x = ir.buffer_f32(&[1.; 10]);
+    let x = ir.array(&[1f32; 10]);
     assert_eq!(x.var().rc, 1, "rc of x should be 1 (in x)");
     let y = x.add(&x);
     // let y = ir::add(&x, &x);
@@ -52,7 +52,7 @@ fn load_add_f32() {
     let ir = Trace::default();
     ir.set_backend("optix");
 
-    let x = ir.buffer_f32(&[1.; 10]);
+    let x = ir.array(&[1f32; 10]);
     // let y = ir::add(&x, &x);
     let y = x.add(&x);
 

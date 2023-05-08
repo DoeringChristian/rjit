@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use half::f16;
 use slotmap::DefaultKey;
 use smallvec::SmallVec;
 
@@ -207,6 +208,33 @@ impl VarType {
         *self == Self::Bool
     }
 }
+macro_rules! as_var_type {
+    ($ty:ident) => {
+        paste::paste! {
+            impl AsVarType for $ty {
+                fn as_var_type() -> VarType {
+                    VarType::[<$ty:camel>]
+                }
+            }
+        }
+    };
+}
+pub trait AsVarType {
+    fn as_var_type() -> VarType;
+}
+
+as_var_type!(bool);
+as_var_type!(i8);
+as_var_type!(u8);
+as_var_type!(i16);
+as_var_type!(u16);
+as_var_type!(i32);
+as_var_type!(u32);
+as_var_type!(i64);
+as_var_type!(u64);
+as_var_type!(f16);
+as_var_type!(f32);
+as_var_type!(f64);
 
 ///
 ///

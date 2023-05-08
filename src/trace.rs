@@ -13,6 +13,7 @@ use smallvec::smallvec;
 
 use crate::backend::Backend;
 pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
+use crate::AsVarType;
 
 pub enum GeometryDesc<'a> {
     Triangles {
@@ -214,6 +215,56 @@ impl Trace {
     buffer!(F32, f32);
     buffer!(F64, f64);
 
+    pub fn array<T: AsVarType>(&self, slice: &[T]) -> VarRef {
+        let ty = T::as_var_type();
+        let buffer = self
+            .lock()
+            .backend
+            .as_ref()
+            .unwrap()
+            .buffer_from_slice(unsafe {
+                std::slice::from_raw_parts(slice.as_ptr() as *const _, slice.len() * ty.size())
+            });
+        self.push_var(Var {
+            data: Data::Buffer(buffer),
+            size: slice.len(),
+            ty,
+            op: Op::Data,
+            ..Default::default()
+        })
+    }
+    pub fn array_uninit<T: AsVarType>(&self, size: usize) -> VarRef {
+        let ty = T::as_var_type();
+        let buffer = self
+            .lock()
+            .backend
+            .as_ref()
+            .unwrap()
+            .buffer_uninit(size * ty.size());
+        self.push_var(Var {
+            data: Data::Buffer(buffer),
+            size,
+            ty,
+            op: Op::Data,
+            ..Default::default()
+        })
+    }
+
+    pub fn literal<T: AsVarType>(&self, val: T) -> VarRef {
+        self.sized_literal(val, 1)
+    }
+    pub fn sized_literal<T: AsVarType>(&self, val: T, size: usize) -> VarRef {
+        self.push_var(Var {
+            op: Op::Literal,
+            deps: smallvec![],
+            ty: T::as_var_type(),
+            data: Data::Literal(unsafe {
+                std::mem::transmute_copy::<_, u64>(&std::mem::ManuallyDrop::new(val))
+            } as _),
+            size,
+            ..Default::default()
+        })
+    }
     // Literal initializers:
     literal!(Bool, u8, bool);
     literal!(I8, u8, i8);
