@@ -155,6 +155,16 @@ macro_rules! literal {
                     ..Default::default()
                 })
             }
+            pub fn [<literal_$ty _sized>](&self, val: $ty, size: usize) -> VarRef {
+                self.push_var(Var {
+                    op: Op::Literal,
+                    deps: smallvec![],
+                    ty: VarType::$TY,
+                    data: Data::Literal(bytemuck::cast::<_, $i>(val) as _),
+                    size,
+                    ..Default::default()
+                })
+            }
         }
     };
 }
