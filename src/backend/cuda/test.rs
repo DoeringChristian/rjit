@@ -349,3 +349,21 @@ fn cast() {
 
     assert_eq!(x.to_host_u64(), vec![1, 2, 3]);
 }
+#[test]
+fn bitcast() {
+    let ir = Trace::default();
+    ir.set_backend("cuda");
+
+    let x = ir.buffer_u32(&[0x3f800000, 0x40000000, 0x40400000]);
+
+    let x = x.bitcast(&crate::VarType::F32);
+
+    x.schedule();
+
+    let mut jit = Jit::default();
+    jit.eval(&mut ir.lock());
+
+    insta::assert_snapshot!(jit.kernel_debug());
+
+    assert_eq!(x.to_host_f32(), vec![1., 2., 3.]);
+}

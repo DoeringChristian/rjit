@@ -950,7 +950,7 @@ pub fn assemble_var(
         Op::Bitcast => {
             writeln!(
                 asm,
-                "    mov.{} {}, {};",
+                "\tmov.{} {}, {};",
                 var.ty.name_cuda_bin(),
                 var.reg(),
                 ir.reg(var.deps[0])

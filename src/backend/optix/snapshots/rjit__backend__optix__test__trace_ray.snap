@@ -201,7 +201,7 @@ call (
 	mov.b32 %r26, %u6_out_3;
 
 	// [22]: ScheduleVar { op: Bitcast, deps: [SVarId(21)], ty: F32, param_ty: Output, reg: 25, buf: Some(3), tex: None, accel: None, literal: 0, size: 2 } =>
-    mov.b32 %f25, %r26;
+	mov.b32 %f25, %r26;
 
 	// Store:
 	ld.const.u64 %rd0, [params + 32]; // rd0 <- params[offset]
@@ -212,7 +212,7 @@ call (
 	mov.b32 %r28, %u6_out_4;
 
 	// [24]: ScheduleVar { op: Bitcast, deps: [SVarId(23)], ty: F32, param_ty: Output, reg: 27, buf: Some(4), tex: None, accel: None, literal: 0, size: 2 } =>
-    mov.b32 %f27, %r28;
+	mov.b32 %f27, %r28;
 
 	// Store:
 	ld.const.u64 %rd0, [params + 40]; // rd0 <- params[offset]
