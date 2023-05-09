@@ -242,7 +242,7 @@ impl Kernel {
 
         super::codegen::assemble_entry(&mut asm, ir, env, entry_point).unwrap();
 
-        std::fs::write("/tmp/tmp.ptx", &asm).unwrap();
+        std::fs::write("/tmp/optix.ptx", &asm).unwrap();
 
         log::trace!("{}", asm);
 
