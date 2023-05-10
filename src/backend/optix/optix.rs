@@ -344,6 +344,8 @@ impl backend::Kernel for Kernel {
         log::trace!("params: {:02x?}", bytemuck::cast_slice::<_, u8>(&params));
         log::trace!("Optix Kernel Launch with {size} threads.");
 
+        dbg!(&params);
+
         let params_buf =
             Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params));
         // let params = Buffer::uninit(&self.device.cuda_device(), 8 * params.len());
