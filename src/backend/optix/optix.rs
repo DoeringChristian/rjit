@@ -375,7 +375,6 @@ impl backend::Kernel for Kernel {
 
         let mut event = Event::create(&self.device.cuda_device()).unwrap();
         event.record(&self.stream).unwrap();
-        self.stream.synchronize().unwrap();
         Arc::new(DeviceFuture {
             event,
             params: params_buf,
@@ -432,6 +431,7 @@ impl Accel {
             };
             let gas_tmp = Buffer::uninit(device.cuda_device(), buffer_size.tempSizeInBytes);
             let gas = Buffer::uninit(device.cuda_device(), buffer_size.outputSizeInBytes);
+            dbg!(gas.ptr());
             let mut accel = 0;
             unsafe {
                 device
@@ -510,6 +510,8 @@ impl Accel {
                 ..Default::default()
             })
             .collect::<Vec<_>>();
+
+        dbg!(&instances);
 
         let instance_buf = unsafe {
             Buffer::from_slice(
