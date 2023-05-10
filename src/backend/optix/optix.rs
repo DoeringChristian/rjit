@@ -375,6 +375,7 @@ impl backend::Kernel for Kernel {
 
         let mut event = Event::create(&self.device.cuda_device()).unwrap();
         event.record(&self.stream).unwrap();
+        self.stream.synchronize().unwrap();
         Arc::new(DeviceFuture {
             event,
             params: params_buf,
