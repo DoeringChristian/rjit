@@ -957,6 +957,12 @@ impl VarRef {
             self.var().opaque = true;
         }
     }
+    pub fn opaque(&self) -> Self {
+        let var = self.var().clone();
+        let res = self.ir.push_var(var);
+        res.make_opaque();
+        res
+    }
 }
 
 impl Clone for VarRef {
@@ -1024,6 +1030,25 @@ mod test {
 
     #[test]
     fn opaque() {
+        let ir = Trace::default();
+        ir.set_backend("cuda");
+
+        let x = ir.literal_u32(10);
+        let x = x.opaque();
+
+        let y = ir.buffer_u32(&[1, 2, 3]);
+
+        let y = y.add(&x);
+
+        y.schedule();
+
+        let mut jit = Jit::default();
+        jit.eval(&mut ir.lock());
+
+        assert_eq!(y.to_host_u32(), vec![11, 12, 13]);
+    }
+    #[test]
+    fn make_opaque() {
         let ir = Trace::default();
         ir.set_backend("cuda");
 

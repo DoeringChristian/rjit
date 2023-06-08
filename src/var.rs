@@ -239,7 +239,7 @@ as_var_type!(f64);
 ///
 ///
 ///
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Var {
     pub op: Op, // Operation used to construct the variable
     pub deps: SmallVec<[VarId; 4]>,
@@ -276,7 +276,7 @@ pub struct VarInfo {
     pub size: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum Data {
     #[default]
     None,
