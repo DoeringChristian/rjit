@@ -952,6 +952,11 @@ impl VarRef {
             .collect::<Vec<_>>();
         ret
     }
+    pub fn make_opaque(&self) {
+        if self.var().is_literal() {
+            self.var().opaque = true;
+        }
+    }
 }
 
 impl Clone for VarRef {
@@ -1016,4 +1021,24 @@ mod test {
     test_uop!(cos(                           [0.1, 0.5, 1., std::f32::consts::PI]; f32));
     test_uop!(exp2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f32));
     test_uop!(log2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f32));
+
+    #[test]
+    fn opaque() {
+        let ir = Trace::default();
+        ir.set_backend("cuda");
+
+        let x = ir.literal_u32(10);
+        x.make_opaque();
+
+        let y = ir.buffer_u32(&[1, 2, 3]);
+
+        let y = y.add(&x);
+
+        y.schedule();
+
+        let mut jit = Jit::default();
+        jit.eval(&mut ir.lock());
+
+        assert_eq!(y.to_host_u32(), vec![11, 12, 13]);
+    }
 }

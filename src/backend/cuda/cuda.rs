@@ -431,6 +431,7 @@ impl backend::Kernel for Kernel {
             let grid_size = (size as u32 + block_size - 1) / block_size;
 
             let mut params = vec![size as u64];
+            params.extend(env.opaques());
             params.extend(
                 env.buffers()
                     .iter()

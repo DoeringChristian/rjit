@@ -93,9 +93,17 @@ pub fn assemble_entry(
     for id in ir.ids() {
         let var = ir.var(id);
         match var.param_ty {
-            ParamType::None => assemble_var(asm, ir, id, 1, 1 + env.buffers().len(), "param")?,
+            ParamType::None => assemble_var(
+                asm,
+                ir,
+                id,
+                1,
+                1 + env.opaques().len(),
+                1 + env.opaques().len() + env.buffers().len(),
+                "param",
+            )?,
             ParamType::Input => {
-                let param_offset = (var.buf.unwrap() + 1) * 8;
+                let param_offset = (var.buf.unwrap() + 1 + env.opaques().len()) * 8;
                 // Load from params
                 writeln!(asm, "")?;
                 writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
@@ -128,8 +136,16 @@ pub fn assemble_entry(
                 }
             }
             ParamType::Output => {
-                let param_offst = (var.buf.unwrap() + 1) * 8;
-                assemble_var(asm, ir, id, 1, 1 + env.buffers().len(), "param")?;
+                let param_offst = (var.buf.unwrap() + 1 + env.opaques().len()) * 8;
+                assemble_var(
+                    asm,
+                    ir,
+                    id,
+                    1,
+                    1 + env.opaques().len(),
+                    1 + env.opaques().len() + env.buffers().len(),
+                    "param",
+                )?;
 
                 // let offset = param_idx * 8;
                 write!(
@@ -181,6 +197,7 @@ pub fn assemble_var(
     asm: &mut impl std::fmt::Write,
     ir: &ScheduleIr,
     id: SVarId,
+    opaque_offset: usize,
     buf_offset: usize,
     tex_offset: usize,
     params_type: &'static str,
@@ -191,13 +208,25 @@ pub fn assemble_var(
 
     match var.op {
         Op::Literal => {
-            writeln!(
-                asm,
-                "\tmov.{} {}, 0x{:x};\n",
-                var.ty.name_cuda_bin(),
-                var.reg(),
-                var.literal
-            )?;
+            if let Some(opaque) = var.opaque {
+                writeln!(
+                    asm,
+                    "\tld.{params_type}.{} {}, [{}+{}];",
+                    var.ty.name_cuda_bin(),
+                    var.reg(),
+                    "params",
+                    (opaque_offset + opaque) * 8
+                )?;
+                // writeln!(asm, "\tmov.{} {}, %rd0;", var.ty.name_cuda_bin(), var.reg(),)?;
+            } else {
+                writeln!(
+                    asm,
+                    "\tmov.{} {}, 0x{:x};\n",
+                    var.ty.name_cuda_bin(),
+                    var.reg(),
+                    var.literal
+                )?;
+            }
         }
         Op::Neg => {
             if var.ty.is_uint() {

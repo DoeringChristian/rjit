@@ -3,7 +3,7 @@ source: src/backend/optix/test.rs
 expression: jit.kernel_debug()
 ---
 ===============================================
-Kernel 5013084308919347089:
+Kernel 163714986441494955:
 
 .version 8.0
 .target sm_86
@@ -12,9 +12,9 @@ Kernel 5013084308919347089:
 .entry cujit(
 	.param .align 8 .b8 params[24]) {
 
-	.reg.b8   %b <9>; .reg.b16 %w<9>; .reg.b32 %r<9>;
-	.reg.b64  %rd<9>; .reg.f32 %f<9>; .reg.f64 %d<9>;
-	.reg.pred %p <9>;
+	.reg.b8   %b <11>; .reg.b16 %w<11>; .reg.b32 %r<11>;
+	.reg.b64  %rd<11>; .reg.f32 %f<11>; .reg.f64 %d<11>;
+	.reg.pred %p <11>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -31,22 +31,29 @@ Kernel 5013084308919347089:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, literal: 3, size: 1 } =>
-	mov.b32 %r5, 0x3;
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, opaque: None, literal: 2, size: 1 } =>
+	mov.b32 %r5, 0x2;
 
 
-	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: None, reg: 6, buf: Some(0), tex: None, accel: None, literal: 0, size: 0 } =>
+	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: None, reg: 6, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 0 } =>
 
-	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 7, buf: None, tex: None, accel: None, literal: 0, size: 2 } =>
-	mov.u32 %r7, %r0;
-
-
-	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 8, buf: None, tex: None, accel: None, literal: 1, size: 1 } =>
-	mov.pred %p8, 0x1;
+	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 8, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 3 } =>
+	mov.u32 %r8, %r0;
 
 
-	// [4]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3)], ty: Void, param_ty: None, reg: 4, buf: None, tex: None, accel: None, literal: 0, size: 2 } =>
-	@!%p8 bra l_4_done;
+	// [3]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 9, buf: None, tex: None, accel: None, opaque: None, literal: 1, size: 1 } =>
+	mov.b32 %r9, 0x1;
+
+
+	// [4]: ScheduleVar { op: Add, deps: [SVarId(2), SVarId(3)], ty: U32, param_ty: None, reg: 7, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 3 } =>
+	add.u32 %r7, %r8, %r9;
+
+	// [5]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 10, buf: None, tex: None, accel: None, opaque: None, literal: 1, size: 1 } =>
+	mov.pred %p10, 0x1;
+
+
+	// [6]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5)], ty: Void, param_ty: None, reg: 4, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 3 } =>
+	@!%p10 bra l_4_done;
 
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r7, 4, %rd0;
@@ -65,7 +72,7 @@ done:
 	ret;
 }
 ===============================================
-Kernel 8469687261713406297:
+Kernel 6559059012187258926:
 
 .version 8.0
 .target sm_86
@@ -93,28 +100,28 @@ Kernel 8469687261713406297:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 5, buf: Some(1), tex: None, accel: None, literal: 0, size: 4 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 5, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 4 } =>
 	ld.param.u64 %rd0, [params+16];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.u32 %r5, [%rd0];
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, literal: 1, size: 1 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, opaque: None, literal: 1, size: 1 } =>
 	mov.b32 %r6, 0x1;
 
 
-	// [2]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 8, buf: None, tex: None, accel: None, literal: 3, size: 1 } =>
+	// [2]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 8, buf: None, tex: None, accel: None, opaque: None, literal: 3, size: 1 } =>
 	mov.b32 %r8, 0x3;
 
 
-	// [3]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 9, buf: None, tex: None, accel: None, literal: 0, size: 2 } =>
+	// [3]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 9, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2 } =>
 	mov.u32 %r9, %r0;
 
 
-	// [4]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 10, buf: None, tex: None, accel: None, literal: 1, size: 1 } =>
+	// [4]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 10, buf: None, tex: None, accel: None, opaque: None, literal: 1, size: 1 } =>
 	mov.pred %p10, 0x1;
 
 
-	// [5]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(2), SVarId(0), SVarId(3), SVarId(4)], ty: Void, param_ty: None, reg: 7, buf: None, tex: None, accel: None, literal: 0, size: 2 } =>
+	// [5]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(2), SVarId(0), SVarId(3), SVarId(4)], ty: Void, param_ty: None, reg: 7, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2 } =>
 	@!%p10 bra l_7_done;
 
 	ld.param.u64 %rd0, [params+16];
@@ -122,7 +129,7 @@ body: // sm_86
 	st.global.u32 [%rd3], %r8;
 	l_7_done:
 
-	// [6]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1), SVarId(5)], ty: U32, param_ty: Output, reg: 4, buf: Some(2), tex: None, accel: None, literal: 0, size: 4 } =>
+	// [6]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1), SVarId(5)], ty: U32, param_ty: Output, reg: 4, buf: Some(2), tex: None, accel: None, opaque: None, literal: 0, size: 4 } =>
 	add.u32 %r4, %r5, %r6;
 
 	// Store:
@@ -142,7 +149,7 @@ done:
 	ret;
 }
 ===============================================
-Kernel 12944709659818679191:
+Kernel 14033616623125453848:
 
 .version 8.0
 .target sm_86
@@ -151,9 +158,9 @@ Kernel 12944709659818679191:
 .entry cujit(
 	.param .align 8 .b8 params[24]) {
 
-	.reg.b8   %b <11>; .reg.b16 %w<11>; .reg.b32 %r<11>;
-	.reg.b64  %rd<11>; .reg.f32 %f<11>; .reg.f64 %d<11>;
-	.reg.pred %p <11>;
+	.reg.b8   %b <9>; .reg.b16 %w<9>; .reg.b32 %r<9>;
+	.reg.b64  %rd<9>; .reg.f32 %f<9>; .reg.f64 %d<9>;
+	.reg.pred %p <9>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -170,29 +177,22 @@ Kernel 12944709659818679191:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, literal: 2, size: 1 } =>
-	mov.b32 %r5, 0x2;
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, opaque: None, literal: 3, size: 1 } =>
+	mov.b32 %r5, 0x3;
 
 
-	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: None, reg: 6, buf: Some(0), tex: None, accel: None, literal: 0, size: 0 } =>
+	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: None, reg: 6, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 0 } =>
 
-	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 8, buf: None, tex: None, accel: None, literal: 0, size: 3 } =>
-	mov.u32 %r8, %r0;
-
-
-	// [3]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 9, buf: None, tex: None, accel: None, literal: 1, size: 1 } =>
-	mov.b32 %r9, 0x1;
+	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 7, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2 } =>
+	mov.u32 %r7, %r0;
 
 
-	// [4]: ScheduleVar { op: Add, deps: [SVarId(2), SVarId(3)], ty: U32, param_ty: None, reg: 7, buf: None, tex: None, accel: None, literal: 0, size: 3 } =>
-	add.u32 %r7, %r8, %r9;
-
-	// [5]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 10, buf: None, tex: None, accel: None, literal: 1, size: 1 } =>
-	mov.pred %p10, 0x1;
+	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 8, buf: None, tex: None, accel: None, opaque: None, literal: 1, size: 1 } =>
+	mov.pred %p8, 0x1;
 
 
-	// [6]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5)], ty: Void, param_ty: None, reg: 4, buf: None, tex: None, accel: None, literal: 0, size: 3 } =>
-	@!%p10 bra l_4_done;
+	// [4]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3)], ty: Void, param_ty: None, reg: 4, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2 } =>
+	@!%p8 bra l_4_done;
 
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r7, 4, %rd0;

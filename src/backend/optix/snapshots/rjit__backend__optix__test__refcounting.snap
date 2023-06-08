@@ -3,7 +3,7 @@ source: src/backend/optix/test.rs
 expression: jit.kernel_debug()
 ---
 ===============================================
-Kernel 599591627597907163:
+Kernel 7142448094676960272:
 
 .version 8.0
 .target sm_86
@@ -31,12 +31,12 @@ Kernel 599591627597907163:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 5, buf: Some(0), tex: None, accel: None, literal: 0, size: 10 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 5, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 10 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.f32 %f5, [%rd0];
 
-	// [1]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(0)], ty: F32, param_ty: Output, reg: 4, buf: Some(1), tex: None, accel: None, literal: 0, size: 10 } =>
+	// [1]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(0)], ty: F32, param_ty: Output, reg: 4, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 10 } =>
 	add.f32 %f4, %f5, %f5;
 
 	// Store:

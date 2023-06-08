@@ -33,6 +33,7 @@ pub struct ScheduleVar {
     pub buf: Option<usize>, // Index into literal/buffer/texture vec
     pub tex: Option<usize>,
     pub accel: Option<usize>,
+    pub opaque: Option<usize>,
     pub literal: u64,
     pub size: usize,
 }
@@ -71,16 +72,16 @@ impl ScheduleVar {
 
 #[derive(Debug, Default)]
 pub struct Env {
-    literals: Vec<u64>,
+    opaques: Vec<u64>,
     buffers: Vec<Arc<dyn Buffer>>,
     textures: Vec<Arc<dyn Texture>>,
     accels: Vec<Arc<dyn Accel>>,
 }
 
 impl Env {
-    fn push_literal(&mut self, literal: u64) -> usize {
-        let idx = self.literals.len();
-        self.literals.push(literal);
+    fn push_opaque(&mut self, literal: u64) -> usize {
+        let idx = self.opaques.len();
+        self.opaques.push(literal);
         idx
     }
     fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
@@ -106,6 +107,9 @@ impl Env {
     }
     pub fn accels(&self) -> &[Arc<dyn Accel>] {
         &self.accels
+    }
+    pub fn opaques(&self) -> &[u64] {
+        &self.opaques
     }
 }
 
@@ -191,6 +195,7 @@ impl ScheduleIr {
             tex: None,
             accel: None,
             literal: 0,
+            opaque: None,
             size: var.size,
         };
 
@@ -204,7 +209,11 @@ impl ScheduleIr {
             Op::Literal => {
                 // TODO: cannot evaluate a literal (maybe neccesarry for tensors)
                 // sv.param_offset = self.push_param(var.literal);
-                sv.literal = var.data.literal().unwrap();
+                if var.opaque {
+                    sv.opaque = Some(env.push_opaque(var.data.literal().unwrap()));
+                } else {
+                    sv.literal = var.data.literal().unwrap();
+                }
             }
             Op::Gather => {
                 sv.deps = smallvec![

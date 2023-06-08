@@ -254,6 +254,7 @@ pub struct Var {
     pub size: usize, // number of elements
     pub rc: usize,
     pub data: Data,
+    pub opaque: bool,
     // pub literal: u64,
 }
 
