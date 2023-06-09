@@ -69,6 +69,7 @@ impl ExecutionGraph {
             .map(|(i, id)| {
                 let mut deps = Vec::new();
                 dependencies_in(ir, *id, &scheduled, &mut deps);
+                dbg!(&deps);
                 let deps = deps
                     .into_iter()
                     .filter(|dep| dep != id)

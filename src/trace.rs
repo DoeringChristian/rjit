@@ -342,7 +342,7 @@ pub struct Internal {
 impl Drop for Internal {
     fn drop(&mut self) {
         self.clear_schedule();
-        dbg!(&self);
+        // dbg!(&self);
         assert_eq!(self.vars.len(), 0);
     }
 }
@@ -376,6 +376,9 @@ impl Internal {
     }
     pub fn schedule(&mut self, ids: &[VarId]) {
         for id in ids {
+            if self.scheduled.contains(id) {
+                continue;
+            }
             // Don't schedule data
             if self.var(*id).op == Op::Data {
                 // TODO: maybe we only need to test if a buffer
@@ -955,6 +958,8 @@ impl VarRef {
     pub fn make_opaque(&self) {
         if self.var().is_literal() {
             self.var().opaque = true;
+        } else {
+            self.schedule();
         }
     }
     pub fn opaque(&self) -> Self {

@@ -439,20 +439,26 @@ fn trace_ray() {
     //     p.schedule();
     // }
     let valid = payload[0].cast(&VarType::Bool);
-    valid.schedule();
 
     let u = payload[3].bitcast(&VarType::F32);
     let v = payload[4].bitcast(&VarType::F32);
-    u.schedule();
+
+    let dst = ir.array(&[0f32, 1f32]);
+    u.scatter(&dst, &ir.index(2), None);
+
+    valid.schedule();
     v.schedule();
+    // u.schedule();
 
     let mut jit = Jit::default();
     jit.eval(&mut ir.lock());
 
+    dbg!(&dst.to_host_f32());
+
     insta::assert_snapshot!(jit.kernel_debug());
 
     assert_eq!(valid.to_host_bool(), vec![true, false]);
-    let u = u.to_host_f32();
+    let u = dst.to_host_f32();
     let v = v.to_host_f32();
     approx::assert_ulps_eq!(u[0], 0.39999998);
     approx::assert_ulps_eq!(u[1], 0.);
