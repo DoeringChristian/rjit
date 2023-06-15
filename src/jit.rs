@@ -46,12 +46,7 @@ impl ExecutionGraph {
         ///
         /// Gets the dependencies of `id` in `scheduled`
         ///
-        fn dependencies_in(
-            ir: &Internal,
-            id: VarId,
-            scheduled: &HashSet<VarId>,
-            deps: &mut Vec<VarId>,
-        ) {
+        fn dependencies_in(ir: &Internal, id: VarId, scheduled: &[VarId], deps: &mut Vec<VarId>) {
             if scheduled.contains(&id) {
                 deps.push(id);
             }
@@ -60,7 +55,7 @@ impl ExecutionGraph {
                 dependencies_in(ir, *dep, scheduled, deps);
             }
         }
-        let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
+        // let scheduled = ir.scheduled.iter().cloned().collect::<HashSet<_>>();
         let mut id2pass = HashMap::new();
         let passes = ir
             .scheduled
@@ -68,7 +63,7 @@ impl ExecutionGraph {
             .enumerate()
             .map(|(i, id)| {
                 let mut deps = Vec::new();
-                dependencies_in(ir, *id, &scheduled, &mut deps);
+                dependencies_in(ir, *id, &ir.scheduled[0..i], &mut deps);
                 dbg!(&deps);
                 let deps = deps
                     .into_iter()

@@ -3,13 +3,13 @@ source: src/backend/optix/test.rs
 expression: jit.kernel_debug()
 ---
 ===============================================
-Kernel 5788832516743116079:
+Kernel 17213476693071626700:
 
 .version 8.0
 .target sm_86
 .address_size 64
 
-.const .align 8 .b8 params[56];
+.const .align 8 .b8 params[64];
 .entry __raygen__cujit(){
 
 	.reg.b8   %b <33>; .reg.b16 %w<33>; .reg.b32 %r<33>;
@@ -95,7 +95,7 @@ body:
 
 
 	// [18]: ScheduleVar { op: TraceRay { payload_count: 5 }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3), SVarId(4), SVarId(5), SVarId(6), SVarId(7), SVarId(8), SVarId(9), SVarId(10), SVarId(11), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(13), SVarId(14), SVarId(15), SVarId(16), SVarId(17)], ty: Void, param_ty: None, reg: 7, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2 } =>
-	ld.const.u64 %rd0, [params+48];
+	ld.const.u64 %rd0, [params+56];
 	.reg.u32 %u7_out_<32>;
 	.reg.u32 %u7_payload_type, %u7_payload_count;
 	mov.u32 %u7_payload_type, 0;
@@ -188,8 +188,13 @@ call (
 	// [19]: ScheduleVar { op: Extract { offset: 3 }, deps: [SVarId(18)], ty: U32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2 } =>
 	mov.b32 %r6, %u7_out_3;
 
-	// [20]: ScheduleVar { op: Bitcast, deps: [SVarId(19)], ty: F32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2 } =>
+	// [20]: ScheduleVar { op: Bitcast, deps: [SVarId(19)], ty: F32, param_ty: Output, reg: 5, buf: Some(5), tex: None, accel: None, opaque: None, literal: 0, size: 2 } =>
 	mov.b32 %f5, %r6;
+
+	// Store:
+	ld.const.u64 %rd0, [params + 48]; // rd0 <- params[offset]
+	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
+	st.global.cs.f32 [%rd0], %f5; // (Index * ty.size() + params[offset])[Index] <- var
 
 	// [21]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: None, reg: 26, buf: Some(2), tex: None, accel: None, opaque: None, literal: 0, size: 0 } =>
 

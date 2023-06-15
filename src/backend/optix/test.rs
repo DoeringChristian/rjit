@@ -448,7 +448,7 @@ fn trace_ray() {
 
     valid.schedule();
     v.schedule();
-    // u.schedule();
+    u.schedule();
 
     let mut jit = Jit::default();
     jit.eval(&mut ir.lock());
