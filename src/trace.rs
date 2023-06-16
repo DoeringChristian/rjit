@@ -13,7 +13,7 @@ use smallvec::smallvec;
 
 use crate::backend::Backend;
 pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
-use crate::AsVarType;
+use crate::{AsVarType, Jit};
 
 pub enum GeometryDesc<'a> {
     Triangles {
@@ -34,7 +34,7 @@ pub struct AccelDesc<'a> {
 /// A wrapper arrund an Intermediate Representation.
 ///
 #[derive(Clone, Debug, Default)]
-pub struct Trace(Arc<Mutex<Internal>>);
+pub struct Trace(Arc<Mutex<Internal>>, Arc<Mutex<Jit>>);
 impl Deref for Trace {
     type Target = Arc<Mutex<Internal>>;
 
@@ -46,11 +46,11 @@ impl Deref for Trace {
 impl Trace {
     fn push_var(&self, mut v: Var) -> VarRef {
         // Push side effects of sources as extra dependencies
-        for dep in v.deps.clone() {
-            if let Some(se) = self.lock().var(dep).last_write {
-                v.deps.push(se);
-            }
-        }
+        // for dep in v.deps.clone() {
+        //     if let Some(se) = self.lock().var(dep).last_write {
+        //         v.deps.push(se);
+        //     }
+        // }
         // Inc rc for deps
         for dep in v.deps.iter() {
             self.lock().inc_rc(*dep);
@@ -120,6 +120,9 @@ impl Trace {
             assert!(Arc::ptr_eq(&r.ir, &self.0));
             self.lock().schedule(&[r.id()])
         }
+    }
+    pub fn eval(&self) {
+        self.1.lock().eval(&mut self.0.lock())
     }
 }
 macro_rules! buffer {
@@ -336,7 +339,6 @@ impl Trace {
 pub struct Internal {
     vars: SlotMap<DefaultKey, Var>,
     pub backend: Option<Box<dyn Backend>>,
-    // pub functions: Vec<VarId>,
     pub scheduled: Vec<VarId>,
 }
 impl Drop for Internal {
@@ -368,9 +370,9 @@ impl Internal {
                 self.dec_rc(dep);
             }
             let var = self.var_mut(id);
-            if let Some(se) = var.last_write.clone() {
-                self.dec_rc(se);
-            }
+            // if let Some(se) = var.last_write.clone() {
+            //     self.dec_rc(se);
+            // }
             self.vars.remove(id.0);
         }
     }
@@ -633,7 +635,7 @@ impl VarRef {
 
     pub fn to_texture(&self, shape: &[usize], n_channels: usize) -> Self {
         self.schedule();
-        // TODO: deferr texture copy
+        self.ir.eval();
 
         let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
         assert_eq!(self.size(), size,);
@@ -645,15 +647,15 @@ impl VarRef {
             .as_ref()
             .unwrap()
             .create_texture(shape, n_channels);
+        texture.copy_from_buffer(self.var().data.buffer().unwrap().as_ref());
         let dst = self.ir.push_var(Var {
-            op: Op::TexUpload,
+            op: Op::Nop,
             deps: smallvec![self.id()],
             ty: VarType::Void,
             size,
             data: Data::Texture(texture),
             ..Default::default()
         });
-        dst.schedule();
         dst
     }
     pub fn tex_to_buffer(&self) -> Self {
@@ -757,6 +759,7 @@ impl VarRef {
     }
     pub fn scatter_reduce(&self, dst: &Self, idx: &Self, mask: Option<&Self>, reduce_op: ReduceOp) {
         dst.schedule();
+        self.ir.eval();
 
         let mask: VarRef = mask
             .map(|m| {
@@ -774,15 +777,16 @@ impl VarRef {
             ..Default::default()
         });
         res.schedule();
+        // res.schedule();
         // Drop old `last_write`
-        {
-            let mut ir = self.ir.lock();
-            if let Some(se) = ir.var(dst.id()).last_write.clone() {
-                ir.dec_rc(se);
-            }
-        }
-        dst.var().last_write = Some(res.id()); // Set side effect
-        res.ir.lock().inc_rc(res.id);
+        // {
+        //     let mut ir = self.ir.lock();
+        //     if let Some(se) = ir.var(dst.id()).last_write.clone() {
+        //         ir.dec_rc(se);
+        //     }
+        // }
+        // dst.var().last_write = Some(res.id()); // Set side effect
+        // res.ir.lock().inc_rc(res.id);
     }
     pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
         self.scatter_reduce(dst, idx, mask, ReduceOp::None);
@@ -833,11 +837,9 @@ impl VarRef {
             return res;
         }
 
-        self.schedule(); // TODO: instead of evaluation, use dependency scheduling
-                         // let mut jit = Jit::default();
-                         // jit.eval(&mut self.ir.lock());
+        self.schedule();
+        self.ir.eval();
 
-        // if self.var().buffer.is_some() {
         let ret = self.ir.push_var(Var {
             op: Op::Gather,
             deps: smallvec![self.id(), index.id(), mask.id()],

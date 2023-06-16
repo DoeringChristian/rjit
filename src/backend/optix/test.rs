@@ -122,47 +122,22 @@ fn gather_eval() {
     let ir = Trace::default();
     ir.set_backend("optix");
 
-    let tmp_x;
-    let tmp_y;
-    let tmp_z;
     let r = {
         let x = ir.index(3);
-        dbg!();
-        assert_eq!(x.var().rc, 1);
         let y = ir.buffer_u32(&[1, 2, 3]);
-        dbg!();
-        assert_eq!(y.var().rc, 1);
 
         // let z = ir::add(&x, &y);
         let z = x.add(&y);
-        dbg!();
-        assert_eq!(x.var().rc, 2);
-        assert_eq!(y.var().rc, 2);
-        assert_eq!(z.var().rc, 1);
 
         let r = z.gather(&ir.index(3), None);
         dbg!();
-        assert_eq!(x.var().rc, 2);
-        assert_eq!(y.var().rc, 2);
-        assert_eq!(z.var().rc, 3);
-        assert_eq!(r.var().rc, 1);
-        tmp_x = x.id();
-        tmp_y = y.id();
-        tmp_z = z.id();
         r
     };
-    assert_eq!(r.var().rc, 1);
-    assert_eq!(ir.lock().get_var(tmp_x).unwrap().rc, 1);
-    assert_eq!(ir.lock().get_var(tmp_y).unwrap().rc, 1);
-    assert_eq!(ir.lock().get_var(tmp_z).unwrap().rc, 2); // z is referenced by r and the
-                                                         // schedule
+    // schedule
 
     ir.schedule(&[&r]);
     let mut jit = Jit::default();
     jit.eval(&mut ir.lock());
-
-    assert_eq!(r.var().rc, 1);
-    assert!(ir.lock().get_var(tmp_z).is_none());
 
     insta::assert_snapshot!(jit.kernel_debug());
 

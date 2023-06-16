@@ -245,7 +245,7 @@ pub struct Var {
     pub deps: SmallVec<[VarId; 4]>,
     // Variable performing the latest write operation.
     // (used when building a scatter dependency chain).
-    pub last_write: Option<VarId>,
+    // pub last_write: Option<VarId>,
     pub ty: VarType, // Type of the variable
     // pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer
     // TODO: unify buffer and texture to

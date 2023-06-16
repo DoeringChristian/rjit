@@ -414,6 +414,10 @@ impl backend::Kernel for Kernel {
     ) -> Arc<dyn backend::DeviceFuture> {
         let ctx = self.device.ctx();
         unsafe {
+            let stream = self
+                .device
+                .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
+                .unwrap();
             let mut unused = 0;
             let mut block_size = 0;
             ctx.cuOccupancyMaxPotentialBlockSize(
@@ -461,7 +465,7 @@ impl backend::Kernel for Kernel {
 
             let mut event = Event::create(&self.device).unwrap();
             event.record(&self.stream).unwrap();
-            Arc::new(DeviceFuture { event })
+            Arc::new(DeviceFuture { event, stream })
         }
     }
 
@@ -475,15 +479,16 @@ unsafe impl Send for DeviceFuture {}
 #[derive(Debug)]
 pub struct DeviceFuture {
     event: Event,
+    stream: Stream,
 }
 
 impl backend::DeviceFuture for DeviceFuture {
     fn wait(&self) {
-        self.event.synchronize();
+        self.event.synchronize().unwrap();
     }
 }
 impl Drop for DeviceFuture {
     fn drop(&mut self) {
-        self.event.synchronize();
+        self.event.synchronize().unwrap();
     }
 }

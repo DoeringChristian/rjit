@@ -351,36 +351,26 @@ impl backend::Kernel for Kernel {
         // let params = Buffer::uninit(&self.device.cuda_device(), 8 * params.len());
 
         unsafe {
-            // let mut d_params = 0;
-            // let ctx = self.device.cuda_ctx();
-            // ctx.cuMemAlloc_v2(&mut d_params, 8 * params.len())
-            //     .check()
-            //     .unwrap();
-            // ctx.cuMemcpyHtoD_v2(d_params, params.as_ptr() as *const _, params.len() * 8)
-            //     .check()
-            //     .unwrap(); // TODO: Free somehow...
+            let stream = self
+                .device
+                .cuda_device()
+                .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
+                .unwrap();
 
             self.pipeline
                 // .as_ref()
                 // .unwrap()
-                .launch(
-                    &self.stream,
-                    params_buf.ptr(),
-                    params_buf.size(),
-                    size as u32,
-                )
+                .launch(&stream, params_buf.ptr(), params_buf.size(), size as u32)
                 .unwrap();
-            // self.stream.synchronize().unwrap();
 
-            // ctx.cuMemFree_v2(d_params).check().unwrap();
+            let mut event = Event::create(&self.device.cuda_device()).unwrap();
+            event.record(&self.stream).unwrap();
+            Arc::new(DeviceFuture {
+                event,
+                params: params_buf,
+                stream,
+            })
         }
-
-        let mut event = Event::create(&self.device.cuda_device()).unwrap();
-        event.record(&self.stream).unwrap();
-        Arc::new(DeviceFuture {
-            event,
-            params: params_buf,
-        })
     }
 
     fn assembly(&self) -> &str {
@@ -578,16 +568,17 @@ unsafe impl Send for DeviceFuture {}
 pub struct DeviceFuture {
     event: Event,
     params: Buffer,
+    stream: Stream,
 }
 
 impl backend::DeviceFuture for DeviceFuture {
     fn wait(&self) {
-        self.event.synchronize();
+        self.event.synchronize().unwrap();
     }
 }
 
 impl Drop for DeviceFuture {
     fn drop(&mut self) {
-        self.event.synchronize();
+        self.event.synchronize().unwrap();
     }
 }
