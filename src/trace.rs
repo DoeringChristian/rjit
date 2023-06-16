@@ -743,7 +743,6 @@ impl VarRef {
         drop(v);
 
         if op == Op::Idx {
-            // self.inc_rc(new_idx);
             return Some(new_idx.clone());
         } else {
             return Some(self.ir.push_var(Var {
@@ -777,16 +776,6 @@ impl VarRef {
             ..Default::default()
         });
         res.schedule();
-        // res.schedule();
-        // Drop old `last_write`
-        // {
-        //     let mut ir = self.ir.lock();
-        //     if let Some(se) = ir.var(dst.id()).last_write.clone() {
-        //         ir.dec_rc(se);
-        //     }
-        // }
-        // dst.var().last_write = Some(res.id()); // Set side effect
-        // res.ir.lock().inc_rc(res.id);
     }
     pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
         self.scatter_reduce(dst, idx, mask, ReduceOp::None);
