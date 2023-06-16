@@ -333,6 +333,13 @@ impl Trace {
             ..Default::default()
         })
     }
+    pub fn loop_record(&self, before: &[&VarRef], after: &[&VarRef]) {
+        let after = after.iter().map(|r| (*r).clone()).collect::<Vec<_>>();
+        let before = before.iter().map(|r| (*r).clone()).collect::<Vec<_>>();
+        self.push_var(Var {
+            ..Default::default()
+        });
+    }
 }
 
 #[derive(Default, Debug)]

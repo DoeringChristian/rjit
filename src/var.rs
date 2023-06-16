@@ -91,6 +91,7 @@ pub enum Op {
     TraceRay {
         payload_count: usize,
     },
+    Loop {},
     Idx,
 }
 

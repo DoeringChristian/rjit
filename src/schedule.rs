@@ -246,6 +246,9 @@ impl ScheduleIr {
                         .map(|dep| self.collect(env, ir, *dep)),
                 );
             }
+            Op::Loop {} => {
+                todo!()
+            }
             _ => {
                 sv.deps = var
                     .deps
