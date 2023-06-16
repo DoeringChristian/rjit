@@ -3,7 +3,7 @@ source: src/backend/optix/test.rs
 expression: jit.kernel_debug()
 ---
 ===============================================
-Kernel 163714986441494955:
+Kernel 14102561540168963304:
 
 .version 8.0
 .target sm_86
