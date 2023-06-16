@@ -344,7 +344,6 @@ pub struct Internal {
 impl Drop for Internal {
     fn drop(&mut self) {
         self.clear_schedule();
-        // dbg!(&self);
         assert_eq!(self.vars.len(), 0);
     }
 }

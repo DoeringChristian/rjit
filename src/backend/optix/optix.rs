@@ -344,7 +344,7 @@ impl backend::Kernel for Kernel {
         log::trace!("params: {:02x?}", bytemuck::cast_slice::<_, u8>(&params));
         log::trace!("Optix Kernel Launch with {size} threads.");
 
-        dbg!(&params);
+        // dbg!(&params);
 
         let params_buf =
             Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params));
@@ -423,7 +423,7 @@ impl Accel {
             };
             let gas_tmp = Buffer::uninit(device.cuda_device(), buffer_size.tempSizeInBytes);
             let gas = Buffer::uninit(device.cuda_device(), buffer_size.outputSizeInBytes);
-            dbg!(gas.ptr());
+            // dbg!(gas.ptr());
             let mut accel = 0;
             unsafe {
                 device
@@ -503,7 +503,7 @@ impl Accel {
             })
             .collect::<Vec<_>>();
 
-        dbg!(&instances);
+        // dbg!(&instances);
 
         let instance_buf = unsafe {
             Buffer::from_slice(

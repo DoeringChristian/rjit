@@ -338,3 +338,20 @@ fn bitcast() {
 
     assert_eq!(x.to_host_f32(), vec![1., 2., 3.]);
 }
+#[test]
+fn scatter_const_mask() {
+    let ir = Trace::default();
+    ir.set_backend("cuda");
+
+    let x = ir.literal(1f32);
+    let mask = ir.buffer_bool(&[true, false, true]);
+
+    let dst = ir.buffer_f32(&[0., 0., 0.]);
+
+    x.scatter(&dst, &ir.index(3), Some(&mask));
+
+    let mut jit = Jit::default();
+    jit.eval(&mut ir.lock());
+
+    assert_eq!(dst.to_host_f32(), vec![1., 0., 1.]);
+}
