@@ -1,6 +1,6 @@
 pub mod backend;
 mod jit;
-mod loop_trace;
+mod loop_record;
 mod schedule;
 mod trace;
 mod var;

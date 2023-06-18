@@ -256,6 +256,7 @@ pub struct Var {
     pub rc: usize,
     pub data: Data,
     pub opaque: bool,
+    pub scope: u32,
     // pub literal: u64,
 }
 

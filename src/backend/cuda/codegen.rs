@@ -1174,6 +1174,9 @@ pub fn assemble_var(
                 offset
             )?;
         }
+        Op::Loop {} => {
+            todo!()
+        }
         _ => {}
     }
     Ok(())
