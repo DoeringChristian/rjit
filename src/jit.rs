@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::ops::Range;
 
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
@@ -24,6 +25,13 @@ use crate::var::{Data, Op};
 #[derive(Debug, Default)]
 pub struct Jit {
     pub kernels: HashMap<u128, Box<dyn Kernel>>,
+    pub kernel_history: Vec<KernelHistroyEntry>,
+}
+
+#[derive(Debug)]
+pub struct KernelHistroyEntry {
+    hash: u128,
+    size: usize,
 }
 
 #[derive(Debug)]
@@ -109,6 +117,10 @@ impl Jit {
             .collect::<Vec<_>>();
 
         let futures = launches.into_iter().map(|mut launch| {
+            self.kernel_history.push(KernelHistroyEntry {
+                hash: launch.hash,
+                size: launch.size,
+            });
             self.kernels
                 .get_mut(&launch.hash)
                 .unwrap()
@@ -148,31 +160,29 @@ impl Jit {
     /// Writes the kernel assemblies into a string which can then be checked by snapshot testing
     /// tools such as insta.
     ///
-    pub fn kernel_debug(&self) -> String {
-        let mut kernel_strings = self
+    pub fn kernel_history(&self) -> String {
+        let mut s = String::new();
+        writeln!(s, "Kernel History:").unwrap();
+        for entry in self.kernel_history.iter() {
+            writeln!(
+                s,
+                "Launched Kernel {} with {} elements",
+                entry.hash, entry.size
+            )
+            .unwrap();
+        }
+
+        for (hash, kernel) in self
             .kernels
             .iter()
-            .map(|(hash, k)| {
-                let mut string = String::new();
-                writeln!(string, "===============================================").unwrap();
-                writeln!(string, "Kernel {}:", hash).unwrap();
-                writeln!(string, "").unwrap();
-                write!(string, "{}", k.assembly()).unwrap();
-                (string, hash)
-            })
-            .collect::<Vec<_>>();
-
-        kernel_strings.sort_by(|(_, hash0), (_, hash1)| hash0.cmp(hash1));
-
-        let string = kernel_strings.into_iter().map(|(string, _)| string).fold(
-            String::new(),
-            |mut s0, s1| {
-                s0.push_str(&s1);
-                s0
-            },
-        );
-
-        string
+            .sorted_by(|(hash1, _), (hash2, _)| hash1.cmp(hash2))
+        {
+            writeln!(s, "===============================================").unwrap();
+            writeln!(s, "Kernel {}:", hash).unwrap();
+            writeln!(s, "").unwrap();
+            write!(s, "{}", kernel.assembly()).unwrap();
+        }
+        s
     }
 }
 

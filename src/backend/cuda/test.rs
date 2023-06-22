@@ -20,7 +20,6 @@ fn refcounting() {
     assert_eq!(y.var().rc, 1, "rc of y should be 1 (in y)");
 
     ir.schedule(&[&y]);
-    let mut jit = Jit::default();
 
     assert_eq!(
         y.var().rc,
@@ -28,7 +27,7 @@ fn refcounting() {
         "rc of y should be 2 (1 in y and 1 in schedule)"
     );
 
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
     assert_eq!(
         x.var().rc,
@@ -41,7 +40,7 @@ fn refcounting() {
         "rc of y should be 2 (y from schedule should be cleaned)"
     );
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(y.to_host_f32(), vec![2f32; 10]);
 }
@@ -55,10 +54,9 @@ fn load_add_f32() {
     let y = x.add(&x);
 
     ir.schedule(&[&y]);
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(y.to_host_f32(), vec![2f32; 10]);
 }
@@ -72,10 +70,9 @@ fn load_gather_f32() {
     let y = x.gather(&i, None);
 
     ir.schedule(&[&y]);
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(y.to_host_f32(), vec![1., 2., 5.]);
 }
@@ -93,10 +90,9 @@ fn reindex() {
     let y = x.gather(&i, None);
 
     ir.schedule(&[&y]);
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(y.to_host_u32(), vec![2, 3, 4]);
 }
@@ -108,10 +104,9 @@ fn index() {
     let i = ir.index(10);
 
     ir.schedule(&[&i]);
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(i.to_host_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 }
@@ -135,6 +130,8 @@ fn gather_eval() {
     ir.schedule(&[&r]);
     ir.eval();
 
+    insta::assert_snapshot!(ir.kernel_history());
+
     assert_eq!(r.to_host_u32(), vec![1, 3, 5]);
 }
 #[test]
@@ -147,10 +144,9 @@ fn paralell() {
     let y = ir.index(3);
 
     ir.schedule(&[&x, &y]);
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(x.to_host_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     assert_eq!(y.to_host_u32(), vec![0, 1, 2]);
@@ -163,11 +159,9 @@ fn _load_gather() {
     let x = ir.buffer_f32(&[1., 2., 3.]);
 
     ir.schedule(&[&x]);
+    ir.eval();
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
-
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(x.to_host_f32(), vec![1., 2., 3.]);
 }
@@ -188,10 +182,9 @@ fn eval_scatter() {
 
     y.scatter(&x, &i, None); // x: [1, 2, 2, 2]
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(x.to_host_u32(), vec![1, 2, 2, 2]);
 }
@@ -216,10 +209,9 @@ fn scatter_twice() {
 
     y.scatter(&x, &i, None);
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(x.to_host_u32(), vec![3, 3, 2, 2]);
 }
@@ -249,10 +241,9 @@ fn scatter_twice_add() {
 
     ir.schedule(&[&x]);
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(x.to_host_u32(), vec![4, 4, 3, 3]);
 }
@@ -271,10 +262,9 @@ fn scatter_reduce() {
 
     ir.schedule(&[&x]);
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(x.to_host_u32(), vec![3, 0, 0, 0]);
 }
@@ -296,10 +286,9 @@ fn tex_lookup() {
 
     r.schedule();
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(r.to_host_f32(), vec![1.]);
 }
@@ -313,10 +302,9 @@ fn cast() {
 
     x.schedule();
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(x.to_host_u64(), vec![1, 2, 3]);
 }
@@ -331,10 +319,9 @@ fn bitcast() {
 
     x.schedule();
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
 
-    insta::assert_snapshot!(jit.kernel_debug());
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(x.to_host_f32(), vec![1., 2., 3.]);
 }
@@ -350,8 +337,8 @@ fn scatter_const_mask() {
 
     x.scatter(&dst, &ir.index(3), Some(&mask));
 
-    let mut jit = Jit::default();
-    jit.eval(&mut ir.lock());
+    ir.eval();
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(dst.to_host_f32(), vec![1., 0., 1.]);
 }
@@ -371,6 +358,8 @@ fn scatter_gather() {
 
     y.schedule();
     ir.eval();
+
+    insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(dst.to_host_u32(), vec![1, 1, 1]);
     assert_eq!(y.to_host_u32(), vec![1, 1, 1]);

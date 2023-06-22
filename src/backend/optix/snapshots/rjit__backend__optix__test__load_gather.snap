@@ -1,5 +1,6 @@
 ---
 source: src/backend/optix/test.rs
-expression: jit.kernel_debug()
+expression: ir.kernel_history()
 ---
+Kernel History:
 

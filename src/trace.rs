@@ -124,6 +124,9 @@ impl Trace {
     pub fn eval(&self) {
         self.1.lock().eval(&mut self.0.lock())
     }
+    pub fn kernel_history(&self) -> String {
+        self.1.lock().kernel_history()
+    }
 }
 macro_rules! buffer {
     ($TY:ident, $ty:ident) => {

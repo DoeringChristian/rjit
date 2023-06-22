@@ -1,5 +1,0 @@
----
-source: src/backend/cuda/test.rs
-expression: jit.kernel_debug()
----
-
