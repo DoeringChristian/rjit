@@ -115,62 +115,6 @@ pub enum VarType {
     F64,
 }
 impl VarType {
-    // Returns the register prefix for this variable
-    pub fn prefix(&self) -> &'static str {
-        match self {
-            Self::Void => "%u",
-            Self::Bool => "%p",
-            Self::I8 => "%b",
-            Self::U8 => "%b",
-            Self::I16 => "%w",
-            Self::U16 => "%w",
-            Self::I32 => "%r",
-            Self::U32 => "%r",
-            Self::I64 => "%rd",
-            Self::U64 => "%rd",
-            // Self::Ptr => "%rd",
-            Self::F16 => "%h",
-            Self::F32 => "%f",
-            Self::F64 => "%d",
-        }
-    }
-    // Retuns the cuda/ptx Representation for this type
-    pub fn name_cuda(&self) -> &'static str {
-        match self {
-            Self::Void => "???",
-            Self::Bool => "pred",
-            Self::I8 => "s8",
-            Self::U8 => "u8",
-            Self::I16 => "s16",
-            Self::U16 => "u16",
-            Self::I32 => "s32",
-            Self::U32 => "u32",
-            Self::I64 => "s64",
-            Self::U64 => "u64",
-            // Self::Ptr => "u64",
-            Self::F16 => "f16",
-            Self::F32 => "f32",
-            Self::F64 => "f64",
-        }
-    }
-    pub fn name_cuda_bin(&self) -> &'static str {
-        match self {
-            Self::Void => "???",
-            Self::Bool => "pred",
-            Self::I8 => "b8",
-            Self::U8 => "b8",
-            Self::I16 => "b16",
-            Self::U16 => "b16",
-            Self::I32 => "b32",
-            Self::U32 => "b32",
-            Self::I64 => "b64",
-            Self::U64 => "b64",
-            // Self::Ptr => "b64",
-            Self::F16 => "b16",
-            Self::F32 => "b32",
-            Self::F64 => "b64",
-        }
-    }
     // Returns the size/stride of this variable
     pub fn size(&self) -> usize {
         match self {

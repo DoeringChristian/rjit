@@ -1,6 +1,60 @@
-use crate::schedule::{Env, SVarId, ScheduleIr};
+use crate::schedule::{Env, SVarId, ScheduleIr, ScheduleVar};
 use crate::trace::VarType;
 use crate::var::{Op, ParamType, ReduceOp};
+
+// Returns the register prefix for this variable
+pub fn prefix(ty: &VarType) -> &'static str {
+    match ty {
+        VarType::Void => "%u",
+        VarType::Bool => "%p",
+        VarType::I8 => "%b",
+        VarType::U8 => "%b",
+        VarType::I16 => "%w",
+        VarType::U16 => "%w",
+        VarType::I32 => "%r",
+        VarType::U32 => "%r",
+        VarType::I64 => "%rd",
+        VarType::U64 => "%rd",
+        VarType::F16 => "%h",
+        VarType::F32 => "%f",
+        VarType::F64 => "%d",
+    }
+}
+// Retuns the cuda/ptx Representation for this type
+pub fn tyname(ty: &VarType) -> &'static str {
+    match ty {
+        VarType::Void => "???",
+        VarType::Bool => "pred",
+        VarType::I8 => "s8",
+        VarType::U8 => "u8",
+        VarType::I16 => "s16",
+        VarType::U16 => "u16",
+        VarType::I32 => "s32",
+        VarType::U32 => "u32",
+        VarType::I64 => "s64",
+        VarType::U64 => "u64",
+        VarType::F16 => "f16",
+        VarType::F32 => "f32",
+        VarType::F64 => "f64",
+    }
+}
+pub fn tyname_bin(ty: &VarType) -> &'static str {
+    match ty {
+        VarType::Void => "???",
+        VarType::Bool => "pred",
+        VarType::I8 => "b8",
+        VarType::U8 => "b8",
+        VarType::I16 => "b16",
+        VarType::U16 => "b16",
+        VarType::I32 => "b32",
+        VarType::U32 => "b32",
+        VarType::I64 => "b64",
+        VarType::U64 => "b64",
+        VarType::F16 => "b16",
+        VarType::F32 => "b32",
+        VarType::F64 => "b64",
+    }
+}
 
 fn reduce_op_name(op: ReduceOp) -> &'static str {
     match op {
@@ -14,12 +68,21 @@ fn reduce_op_name(op: ReduceOp) -> &'static str {
     }
 }
 
+pub struct Reg<'a>(pub SVarId, pub &'a ScheduleVar);
+impl<'a> std::fmt::Display for Reg<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", prefix(&self.1.ty), self.1.reg)
+    }
+}
+
 pub fn assemble_entry(
     asm: &mut impl std::fmt::Write,
     ir: &ScheduleIr,
     env: &Env,
     entry_point: &str,
 ) -> std::fmt::Result {
+    let reg = |id| Reg(id, ir.var(id));
+
     let n_params = 1 + env.buffers().len() + env.textures().len(); // Add 1 for size
     let n_regs = ir.n_regs();
 
@@ -111,8 +174,8 @@ pub fn assemble_entry(
                     writeln!(
                         asm,
                         "\tld.param.{} {}, [params+{}];",
-                        var.ty.name_cuda(),
-                        var.reg(),
+                        tyname(&var.ty),
+                        reg(id),
                         param_offset
                     )?;
                     continue;
@@ -125,13 +188,13 @@ pub fn assemble_entry(
 
                 if var.ty == VarType::Bool {
                     writeln!(asm, "\tld.global.cs.u8 %w0, [%rd0];")?;
-                    writeln!(asm, "\tsetp.ne.u16 {}, %w0, 0;", var.reg())?;
+                    writeln!(asm, "\tsetp.ne.u16 {}, %w0, 0;", reg(id))?;
                 } else {
                     writeln!(
                         asm,
                         "\tld.global.cs.{} {}, [%rd0];",
-                        var.ty.name_cuda(),
-                        var.reg(),
+                        tyname(&var.ty),
+                        reg(id),
                     )?;
                 }
             }
@@ -159,14 +222,14 @@ pub fn assemble_entry(
                 )?;
 
                 if var.ty == VarType::Bool {
-                    writeln!(asm, "\tselp.u16 %w0, 1, 0, {};", var.reg())?;
+                    writeln!(asm, "\tselp.u16 %w0, 1, 0, {};", reg(id))?;
                     writeln!(asm, "\tst.global.cs.u8 [%rd0], %w0;")?;
                 } else {
                     writeln!(
                                asm,
                                "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
-                               var.ty.name_cuda(),
-                               var.reg(),
+                               tyname(&var.ty),
+                               reg(id),
                            )?;
                 }
             }
@@ -196,15 +259,18 @@ pub fn assemble_entry(
 pub fn assemble_var(
     asm: &mut impl std::fmt::Write,
     ir: &ScheduleIr,
-    id: SVarId,
+    vid: SVarId,
     opaque_offset: usize,
     buf_offset: usize,
     tex_offset: usize,
     params_type: &'static str,
 ) -> std::fmt::Result {
-    let var = ir.var(id);
+    let reg = |id| Reg(id, ir.var(id));
+    let ridx = |id| ir.var(id).reg;
+
+    let var = ir.var(vid);
     writeln!(asm, "")?;
-    writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
+    writeln!(asm, "\t// [{}]: {:?} =>", vid, var)?;
 
     match var.op {
         Op::Literal => {
@@ -212,8 +278,8 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tld.{params_type}.{} {}, [{}+{}];",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
+                    tyname_bin(&var.ty),
+                    reg(vid),
                     "params",
                     (opaque_offset + opaque) * 8
                 )?;
@@ -222,8 +288,8 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tmov.{} {}, 0x{:x};\n",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
+                    tyname_bin(&var.ty),
+                    reg(vid),
                     var.literal
                 )?;
             }
@@ -234,16 +300,16 @@ pub fn assemble_var(
                     asm,
                     "\tneg.s{} {}, {};",
                     var.ty.size() * 8,
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tneg.{} {}, {};\n",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             }
         }
@@ -251,9 +317,9 @@ pub fn assemble_var(
             writeln!(
                 asm,
                 "\tnot.{} {}, {};",
-                var.ty.name_cuda_bin(),
-                var.reg(),
-                ir.reg(var.deps[0])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0])
             )?;
         }
         Op::Sqrt => {
@@ -261,17 +327,17 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tsqrt.approx.ftz.{} {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tsqrt.rn.{} {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             }
         }
@@ -279,29 +345,29 @@ pub fn assemble_var(
             writeln!(
                 asm,
                 "\tabs.{} {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0])
             )?;
         }
         Op::Add => {
             writeln!(
                 asm,
                 "\tadd.{} {}, {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0]),
-                ir.reg(var.deps[1]),
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
+                reg(var.deps[1])
             )?;
         }
         Op::Sub => {
             writeln!(
                 asm,
                 "\tsub.{} {}, {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0]),
-                ir.reg(var.deps[1])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
+                reg(var.deps[1]),
             )?;
         }
         Op::Mul => {
@@ -309,28 +375,28 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tmul.ftz.{} {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             } else if var.ty.is_double() {
                 writeln!(
                     asm,
                     "\tmul.{} {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tmul.lo.{} {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             }
         }
@@ -339,28 +405,28 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tdiv.approx.ftz.{} {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             } else if var.ty.is_double() {
                 writeln!(
                     asm,
                     "\tdiv.rn.{} {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tdiv.{} {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             }
         }
@@ -368,20 +434,20 @@ pub fn assemble_var(
             writeln!(
                 asm,
                 "\trem.{} {}, {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0]),
-                ir.reg(var.deps[1])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
+                reg(var.deps[1])
             )?;
         }
         Op::Mulhi => {
             writeln!(
                 asm,
                 "\tmul.hi.{} {}, {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0]),
-                ir.reg(var.deps[1])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
+                reg(var.deps[1])
             )?;
         }
         Op::Fma => {
@@ -389,31 +455,31 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tfma.rn.ftz.{} {}, {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
-                    ir.reg(var.deps[2]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
+                    reg(var.deps[2])
                 )?;
             } else if var.ty.is_double() {
                 writeln!(
                     asm,
                     "\tfma.rn.{} {}, {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
-                    ir.reg(var.deps[2]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
+                    reg(var.deps[2]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tmad.lo.{} {}, {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
-                    ir.reg(var.deps[2]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
+                    reg(var.deps[2]),
                 )?;
             }
         }
@@ -422,19 +488,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tmin.ftz.{} {}, {}, {};\n",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tmin.{} {}, {}, {};\n",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             }
         }
@@ -443,19 +509,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tmax.ftz.{} {}, {}, {};\n",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tmax.{} {}, {}, {};\n",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             }
         }
@@ -463,36 +529,36 @@ pub fn assemble_var(
             writeln!(
                 asm,
                 "\tcvt.rpi.{0}.{0} {1}, {2};\n",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0]),
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
             )?;
         }
         Op::Floor => {
             writeln!(
                 asm,
                 "\tcvt.rmi.{0}.{0} {1}, {2};\n",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0]),
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
             )?;
         }
         Op::Round => {
             writeln!(
                 asm,
                 "\tcvt.rni.{0}.{0} {1}, {2};\n",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0]),
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
             )?;
         }
         Op::Trunc => {
             writeln!(
                 asm,
                 "\tcvt.rzi.{0}.{0} {1}, {2};\n",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0]),
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
             )?;
         }
         Op::Eq => {
@@ -501,19 +567,19 @@ pub fn assemble_var(
                     asm,
                     "\txor.{0} {1}, {2}, {3};\n\
                         \tnot.{0} {1}, {1};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tsetp.eq.{}, {}, {}, {};\n",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             }
         }
@@ -522,19 +588,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\txor.{} {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tsetp.ne.{} {}, {}, {};\n",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             }
         }
@@ -543,19 +609,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tsetp.lo.{} {}, {}, {};",
-                    ir.var(var.deps[0]).ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&ir.var(var.deps[0]).ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tsetp.lt.{} {}, {}, {};",
-                    ir.var(var.deps[0]).ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&ir.var(var.deps[0]).ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             }
         }
@@ -564,19 +630,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tsetp.ls.{} {}, {}, {};",
-                    ir.var(var.deps[0]).ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&ir.var(var.deps[0]).ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tsetp.le.{} {}, {}, {};",
-                    ir.var(var.deps[0]).ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&ir.var(var.deps[0]).ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             }
         }
@@ -585,19 +651,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tsetp.hi.{} {}, {}, {};",
-                    ir.var(var.deps[0]).ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&ir.var(var.deps[0]).ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tsetp.gt.{} {}, {}, {};",
-                    ir.var(var.deps[0]).ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&ir.var(var.deps[0]).ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             }
         }
@@ -606,19 +672,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tsetp.hs.{} {}, {}, {};",
-                    ir.var(var.deps[0]).ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&ir.var(var.deps[0]).ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tsetp.ge.{} {}, {}, {};",
-                    ir.var(var.deps[0]).ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname(&ir.var(var.deps[0]).ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             }
         }
@@ -627,11 +693,11 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tselp.{} {}, {}, {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[1]),
-                    ir.reg(var.deps[2]),
-                    ir.reg(var.deps[0])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[1]),
+                    reg(var.deps[2]),
+                    reg(var.deps[0])
                 )?;
             } else {
                 write!(
@@ -639,11 +705,11 @@ pub fn assemble_var(
                     "\tand.pred %p3, {}, {};\n\
                         \tand.pred %p2, !{}, {};\n\
                         \tor.pred {}, %p2, %p3;\n",
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1]),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[2]),
-                    var.reg()
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
+                    reg(var.deps[0]),
+                    reg(var.deps[2]),
+                    reg(vid),
                 )?;
             }
         }
@@ -652,19 +718,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tpopc.{} {}, {};",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             } else {
                 write!(
                     asm,
                     "\tpopc.{} %r3, {};\n\
                         \tcvt.{}.u32 {}, %r3;\n",
-                    var.ty.name_cuda_bin(),
-                    ir.reg(var.deps[0]),
-                    var.ty.name_cuda(),
-                    var.reg()
+                    tyname_bin(&var.ty),
+                    reg(var.deps[0]),
+                    tyname(&var.ty),
+                    reg(vid),
                 )?;
             }
         }
@@ -673,19 +739,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tclz.{} {}, {};",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             } else {
                 write!(
                     asm,
                     "\tclz.{} %r3, {};\n\
                         \tcvt.{}.u32 {}, %r3;\n",
-                    var.ty.name_cuda_bin(),
-                    ir.reg(var.deps[0]),
-                    var.ty.name_cuda(),
-                    var.reg()
+                    tyname_bin(&var.ty),
+                    reg(var.deps[0]),
+                    tyname(&var.ty),
+                    reg(vid),
                 )?;
             }
         }
@@ -695,12 +761,12 @@ pub fn assemble_var(
                     asm,
                     "\tbrev.{} {}, {};\n\
                         \tclz.{} {}, {};\n",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    var.reg()
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(vid),
                 )?;
             } else {
                 write!(
@@ -708,13 +774,13 @@ pub fn assemble_var(
                     "\tbrev.{} {}, {};\n\
                         \tclz.{} %r3, {};\n\
                         \tcvt.{}.u32 {}, %r3;\n",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    var.ty.name_cuda_bin(),
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    var.reg()
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    tyname_bin(&var.ty),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(vid),
                 )?;
             }
         }
@@ -726,19 +792,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tand.{} {}, {}, {};",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    d0.reg(),
-                    d1.reg()
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tselp.{} {}, {}, 0, {};",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    d0.reg(),
-                    d1.reg()
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             }
         }
@@ -750,19 +816,19 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tor.{} {}, {}, {};",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    d0.reg(),
-                    d1.reg()
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tselp.{} {}, -1, {}, {};",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    d0.reg(),
-                    d1.reg()
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1]),
                 )?;
             }
         }
@@ -770,10 +836,10 @@ pub fn assemble_var(
             writeln!(
                 asm,
                 "\txor.{} {}, {}, {};",
-                var.ty.name_cuda_bin(),
-                var.reg(),
-                ir.reg(var.deps[0]),
-                ir.reg(var.deps[1])
+                tyname_bin(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
+                reg(var.deps[1])
             )?;
         }
         Op::Shl => {
@@ -781,21 +847,21 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tshl.{} {}, {}, {};",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             } else {
                 write!(
                     asm,
                     "\tcvt.u32.{} %r3, {};\n\
                         \tshl.{} {}, {}, %r3;\n",
-                    ir.var(var.deps[1]).ty.name_cuda(),
-                    ir.reg(var.deps[1]),
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname(&ir.var(var.deps[1]).ty),
+                    reg(var.deps[1]),
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             }
         }
@@ -804,21 +870,21 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\tshr.{} {}, {}, {};",
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    ir.reg(var.deps[1])
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    reg(var.deps[1])
                 )?;
             } else {
                 write!(
                     asm,
                     "\tcvt.u32.{} %r3, {};\n\
                         \tshr.{} {}, {}, %r3;\n",
-                    ir.var(var.deps[1]).ty.name_cuda(),
-                    ir.reg(var.deps[1]),
-                    var.ty.name_cuda_bin(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname(&ir.var(var.deps[1]).ty),
+                    reg(var.deps[1]),
+                    tyname_bin(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             }
         }
@@ -827,17 +893,17 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\trcp.approx.ftz.{} {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\trcp.rn.{} {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             }
         }
@@ -846,21 +912,21 @@ pub fn assemble_var(
                 writeln!(
                     asm,
                     "\trsqrt.approx.ftz.{} {}, {};",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0])
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0])
                 )?;
             } else {
                 write!(
                     asm,
                     "\trcp.rn.{} {}, {};\n\
                     \tsqrt.rn.{} {}, {};\n",
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    ir.reg(var.deps[0]),
-                    var.ty.name_cuda(),
-                    var.reg(),
-                    var.reg()
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
+                    tyname(&var.ty),
+                    reg(vid),
+                    reg(vid),
                 )?;
             }
         }
@@ -868,36 +934,36 @@ pub fn assemble_var(
             writeln!(
                 asm,
                 "\tsin.approx.ftz.{} {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0])
             )?;
         }
         Op::Cos => {
             writeln!(
                 asm,
                 "\tcos.approx.ftz.{} {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0])
             )?;
         }
         Op::Exp2 => {
             writeln!(
                 asm,
                 "\tex2.approx.ftz.{} {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0])
             )?;
         }
         Op::Log2 => {
             writeln!(
                 asm,
                 "\tlg2.approx.ftz.{} {}, {};",
-                var.ty.name_cuda(),
-                var.reg(),
-                ir.reg(var.deps[0])
+                tyname(&var.ty),
+                reg(vid),
+                reg(var.deps[0])
             )?;
         }
         Op::Cast => {
@@ -907,17 +973,17 @@ pub fn assemble_var(
                     writeln!(
                         asm,
                         "\tsetp.ne.{} {}, {}, 0.0;",
-                        d0.ty.name_cuda(),
-                        var.reg(),
-                        d0.reg()
+                        tyname(&d0.ty),
+                        reg(vid),
+                        reg(var.deps[0]),
                     )?;
                 } else {
                     writeln!(
                         asm,
                         "\tsetp.ne.{} {}, {}, 0;",
-                        d0.ty.name_cuda(),
-                        var.reg(),
-                        d0.reg()
+                        tyname(&d0.ty),
+                        reg(vid),
+                        reg(var.deps[0]),
                     )?;
                 }
             } else if d0.ty.is_bool() {
@@ -925,54 +991,54 @@ pub fn assemble_var(
                     writeln!(
                         asm,
                         "\tselp.{} {}, 1.0, 0.0, {};",
-                        var.ty.name_cuda(),
-                        var.reg(),
-                        d0.reg()
+                        tyname(&var.ty),
+                        reg(vid),
+                        reg(var.deps[0]),
                     )?;
                 } else {
                     writeln!(
                         asm,
                         "\tselp.{} {}, 1, 0, {};",
-                        var.ty.name_cuda(),
-                        var.reg(),
-                        d0.reg()
+                        tyname(&var.ty),
+                        reg(vid),
+                        reg(var.deps[0]),
                     )?;
                 }
             } else if var.ty.is_float() && !d0.ty.is_float() {
                 writeln!(
                     asm,
                     "\tcvt.rn.{}.{} {}, {};",
-                    var.ty.name_cuda(),
-                    d0.ty.name_cuda(),
-                    var.reg(),
-                    d0.reg()
+                    tyname(&var.ty),
+                    tyname(&d0.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
                 )?;
             } else if !var.ty.is_float() && d0.ty.is_float() {
                 writeln!(
                     asm,
                     "\tcvt.rzi.{}.{} {}, {};",
-                    var.ty.name_cuda(),
-                    d0.ty.name_cuda(),
-                    var.reg(),
-                    d0.reg()
+                    tyname(&var.ty),
+                    tyname(&d0.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
                 )?;
             } else if var.ty.is_float() && d0.ty.is_float() && var.ty.size() < d0.ty.size() {
                 writeln!(
                     asm,
                     "\tcvt.rn.{}.{} {}, {};",
-                    var.ty.name_cuda(),
-                    d0.ty.name_cuda(),
-                    var.reg(),
-                    d0.reg()
+                    tyname(&var.ty),
+                    tyname(&d0.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tcvt.{}.{} {}, {};",
-                    var.ty.name_cuda(),
-                    d0.ty.name_cuda(),
-                    var.reg(),
-                    d0.reg()
+                    tyname(&var.ty),
+                    tyname(&d0.ty),
+                    reg(vid),
+                    reg(var.deps[0]),
                 )?;
             }
         }
@@ -980,21 +1046,21 @@ pub fn assemble_var(
             writeln!(
                 asm,
                 "\tmov.{} {}, {};",
-                var.ty.name_cuda_bin(),
-                var.reg(),
-                ir.reg(var.deps[0])
+                tyname_bin(&var.ty),
+                reg(vid),
+                reg(var.deps[0])
             )?;
         }
         Op::Gather => {
             let src = ir.var(var.deps[0]);
-            let index = ir.var(var.deps[1]);
-            let mask = ir.var(var.deps[2]);
-            let unmasked = mask.is_literal() && mask.literal != 0;
+            let index = var.deps[1];
+            let mask = var.deps[2];
+            let unmasked = ir.var(mask).is_literal() && ir.var(mask).literal != 0;
             let is_bool = var.ty.is_bool();
 
             // TODO: better buffer loading ( dont use as_ptr and get ptr from src in here).
             if !unmasked {
-                writeln!(asm, "\t@!{} bra l_{}_masked;", mask.reg(), var.reg_idx())?;
+                writeln!(asm, "\t@!{} bra l_{}_masked;", reg(mask), ridx(vid))?;
             }
 
             // Load buffer ptr:
@@ -1013,16 +1079,16 @@ pub fn assemble_var(
                     asm,
                     "\tcvt.u64.{} %rd3, {};\n\
                         \tadd.u64 %rd3, %rd3, %rd0;\n",
-                    index.ty.name_cuda(),
-                    index.reg(),
+                    tyname(&ir.var(index).ty),
+                    reg(index),
                     // d0.reg()
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tmad.wide.{} %rd3, {}, {}, %rd0;",
-                    index.ty.name_cuda(),
-                    index.reg(),
+                    tyname(&ir.var(index).ty),
+                    reg(index),
                     var.ty.size(),
                     // d0.reg()
                 )?;
@@ -1032,14 +1098,14 @@ pub fn assemble_var(
                     asm,
                     "\tld.global.nc.u8 %w0, [%rd3];\n\
                         \tsetp.ne.u16 {}, %w0, 0;\n",
-                    var.reg()
+                    reg(vid),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tld.global.nc.{} {}, [%rd3];",
-                    var.ty.name_cuda(),
-                    var.reg()
+                    tyname(&var.ty),
+                    reg(vid),
                 )?;
             }
             if !unmasked {
@@ -1049,23 +1115,23 @@ pub fn assemble_var(
                         l_{0}_masked:\n\
                             mov.{1} {2}, 0;\n\n\
                         l_{0}_done:\n",
-                    var.reg_idx(),
-                    var.ty.name_cuda_bin(),
-                    var.reg()
+                    ridx(vid),
+                    tyname_bin(&var.ty),
+                    reg(vid),
                 )?;
             }
         }
         Op::Scatter { op } => {
-            let src = ir.var(var.deps[0]);
+            let src = var.deps[0];
             let dst = ir.var(var.deps[1]);
-            let idx = ir.var(var.deps[2]);
-            let mask = ir.var(var.deps[3]);
+            let index = var.deps[2];
+            let mask = var.deps[3];
 
-            let unmasked = idx.is_literal() && idx.literal != 0;
-            let is_bool = src.ty.is_bool();
+            let unmasked = ir.var(index).is_literal() && ir.var(index).literal != 0;
+            let is_bool = ir.var(src).ty.is_bool();
 
             if !unmasked {
-                writeln!(asm, "\t@!{} bra l_{}_done;\n", mask.reg(), var.reg_idx())?;
+                writeln!(asm, "\t@!{} bra l_{}_done;\n", reg(mask), ridx(vid))?;
             }
 
             let param_offset = (dst.buf.unwrap() + buf_offset) * 8;
@@ -1076,28 +1142,28 @@ pub fn assemble_var(
                 param_offset,
             )?;
 
-            if src.ty.size() == 1 {
+            if ir.var(src).ty.size() == 1 {
                 write!(
                     asm,
                     "\tcvt.u64.{} %rd3, {};\n\
                         \tadd.u64 %rd3, %rd3, %rd0;\n",
-                    src.ty.name_cuda(),
-                    idx.reg(),
+                    tyname(&ir.var(src).ty),
+                    reg(index),
                 )?;
             } else {
                 writeln!(
                     asm,
                     "\tmad.wide.{} %rd3, {}, {}, %rd0;",
-                    idx.ty.name_cuda(),
-                    idx.reg(),
-                    src.ty.size(),
+                    tyname(&ir.var(index).ty),
+                    reg(index),
+                    ir.var(src).ty.size(),
                 )?;
             }
 
             let op_type = if op == ReduceOp::None { "st" } else { "red" };
             let op = reduce_op_name(op);
             if is_bool {
-                writeln!(asm, "\tselp.u16 %w0, 1, 0, {};", src.reg())?;
+                writeln!(asm, "\tselp.u16 %w0, 1, 0, {};", reg(src))?;
                 writeln!(asm, "\t{}.global{}.u8 [%rd3], %w0;", op_type, op)?;
             } else {
                 writeln!(
@@ -1105,17 +1171,17 @@ pub fn assemble_var(
                     "\t{}.global{}.{} [%rd3], {};",
                     op_type,
                     op,
-                    src.ty.name_cuda(),
-                    src.reg()
+                    tyname(&ir.var(src).ty),
+                    reg(src),
                 )?;
             }
 
             if !unmasked {
-                writeln!(asm, "\tl_{}_done:", var.reg_idx())?;
+                writeln!(asm, "\tl_{}_done:", ridx(vid))?;
             }
         }
         Op::Idx => {
-            writeln!(asm, "\tmov.{} {}, %r0;\n", var.ty.name_cuda(), var.reg())?;
+            writeln!(asm, "\tmov.{} {}, %r0;\n", tyname(&var.ty), reg(vid))?;
         }
         Op::TexLookup { dim } => {
             let src = ir.var(var.deps[0]);
@@ -1129,36 +1195,36 @@ pub fn assemble_var(
                 param_offset,
             )?;
 
-            writeln!(asm, "\t.reg.f32 {}_out_<4>;", var.reg())?;
+            writeln!(asm, "\t.reg.f32 {}_out_<4>;", reg(vid))?;
             if dim == 3 {
                 writeln!(
                     asm,
                     "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
                              {v}_out_3}}, [%rd0, {{{d1}, {d2}, {d3}, {d3}}}];",
-                    v = var.reg(),
-                    // d0 = ir.reg(var.deps[0]),
-                    d1 = ir.reg(var.deps[1]),
-                    d2 = ir.reg(var.deps[2]),
-                    d3 = ir.reg(var.deps[3])
+                    v = reg(vid),
+                    // d0 = reg(var.deps[0]),
+                    d1 = reg(var.deps[1]),
+                    d2 = reg(var.deps[2]),
+                    d3 = reg(var.deps[3])
                 )?;
             } else if dim == 2 {
                 writeln!(
                     asm,
                     "\ttex.2d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
                              {v}_out_3}}, [%rd0, {{{d1}, {d2}}}];",
-                    v = var.reg(),
-                    // d0 = ir.reg(var.deps[0]),
-                    d1 = ir.reg(var.deps[1]),
-                    d2 = ir.reg(var.deps[2]),
+                    v = reg(vid),
+                    // d0 = reg(var.deps[0]),
+                    d1 = reg(var.deps[1]),
+                    d2 = reg(var.deps[2]),
                 )?;
             } else if dim == 1 {
                 writeln!(
                     asm,
                     "\ttex.1d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
                              {v}_out_3}}, [%rd0, {{{d1}}}];",
-                    v = var.reg(),
-                    // d0 = ir.reg(var.deps[0]),
-                    d1 = ir.reg(var.deps[1]),
+                    v = reg(vid),
+                    // d0 = reg(var.deps[0]),
+                    d1 = reg(var.deps[1]),
                 )?;
             } else {
                 unimplemented!();
@@ -1168,9 +1234,9 @@ pub fn assemble_var(
             writeln!(
                 asm,
                 "\tmov.{} {}, {}_out_{};",
-                var.ty.name_cuda_bin(),
-                var.reg(),
-                ir.reg(var.deps[0]),
+                tyname_bin(&var.ty),
+                reg(vid),
+                reg(var.deps[0]),
                 offset
             )?;
         }

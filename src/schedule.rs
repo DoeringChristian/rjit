@@ -44,30 +44,20 @@ impl ScheduleVar {
     }
 }
 
-///
-/// Helper struct for printing register names.
-/// <prefix><register_index>
-///
-pub struct Reg<'a>(pub &'a ScheduleVar);
-impl<'a> std::fmt::Display for Reg<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.0.ty.prefix(), self.0.reg)
-    }
-}
 impl ScheduleVar {
-    ///
-    /// Returns a helper struct (Reg) that can be displayed with the correct prefix for the
-    /// variable type.
-    ///
-    pub fn reg(&self) -> Reg {
-        Reg(self)
-    }
-    ///
-    /// Returns the raw index of the register for this variable.
-    ///
-    pub fn reg_idx(&self) -> usize {
-        self.reg
-    }
+    // ///
+    // /// Returns a helper struct (Reg) that can be displayed with the correct prefix for the
+    // /// variable type.
+    // ///
+    // pub fn reg(&self) -> Reg {
+    //     Reg(self)
+    // }
+    // ///
+    // /// Returns the raw index of the register for this variable.
+    // ///
+    // pub fn reg_idx(&self) -> usize {
+    //     self.reg
+    // }
 }
 
 #[derive(Debug, Default)]
@@ -140,9 +130,9 @@ impl ScheduleIr {
     pub fn var_mut(&mut self, id: SVarId) -> &mut ScheduleVar {
         &mut self.vars[id.0]
     }
-    pub fn reg(&self, id: SVarId) -> Reg {
-        self.var(id).reg()
-    }
+    // pub fn reg(&self, id: SVarId) -> Reg {
+    //     self.var(id).reg()
+    // }
     pub fn n_regs(&self) -> usize {
         self.n_regs
     }
