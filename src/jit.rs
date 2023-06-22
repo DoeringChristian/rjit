@@ -23,9 +23,6 @@ use crate::var::{Data, Op};
 ///
 #[derive(Debug, Default)]
 pub struct Jit {
-    // schedules: Vec<ScheduleIr>,
-    // hashes: Vec<u128>,
-    // passes: Vec<Pass>,
     pub kernels: HashMap<u128, Box<dyn Kernel>>,
 }
 
@@ -133,6 +130,7 @@ impl Jit {
             // Set op and type for next kernel:
             // var.param_ty = ParamType::Input;
             var.op = Op::Data;
+            var.dirty = false;
 
             // Clear dependencies:
             let deps = var.deps.clone();

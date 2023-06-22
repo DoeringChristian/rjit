@@ -355,3 +355,23 @@ fn scatter_const_mask() {
 
     assert_eq!(dst.to_host_f32(), vec![1., 0., 1.]);
 }
+#[test]
+fn scatter_gather() {
+    let ir = Trace::default();
+    ir.set_backend("cuda");
+
+    let dst = ir.buffer_u32(&[0, 0, 0]);
+    let idx = ir.index(3);
+
+    let x = ir.buffer_u32(&[1, 1, 1]);
+
+    x.scatter(&dst, &idx, None);
+
+    let y = dst.gather(&idx, None);
+
+    y.schedule();
+    ir.eval();
+
+    assert_eq!(dst.to_host_u32(), vec![1, 1, 1]);
+    assert_eq!(y.to_host_u32(), vec![1, 1, 1]);
+}

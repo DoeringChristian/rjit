@@ -249,13 +249,11 @@ pub struct Var {
     // pub last_write: Option<VarId>,
     pub ty: VarType, // Type of the variable
     // pub buffer: Option<Arc<dyn Buffer>>, // Optional buffer
-    // TODO: unify buffer and texture to
-    // single enum
-    // pub texture: Option<Arc<dyn Texture>>,
     pub size: usize, // number of elements
     pub rc: usize,
     pub data: Data,
     pub opaque: bool,
+    pub dirty: bool,
     pub scope: u32,
     // pub literal: u64,
 }

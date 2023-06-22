@@ -762,8 +762,14 @@ impl VarRef {
             }));
         }
     }
-    pub fn scatter_reduce(&self, dst: &Self, idx: &Self, mask: Option<&Self>, reduce_op: ReduceOp) {
-        dst.schedule();
+    pub fn scatter_reduce(
+        &self,
+        target: &Self,
+        idx: &Self,
+        mask: Option<&Self>,
+        reduce_op: ReduceOp,
+    ) {
+        target.schedule();
         self.ir.eval();
 
         let mask: VarRef = mask
@@ -777,10 +783,11 @@ impl VarRef {
 
         let res = self.ir.push_var(Var {
             op: Op::Scatter { op: reduce_op },
-            deps: smallvec![self.id(), dst.id(), idx.id(), mask.id()],
+            deps: smallvec![self.id(), target.id(), idx.id(), mask.id()],
             size,
             ..Default::default()
         });
+        target.var().dirty = true;
         res.schedule();
     }
     pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
@@ -804,6 +811,10 @@ impl VarRef {
 
         let size = index.var().size;
         let ty = self.var().ty.clone();
+
+        if self.var().dirty || index.var().dirty {
+            self.ir.eval();
+        }
 
         let mask: VarRef = mask
             .map(|m| {
