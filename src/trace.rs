@@ -1024,9 +1024,9 @@ mod test {
 
                     ir.schedule(&[&y]);
 
-                    let mut jit = Jit::default();
-                    jit.eval(&mut ir.lock());
+                    ir.eval();
 
+                    insta::assert_snapshot!(ir.kernel_history());
 
                     for (i, calculated) in y.[<to_host_$ty>]().into_iter().enumerate(){
                         let expected = ($rop)(initial[i]);
@@ -1057,9 +1057,9 @@ mod test {
         let y = y.add(&x);
 
         y.schedule();
+        ir.eval();
 
-        let mut jit = Jit::default();
-        jit.eval(&mut ir.lock());
+        insta::assert_snapshot!(ir.kernel_history());
 
         assert_eq!(y.to_host_u32(), vec![11, 12, 13]);
     }
@@ -1076,9 +1076,9 @@ mod test {
         let y = y.add(&x);
 
         y.schedule();
+        ir.eval();
 
-        let mut jit = Jit::default();
-        jit.eval(&mut ir.lock());
+        insta::assert_snapshot!(ir.kernel_history());
 
         assert_eq!(y.to_host_u32(), vec![11, 12, 13]);
     }
