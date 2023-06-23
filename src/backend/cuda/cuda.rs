@@ -155,6 +155,10 @@ impl backend::Buffer for Buffer {
                 .unwrap();
         }
     }
+
+    fn ptr(&self) -> Option<u64> {
+        Some(self.dptr)
+    }
 }
 
 impl Drop for Buffer {

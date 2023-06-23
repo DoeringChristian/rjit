@@ -29,6 +29,7 @@ pub trait DeviceFuture: Debug + Sync + Send {
 pub trait Buffer: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
     fn copy_to_host(&self, dst: &mut [u8]);
+    fn ptr(&self) -> Option<u64>;
 }
 
 pub trait Backend: Debug + Sync + Send {

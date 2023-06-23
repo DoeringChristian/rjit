@@ -979,6 +979,18 @@ impl VarRef {
         res.make_opaque();
         res
     }
+    pub fn count(&self) -> Self {
+        todo!()
+    }
+    pub fn backend_ident(&self) -> &'static str {
+        self.ir.backend().ident()
+    }
+    pub fn ptr(&self) -> Option<u64> {
+        match self.var().data {
+            Data::Buffer(ref buf) => buf.ptr(),
+            _ => None,
+        }
+    }
 }
 
 impl Clone for VarRef {

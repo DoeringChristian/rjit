@@ -96,36 +96,24 @@ impl Jit {
 
         let first_register = ir.backend.as_ref().unwrap().first_register();
 
-        let launches = schedule_groups
+        let futures = schedule_groups
             .into_iter()
             .map(|sg| {
                 let mut s = ScheduleIr::new(first_register);
                 let mut env = Env::default();
                 s.collect_vars(&mut env, ir, &schedule[sg.range]);
                 let hash = s.internal_hash();
-                if !self.kernels.contains_key(&hash) {
-                    self.kernels.insert(hash, {
-                        ir.backend.as_ref().unwrap().compile_kernel(&s, &env)
-                    });
-                };
-                KernelLaunch {
-                    size: sg.size,
+
+                self.kernel_history.push(KernelHistroyEntry {
                     hash,
-                    env,
-                }
+                    size: sg.size,
+                });
+                self.kernels
+                    .entry(hash)
+                    .or_insert(ir.backend.as_ref().unwrap().compile_kernel(&s, &env))
+                    .execute_async(&mut env, sg.size)
             })
             .collect::<Vec<_>>();
-
-        let futures = launches.into_iter().map(|mut launch| {
-            self.kernel_history.push(KernelHistroyEntry {
-                hash: launch.hash,
-                size: launch.size,
-            });
-            self.kernels
-                .get_mut(&launch.hash)
-                .unwrap()
-                .execute_async(&mut launch.env, launch.size)
-        });
 
         // TODO: synchronisation here
         for future in futures {
