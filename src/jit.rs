@@ -39,12 +39,6 @@ struct ScheduleGroup {
     size: usize,
     range: Range<usize>,
 }
-#[derive(Debug)]
-struct KernelLaunch {
-    size: usize,
-    hash: u128,
-    env: Env,
-}
 
 impl Jit {
     ///

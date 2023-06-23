@@ -18,7 +18,7 @@ pub trait Texture: Debug + Sync + Send {
 
 pub trait Kernel: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
-    fn execute_async(&mut self, ir: &mut Env, size: usize) -> Arc<dyn DeviceFuture>;
+    fn execute_async(&mut self, env: &mut Env, size: usize) -> Arc<dyn DeviceFuture>;
     fn assembly(&self) -> &str;
 }
 
