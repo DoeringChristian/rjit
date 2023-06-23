@@ -2,6 +2,7 @@ use std::borrow::BorrowMut;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::ops::Range;
+use std::sync::Arc;
 
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -24,7 +25,7 @@ use crate::var::{Data, Op};
 ///
 #[derive(Debug, Default)]
 pub struct Jit {
-    pub kernels: HashMap<KernelKey, Box<dyn Kernel>>,
+    pub kernels: HashMap<KernelKey, Arc<dyn Kernel>>,
     pub kernel_history: Vec<KernelHistroyEntry>,
 }
 
@@ -158,6 +159,14 @@ impl Jit {
         }
         ir.scheduled.clear();
     }
+    pub fn launch_kernel(&mut self, name: &str, env: &mut Env, size: usize) {
+        self.kernels
+            .get_mut(&KernelKey::Name(String::from(name)))
+            .unwrap()
+            .execute_async(env, size)
+            .wait();
+    }
+    // pub fn launch_kernel(&self, ir: &mut Internal) {}
     ///
     /// Writes the kernel assemblies into a string which can then be checked by snapshot testing
     /// tools such as insta.

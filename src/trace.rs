@@ -12,6 +12,7 @@ use slotmap::{DefaultKey, SlotMap};
 use smallvec::smallvec;
 
 use crate::backend::Backend;
+use crate::schedule::Env;
 pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
 use crate::{AsVarType, Jit};
 
@@ -34,7 +35,7 @@ pub struct AccelDesc<'a> {
 /// A wrapper arrund an Intermediate Representation.
 ///
 #[derive(Clone, Debug, Default)]
-pub struct Trace(Arc<Mutex<Internal>>, Arc<Mutex<Jit>>);
+pub struct Trace(Arc<Mutex<Internal>>, pub Arc<Mutex<Jit>>);
 impl Deref for Trace {
     type Target = Arc<Mutex<Internal>>;
 
@@ -126,6 +127,21 @@ impl Trace {
     }
     pub fn kernel_history(&self) -> String {
         self.1.lock().kernel_history()
+    }
+    pub fn register_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn crate::backend::Kernel> {
+        self.1
+            .lock()
+            .kernels
+            .entry(crate::KernelKey::Name(String::from(entry_point)))
+            .or_insert(
+                self.0
+                    .lock()
+                    .backend
+                    .as_ref()
+                    .unwrap()
+                    .assemble_kernel(asm, entry_point),
+            )
+            .clone()
     }
 }
 macro_rules! buffer {
@@ -419,7 +435,7 @@ impl Internal {
 #[derive(Debug)]
 pub struct VarRef {
     id: VarId,
-    ir: Trace,
+    pub ir: Trace,
 }
 
 impl VarRef {
@@ -978,9 +994,6 @@ impl VarRef {
         let res = self.ir.push_var(var);
         res.make_opaque();
         res
-    }
-    pub fn count(&self) -> Self {
-        todo!()
     }
     pub fn backend_ident(&self) -> &'static str {
         self.ir.backend().ident()

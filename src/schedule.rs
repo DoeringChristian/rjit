@@ -74,7 +74,7 @@ impl Env {
         self.opaques.push(literal);
         idx
     }
-    fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
+    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
         let idx = self.buffers.len();
         self.buffers.push(buf.clone());
         idx

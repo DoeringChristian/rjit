@@ -41,9 +41,9 @@ impl Backend {
 unsafe impl Sync for Backend {}
 unsafe impl Send for Backend {}
 impl backend::Backend for Backend {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
+    // fn as_any(&self) -> &dyn std::any::Any {
+    //     self
+    // }
 
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
         Arc::new(Texture::create(&self.device, shape, n_channels))
@@ -67,9 +67,9 @@ impl backend::Backend for Backend {
         todo!()
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
+    // fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    //     self
+    // }
 
     fn set_compile_options(&mut self, compile_options: &backend::CompileOptions) {
         todo!()
@@ -83,16 +83,16 @@ impl backend::Backend for Backend {
         todo!()
     }
 
-    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn backend::Kernel> {
-        Box::new(Kernel::compile(&self.device, ir, env))
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Arc<dyn backend::Kernel> {
+        Arc::new(Kernel::compile(&self.device, ir, env))
     }
 
     fn ident(&self) -> &'static str {
         "CUDA"
     }
 
-    fn assemble_kernel(&self, asm: &str) -> Box<dyn backend::Kernel> {
-        Box::new(Kernel::assemble(&self.device, asm))
+    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn backend::Kernel> {
+        Arc::new(Kernel::assemble(&self.device, asm, entry_point))
     }
 }
 
@@ -386,9 +386,9 @@ impl Kernel {
 }
 
 impl Kernel {
-    pub fn assemble(device: &Device, asm: &str) -> Self {
+    pub fn assemble(device: &Device, asm: &str, entry_point: &str) -> Self {
         let module = Module::from_ptx(&device, &asm).unwrap();
-        let func = module.function(Kernel::ENTRY_POINT).unwrap();
+        let func = module.function(entry_point).unwrap();
 
         Self {
             asm: String::from(asm),
@@ -409,22 +409,35 @@ impl Kernel {
 
         log::trace!("{}", asm);
 
-        Self::assemble(device, &asm)
+        Self::assemble(device, &asm, Kernel::ENTRY_POINT)
     }
-}
+    pub fn launch_size(&self, size: usize) -> (u32, u32) {
+        let ctx = self.device.ctx();
+        unsafe {
+            let mut unused = 0;
+            let mut block_size = 0;
+            ctx.cuOccupancyMaxPotentialBlockSize(
+                &mut unused,
+                &mut block_size,
+                self.func.raw(),
+                None,
+                0,
+                0,
+            )
+            .check()
+            .unwrap();
+            let block_size = block_size as u32;
 
-unsafe impl Sync for Kernel {}
-unsafe impl Send for Kernel {}
-impl backend::Kernel for Kernel {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+            let grid_size = (size as u32 + block_size - 1) / block_size;
+
+            (grid_size, block_size)
+        }
     }
-
-    fn execute_async(
-        &mut self,
-        env: &mut crate::schedule::Env,
+    pub fn launch_with_size(
+        &self,
+        params: &mut [*mut std::ffi::c_void],
         size: usize,
-    ) -> Arc<dyn backend::DeviceFuture> {
+    ) -> Arc<DeviceFuture> {
         let ctx = self.device.ctx();
         unsafe {
             let mut stream = self
@@ -448,19 +461,6 @@ impl backend::Kernel for Kernel {
 
             let grid_size = (size as u32 + block_size - 1) / block_size;
 
-            let mut params = vec![size as u64];
-            params.extend(env.opaques());
-            params.extend(
-                env.buffers()
-                    .iter()
-                    .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().ptr()),
-            );
-            params.extend(
-                env.textures()
-                    .iter()
-                    .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
-            );
-
             ctx.cuLaunchKernel(
                 self.func.raw(),
                 grid_size,
@@ -471,16 +471,79 @@ impl backend::Kernel for Kernel {
                 1,
                 0,
                 stream.raw(),
-                [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
+                params.as_mut_ptr(),
                 std::ptr::null_mut(),
             )
             .check()
             .unwrap();
 
-            let mut event = Arc::new(Event::create(&self.device).unwrap());
-            stream.record_event(&event);
+            let event = Arc::new(Event::create(&self.device).unwrap());
+            stream.record_event(&event).unwrap();
             Arc::new(DeviceFuture { event, stream })
         }
+    }
+    pub fn launch(
+        &self,
+        params: &mut [*mut std::ffi::c_void],
+        block_count: u32,
+        thread_count: u32,
+        shared_mem_bytes: u32,
+    ) -> Arc<DeviceFuture> {
+        let ctx = self.device.ctx();
+        unsafe {
+            let mut stream = self
+                .device
+                .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
+                .unwrap();
+
+            ctx.cuLaunchKernel(
+                self.func.raw(),
+                block_count,
+                1,
+                1,
+                thread_count,
+                1,
+                1,
+                shared_mem_bytes,
+                stream.raw(),
+                params.as_mut_ptr(),
+                std::ptr::null_mut(),
+            )
+            .check()
+            .unwrap();
+
+            let event = Arc::new(Event::create(&self.device).unwrap());
+            stream.record_event(&event).unwrap();
+            Arc::new(DeviceFuture { event, stream })
+        }
+    }
+}
+
+unsafe impl Sync for Kernel {}
+unsafe impl Send for Kernel {}
+impl backend::Kernel for Kernel {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn execute_async(
+        &self,
+        env: &mut crate::schedule::Env,
+        size: usize,
+    ) -> Arc<dyn backend::DeviceFuture> {
+        let mut params = vec![size as u64];
+        params.extend(env.opaques());
+        params.extend(
+            env.buffers()
+                .iter()
+                .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().ptr()),
+        );
+        params.extend(
+            env.textures()
+                .iter()
+                .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
+        );
+        self.launch_with_size(&mut [params.as_mut_ptr() as *mut _], size)
     }
 
     fn assembly(&self) -> &str {
@@ -489,6 +552,10 @@ impl backend::Kernel for Kernel {
 
     fn backend_ident(&self) -> &'static str {
         "CUDA"
+    }
+
+    fn into_any(self: Arc<Self>) -> Arc<dyn std::any::Any> {
+        self
     }
 }
 

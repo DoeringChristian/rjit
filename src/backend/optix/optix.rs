@@ -110,13 +110,13 @@ impl Backend {
 unsafe impl Sync for Backend {}
 unsafe impl Send for Backend {}
 impl backend::Backend for Backend {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
+    // fn as_any(&self) -> &dyn std::any::Any {
+    //     self
+    // }
+    //
+    // fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    //     self
+    // }
 
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
         Arc::new(Texture::create(
@@ -181,15 +181,15 @@ impl backend::Backend for Backend {
         ))
     }
 
-    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn backend::Kernel> {
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Arc<dyn backend::Kernel> {
         if env.accels().is_empty() {
-            Box::new(crate::backend::cuda::Kernel::compile(
+            Arc::new(crate::backend::cuda::Kernel::compile(
                 self.device.cuda_device(),
                 ir,
                 env,
             ))
         } else {
-            Box::new(Kernel::compile(
+            Arc::new(Kernel::compile(
                 &self.device,
                 &self.compile_options,
                 self.miss.as_ref().unwrap(),
@@ -204,10 +204,11 @@ impl backend::Backend for Backend {
         "OptiX"
     }
 
-    fn assemble_kernel(&self, asm: &str) -> Box<dyn backend::Kernel> {
-        Box::new(crate::backend::cuda::Kernel::assemble(
+    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn backend::Kernel> {
+        Arc::new(crate::backend::cuda::Kernel::assemble(
             self.device.cuda_device(),
             asm,
+            entry_point,
         ))
     }
 }
@@ -325,7 +326,7 @@ impl backend::Kernel for Kernel {
     }
 
     fn execute_async(
-        &mut self,
+        &self,
         env: &mut crate::schedule::Env,
         size: usize,
     ) -> Arc<dyn backend::DeviceFuture> {
@@ -385,6 +386,10 @@ impl backend::Kernel for Kernel {
 
     fn backend_ident(&self) -> &'static str {
         "OptiX"
+    }
+
+    fn into_any(self: Arc<Self>) -> Arc<dyn std::any::Any> {
+        self
     }
 }
 

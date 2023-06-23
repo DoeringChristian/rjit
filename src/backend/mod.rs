@@ -5,6 +5,8 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use downcast_rs::{impl_downcast, Downcast, DowncastSync};
+
 use crate::schedule::{Env, ScheduleIr};
 
 pub trait Texture: Debug + Sync + Send {
@@ -16,12 +18,14 @@ pub trait Texture: Debug + Sync + Send {
     fn copy_to_buffer(&self, buf: &dyn Buffer);
 }
 
-pub trait Kernel: Debug + Sync + Send {
+pub trait Kernel: Debug + Sync + Send + DowncastSync {
     fn as_any(&self) -> &dyn Any;
-    fn execute_async(&mut self, env: &mut Env, size: usize) -> Arc<dyn DeviceFuture>;
+    fn into_any(self: Arc<Self>) -> Arc<dyn Any>;
+    fn execute_async(&self, env: &mut Env, size: usize) -> Arc<dyn DeviceFuture>;
     fn assembly(&self) -> &str;
     fn backend_ident(&self) -> &'static str;
 }
+impl_downcast!(sync Kernel);
 
 pub trait DeviceFuture: Debug + Sync + Send {
     fn wait(&self);
@@ -33,11 +37,9 @@ pub trait Buffer: Debug + Sync + Send {
     fn ptr(&self) -> Option<u64>;
 }
 
-pub trait Backend: Debug + Sync + Send {
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn Kernel>;
-    fn assemble_kernel(&self, asm: &str) -> Box<dyn Kernel>;
+pub trait Backend: Debug + Sync + Send + DowncastSync {
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Arc<dyn Kernel>;
+    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn Kernel>;
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn Texture>;
     fn buffer_uninit(&self, size: usize) -> Arc<dyn Buffer>;
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn Buffer>;
@@ -49,6 +51,8 @@ pub trait Backend: Debug + Sync + Send {
     fn push_hit_from_str(&mut self, entry_point: &str, source: &str);
     fn ident(&self) -> &'static str;
 }
+
+impl_downcast!(sync Backend);
 
 pub trait Accel: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
