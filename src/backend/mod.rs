@@ -37,7 +37,7 @@ pub trait Backend: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn Kernel>;
-    fn kernel_from_asm(&self, asm: &str) -> Box<dyn Kernel>;
+    fn assemble_kernel(&self, asm: &str) -> Box<dyn Kernel>;
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn Texture>;
     fn buffer_uninit(&self, size: usize) -> Arc<dyn Buffer>;
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn Buffer>;

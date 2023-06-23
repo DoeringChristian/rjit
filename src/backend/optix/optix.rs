@@ -185,14 +185,12 @@ impl backend::Backend for Backend {
         if env.accels().is_empty() {
             Box::new(crate::backend::cuda::Kernel::compile(
                 self.device.cuda_device(),
-                &self.stream,
                 ir,
                 env,
             ))
         } else {
             Box::new(Kernel::compile(
                 &self.device,
-                &self.stream,
                 &self.compile_options,
                 self.miss.as_ref().unwrap(),
                 &self.hit,
@@ -206,8 +204,11 @@ impl backend::Backend for Backend {
         "OptiX"
     }
 
-    fn kernel_from_asm(&self, asm: &str) -> Box<dyn backend::Kernel> {
-        todo!()
+    fn assemble_kernel(&self, asm: &str) -> Box<dyn backend::Kernel> {
+        Box::new(crate::backend::cuda::Kernel::assemble(
+            self.device.cuda_device(),
+            asm,
+        ))
     }
 }
 
@@ -236,7 +237,6 @@ impl Debug for Kernel {
 impl Kernel {
     pub fn compile(
         device: &Device,
-        stream: &Arc<Stream>,
         compile_options: &CompileOptions,
         miss: &(String, Arc<Module>),
         hit: &[(String, Arc<Module>)],

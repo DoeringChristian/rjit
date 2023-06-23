@@ -84,24 +84,15 @@ impl backend::Backend for Backend {
     }
 
     fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn backend::Kernel> {
-        Box::new(Kernel::compile(&self.device, &self.stream, ir, env))
+        Box::new(Kernel::compile(&self.device, ir, env))
     }
 
     fn ident(&self) -> &'static str {
         "CUDA"
     }
 
-    fn kernel_from_asm(&self, asm: &str) -> Box<dyn backend::Kernel> {
-        let module = Module::from_ptx(&self.device, &asm).unwrap();
-        let func = module.function(Kernel::ENTRY_POINT).unwrap();
-
-        Box::new(Kernel {
-            asm: String::from(asm),
-            module,
-            func,
-            device: self.device.clone(),
-            // stream: stream.clone(),
-        })
+    fn assemble_kernel(&self, asm: &str) -> Box<dyn backend::Kernel> {
+        Box::new(Kernel::assemble(&self.device, asm))
     }
 }
 
@@ -395,7 +386,18 @@ impl Kernel {
 }
 
 impl Kernel {
-    pub fn compile(device: &Device, stream: &Arc<Stream>, ir: &ScheduleIr, env: &Env) -> Self {
+    pub fn assemble(device: &Device, asm: &str) -> Self {
+        let module = Module::from_ptx(&device, &asm).unwrap();
+        let func = module.function(Kernel::ENTRY_POINT).unwrap();
+
+        Self {
+            asm: String::from(asm),
+            module,
+            func,
+            device: device.clone(),
+        }
+    }
+    pub fn compile(device: &Device, ir: &ScheduleIr, env: &Env) -> Self {
         assert!(env.accels().is_empty());
         // Assemble:
 
@@ -407,17 +409,7 @@ impl Kernel {
 
         log::trace!("{}", asm);
 
-        // Compile module:
-        let module = Module::from_ptx(&device, &asm).unwrap();
-        let func = module.function(Kernel::ENTRY_POINT).unwrap();
-
-        Kernel {
-            asm,
-            module,
-            func,
-            device: device.clone(),
-            // stream: stream.clone(),
-        }
+        Self::assemble(device, &asm)
     }
 }
 
