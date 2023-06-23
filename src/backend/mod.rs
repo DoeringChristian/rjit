@@ -44,6 +44,7 @@ pub trait Backend: Debug + Sync + Send {
     fn set_compile_options(&mut self, compile_options: &CompileOptions);
     fn set_miss_from_str(&mut self, entry_point: &str, source: &str);
     fn push_hit_from_str(&mut self, entry_point: &str, source: &str);
+    fn ident(&self) -> &'static str;
 }
 
 pub trait Accel: Debug + Sync + Send {

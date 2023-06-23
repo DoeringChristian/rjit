@@ -86,6 +86,10 @@ impl backend::Backend for Backend {
     fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Box<dyn backend::Kernel> {
         Box::new(Kernel::compile(&self.device, &self.stream, ir, env))
     }
+
+    fn ident(&self) -> &'static str {
+        "cuda"
+    }
 }
 
 impl Drop for Backend {

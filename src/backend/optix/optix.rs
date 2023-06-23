@@ -201,6 +201,10 @@ impl backend::Backend for Backend {
             ))
         }
     }
+
+    fn ident(&self) -> &'static str {
+        "optix"
+    }
 }
 
 pub struct Kernel {
