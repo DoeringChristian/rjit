@@ -5,7 +5,7 @@ expression: ir.kernel_history()
 Kernel History:
 Launched Kernel 12064201027955328215 with 3 elements
 ===============================================
-Kernel 12064201027955328215:
+Kernel 0x0000000000000000a76ca6ea822e04d7:
 
 .version 8.0
 .target sm_86

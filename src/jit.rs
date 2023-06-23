@@ -24,8 +24,22 @@ use crate::var::{Data, Op};
 ///
 #[derive(Debug, Default)]
 pub struct Jit {
-    pub kernels: HashMap<u128, Box<dyn Kernel>>,
+    pub kernels: HashMap<KernelKey, Box<dyn Kernel>>,
     pub kernel_history: Vec<KernelHistroyEntry>,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum KernelKey {
+    Hash(u128),
+    Name(String),
+}
+impl std::fmt::Display for KernelKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KernelKey::Hash(hash) => write!(f, "{:#034x?}", hash),
+            KernelKey::Name(name) => write!(f, "{name}"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -103,7 +117,7 @@ impl Jit {
                     size: sg.size,
                 });
                 self.kernels
-                    .entry(hash)
+                    .entry(KernelKey::Hash(hash))
                     .or_insert(ir.backend.as_ref().unwrap().compile_kernel(&s, &env))
                     .execute_async(&mut env, sg.size)
             })
