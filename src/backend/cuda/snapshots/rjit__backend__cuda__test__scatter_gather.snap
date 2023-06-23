@@ -6,7 +6,7 @@ Kernel History:
 Launched Kernel 5985965986441040345 with 3 elements
 Launched Kernel 17221763998659399932 with 3 elements
 ===============================================
-Kernel 0x000000000000000053126c59836391d9:
+Kernel 5985965986441040345:
 
 .version 8.0
 .target sm_86
@@ -69,7 +69,7 @@ done:
 	ret;
 }
 ===============================================
-Kernel 0x0000000000000000eeffff1ca9b450fc:
+Kernel 17221763998659399932:
 
 .version 8.0
 .target sm_86
