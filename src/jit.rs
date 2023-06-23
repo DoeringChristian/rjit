@@ -36,7 +36,7 @@ pub enum KernelKey {
 impl std::fmt::Display for KernelKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            KernelKey::Hash(hash) => write!(f, "{:#034x?}", hash),
+            KernelKey::Hash(hash) => write!(f, "{hash}"),
             KernelKey::Name(name) => write!(f, "{name}"),
         }
     }
