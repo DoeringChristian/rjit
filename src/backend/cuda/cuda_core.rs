@@ -313,6 +313,7 @@ impl Drop for Instance {
 
 #[derive(Debug)]
 pub struct Stream {
+    events: Vec<Arc<Event>>,
     raw: CUstream,
     device: Device,
 }
@@ -327,6 +328,7 @@ impl Stream {
             Ok(Self {
                 raw: stream,
                 device: device.clone(),
+                events: vec![],
             })
         }
     }
@@ -341,12 +343,13 @@ impl Stream {
     pub unsafe fn raw(&self) -> CUstream {
         self.raw
     }
-    pub fn enent(&self) -> Result<Event, Error> {
+    pub fn record_event(&mut self, event: &Arc<Event>) -> Result<(), Error> {
         let ctx = self.device.ctx();
         unsafe {
-            // ctx.cuEventCreate
+            ctx.cuEventRecord(event.raw(), self.raw()).check()?;
         }
-        todo!()
+        self.events.push(event.clone());
+        Ok(())
     }
 }
 
@@ -561,7 +564,7 @@ impl From<(u32, u32, u32)> for KernelSize {
 
 #[derive(Debug)]
 pub struct Event {
-    stream: Option<Arc<Stream>>,
+    // stream: Option<Arc<Stream>>,
     device: Device,
     event: CUevent,
 }
@@ -575,18 +578,13 @@ impl Event {
                 .check()?;
             Ok(Self {
                 device: device.clone(),
-                stream: None,
+                // stream: None,
                 event,
             })
         }
     }
-    pub fn record(&mut self, stream: &Arc<Stream>) -> Result<(), Error> {
-        let ctx = self.device.ctx();
-        unsafe {
-            ctx.cuEventRecord(self.event, stream.raw()).check()?;
-        }
-        self.stream = Some(stream.clone());
-        Ok(())
+    pub fn raw(&self) -> CUevent {
+        self.event
     }
     pub fn synchronize(&self) -> Result<(), Error> {
         let ctx = self.device.ctx();

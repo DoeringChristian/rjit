@@ -205,6 +205,10 @@ impl backend::Backend for Backend {
     fn ident(&self) -> &'static str {
         "optix"
     }
+
+    fn kernel_from_asm(&self, asm: &str) -> Box<dyn backend::Kernel> {
+        todo!()
+    }
 }
 
 pub struct Kernel {
@@ -355,7 +359,7 @@ impl backend::Kernel for Kernel {
         // let params = Buffer::uninit(&self.device.cuda_device(), 8 * params.len());
 
         unsafe {
-            let stream = self
+            let mut stream = self
                 .device
                 .cuda_device()
                 .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
@@ -367,8 +371,8 @@ impl backend::Kernel for Kernel {
                 .launch(&stream, params_buf.ptr(), params_buf.size(), size as u32)
                 .unwrap();
 
-            let mut event = Event::create(&self.device.cuda_device()).unwrap();
-            event.record(&self.stream).unwrap();
+            let event = Arc::new(Event::create(&self.device.cuda_device()).unwrap());
+            stream.record_event(&event).unwrap();
             Arc::new(DeviceFuture {
                 event,
                 params: params_buf,
@@ -570,7 +574,7 @@ unsafe impl Sync for DeviceFuture {}
 unsafe impl Send for DeviceFuture {}
 #[derive(Debug)]
 pub struct DeviceFuture {
-    event: Event,
+    event: Arc<Event>,
     params: Buffer,
     stream: Stream,
 }

@@ -90,6 +90,19 @@ impl backend::Backend for Backend {
     fn ident(&self) -> &'static str {
         "cuda"
     }
+
+    fn kernel_from_asm(&self, asm: &str) -> Box<dyn backend::Kernel> {
+        let module = Module::from_ptx(&self.device, &asm).unwrap();
+        let func = module.function(Kernel::ENTRY_POINT).unwrap();
+
+        Box::new(Kernel {
+            asm: String::from(asm),
+            module,
+            func,
+            device: self.device.clone(),
+            // stream: stream.clone(),
+        })
+    }
 }
 
 impl Drop for Backend {
@@ -373,7 +386,7 @@ pub struct Kernel {
     module: Module,
     func: Function,
     device: Device,
-    stream: Arc<Stream>,
+    // stream: Arc<Stream>,
 }
 
 impl Kernel {
@@ -403,7 +416,7 @@ impl Kernel {
             module,
             func,
             device: device.clone(),
-            stream: stream.clone(),
+            // stream: stream.clone(),
         }
     }
 }
@@ -422,10 +435,11 @@ impl backend::Kernel for Kernel {
     ) -> Arc<dyn backend::DeviceFuture> {
         let ctx = self.device.ctx();
         unsafe {
-            let stream = self
+            let mut stream = self
                 .device
                 .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
                 .unwrap();
+
             let mut unused = 0;
             let mut block_size = 0;
             ctx.cuOccupancyMaxPotentialBlockSize(
@@ -464,15 +478,15 @@ impl backend::Kernel for Kernel {
                 1,
                 1,
                 0,
-                **self.stream,
+                stream.raw(),
                 [params.as_mut_ptr() as *mut std::ffi::c_void].as_mut_ptr(),
                 std::ptr::null_mut(),
             )
             .check()
             .unwrap();
 
-            let mut event = Event::create(&self.device).unwrap();
-            event.record(&self.stream).unwrap();
+            let mut event = Arc::new(Event::create(&self.device).unwrap());
+            stream.record_event(&event);
             Arc::new(DeviceFuture { event, stream })
         }
     }
@@ -486,7 +500,7 @@ unsafe impl Sync for DeviceFuture {}
 unsafe impl Send for DeviceFuture {}
 #[derive(Debug)]
 pub struct DeviceFuture {
-    event: Event,
+    event: Arc<Event>,
     stream: Stream,
 }
 
