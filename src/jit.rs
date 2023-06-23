@@ -28,7 +28,7 @@ pub struct Jit {
     pub kernel_history: Vec<KernelHistroyEntry>,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum KernelKey {
     Hash(u128),
     Name(String),
@@ -44,7 +44,7 @@ impl std::fmt::Display for KernelKey {
 
 #[derive(Debug)]
 pub struct KernelHistroyEntry {
-    hash: u128,
+    key: KernelKey,
     size: usize,
 }
 
@@ -111,13 +111,15 @@ impl Jit {
                 let mut env = Env::default();
                 s.collect_vars(&mut env, ir, &schedule[sg.range]);
                 let hash = s.internal_hash();
+                let key = KernelKey::Hash(hash);
 
                 self.kernel_history.push(KernelHistroyEntry {
-                    hash,
+                    key: key.clone(),
                     size: sg.size,
                 });
+
                 self.kernels
-                    .entry(KernelKey::Hash(hash))
+                    .entry(key)
                     .or_insert(ir.backend.as_ref().unwrap().compile_kernel(&s, &env))
                     .execute_async(&mut env, sg.size)
             })
@@ -163,7 +165,7 @@ impl Jit {
             writeln!(
                 s,
                 "Launched Kernel {} with {} elements",
-                entry.hash, entry.size
+                entry.key, entry.size
             )
             .unwrap();
         }
