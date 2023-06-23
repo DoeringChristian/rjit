@@ -3,8 +3,8 @@ source: src/backend/cuda/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched Kernel 14102561540168963304 with 3 elements
-Launched Kernel 3079941480490404177 with 2 elements
+Launched CUDA Kernel 14102561540168963304 with 3 elements
+Launched CUDA Kernel 3079941480490404177 with 2 elements
 ===============================================
 Kernel 3079941480490404177:
 

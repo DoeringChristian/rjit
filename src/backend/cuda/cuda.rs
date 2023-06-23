@@ -88,7 +88,7 @@ impl backend::Backend for Backend {
     }
 
     fn ident(&self) -> &'static str {
-        "cuda"
+        "CUDA"
     }
 
     fn kernel_from_asm(&self, asm: &str) -> Box<dyn backend::Kernel> {
@@ -493,6 +493,10 @@ impl backend::Kernel for Kernel {
 
     fn assembly(&self) -> &str {
         &self.asm
+    }
+
+    fn backend_ident(&self) -> &'static str {
+        "CUDA"
     }
 }
 

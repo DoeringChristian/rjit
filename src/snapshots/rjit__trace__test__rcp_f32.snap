@@ -3,7 +3,7 @@ source: src/trace.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched Kernel 10286608295842984421 with 4 elements
+Launched CUDA Kernel 10286608295842984421 with 4 elements
 ===============================================
 Kernel 10286608295842984421:
 

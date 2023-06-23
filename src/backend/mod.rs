@@ -20,6 +20,7 @@ pub trait Kernel: Debug + Sync + Send {
     fn as_any(&self) -> &dyn Any;
     fn execute_async(&mut self, env: &mut Env, size: usize) -> Arc<dyn DeviceFuture>;
     fn assembly(&self) -> &str;
+    fn backend_ident(&self) -> &'static str;
 }
 
 pub trait DeviceFuture: Debug + Sync + Send {

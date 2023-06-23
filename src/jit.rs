@@ -46,6 +46,7 @@ impl std::fmt::Display for KernelKey {
 pub struct KernelHistroyEntry {
     key: KernelKey,
     size: usize,
+    backend: &'static str,
 }
 
 #[derive(Debug)]
@@ -113,15 +114,18 @@ impl Jit {
                 let hash = s.internal_hash();
                 let key = KernelKey::Hash(hash);
 
+                let kernel = self
+                    .kernels
+                    .entry(key.clone())
+                    .or_insert(ir.backend.as_ref().unwrap().compile_kernel(&s, &env));
+
                 self.kernel_history.push(KernelHistroyEntry {
-                    key: key.clone(),
+                    key,
                     size: sg.size,
+                    backend: kernel.backend_ident(),
                 });
 
-                self.kernels
-                    .entry(key)
-                    .or_insert(ir.backend.as_ref().unwrap().compile_kernel(&s, &env))
-                    .execute_async(&mut env, sg.size)
+                kernel.execute_async(&mut env, sg.size)
             })
             .collect::<Vec<_>>();
 
@@ -164,8 +168,8 @@ impl Jit {
         for entry in self.kernel_history.iter() {
             writeln!(
                 s,
-                "Launched Kernel {} with {} elements",
-                entry.key, entry.size
+                "Launched {} Kernel {} with {} elements",
+                entry.backend, entry.key, entry.size
             )
             .unwrap();
         }

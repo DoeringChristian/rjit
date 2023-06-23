@@ -3,8 +3,8 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched Kernel 8367220159092093313 with 3 elements
-Launched Kernel 13181206111028237730 with 10 elements
+Launched CUDA Kernel 8367220159092093313 with 3 elements
+Launched CUDA Kernel 13181206111028237730 with 10 elements
 ===============================================
 Kernel 8367220159092093313:
 

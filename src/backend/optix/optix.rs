@@ -203,7 +203,7 @@ impl backend::Backend for Backend {
     }
 
     fn ident(&self) -> &'static str {
-        "optix"
+        "OptiX"
     }
 
     fn kernel_from_asm(&self, asm: &str) -> Box<dyn backend::Kernel> {
@@ -216,7 +216,6 @@ pub struct Kernel {
     pub asm: String,
     // entry_point: String,
     pipeline: optix_core::Pipeline,
-    stream: Arc<cuda_core::Stream>,
     // compile_options: backend::CompileOptions,
     // miss: (String, Arc<Module>),
     // hit: Vec<(String, Arc<Module>)>,
@@ -313,7 +312,6 @@ impl Kernel {
         Self {
             pipeline,
             device: device.clone(),
-            stream: stream.clone(),
             asm,
         }
     }
@@ -383,6 +381,10 @@ impl backend::Kernel for Kernel {
 
     fn assembly(&self) -> &str {
         &self.asm
+    }
+
+    fn backend_ident(&self) -> &'static str {
+        "OptiX"
     }
 }
 

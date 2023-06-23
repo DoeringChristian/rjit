@@ -3,7 +3,7 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched Kernel 13924960058171316963 with 2 elements
+Launched OptiX Kernel 13924960058171316963 with 2 elements
 ===============================================
 Kernel 13924960058171316963:
 
