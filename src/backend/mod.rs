@@ -9,17 +9,16 @@ use downcast_rs::{impl_downcast, Downcast, DowncastSync};
 
 use crate::schedule::{Env, ScheduleIr};
 
-pub trait Texture: Debug + Sync + Send {
-    fn as_any(&self) -> &dyn Any;
+pub trait Texture: Debug + Sync + Send + DowncastSync {
     fn channels(&self) -> usize;
     fn dimensions(&self) -> usize;
     fn shape(&self) -> &[usize];
     fn copy_from_buffer(&self, buf: &dyn Buffer);
     fn copy_to_buffer(&self, buf: &dyn Buffer);
 }
+impl_downcast!(sync Texture);
 
 pub trait Kernel: Debug + Sync + Send + DowncastSync {
-    fn as_any(&self) -> &dyn Any;
     fn into_any(self: Arc<Self>) -> Arc<dyn Any>;
     fn execute_async(&self, env: &mut Env, size: usize) -> Arc<dyn DeviceFuture>;
     fn assembly(&self) -> &str;
@@ -31,11 +30,11 @@ pub trait DeviceFuture: Debug + Sync + Send {
     fn wait(&self);
 }
 
-pub trait Buffer: Debug + Sync + Send {
-    fn as_any(&self) -> &dyn Any;
+pub trait Buffer: Debug + Sync + Send + DowncastSync {
     fn copy_to_host(&self, dst: &mut [u8]);
     fn ptr(&self) -> Option<u64>;
 }
+impl_downcast!(sync Buffer);
 
 pub trait Backend: Debug + Sync + Send + DowncastSync {
     fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Arc<dyn Kernel>;
@@ -51,12 +50,10 @@ pub trait Backend: Debug + Sync + Send + DowncastSync {
     fn push_hit_from_str(&mut self, entry_point: &str, source: &str);
     fn ident(&self) -> &'static str;
 }
-
 impl_downcast!(sync Backend);
 
-pub trait Accel: Debug + Sync + Send {
-    fn as_any(&self) -> &dyn Any;
-}
+pub trait Accel: Debug + Sync + Send + DowncastSync {}
+impl_downcast!(sync Accel);
 
 #[derive(Clone, Default)]
 pub struct CompileOptions {

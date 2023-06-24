@@ -95,7 +95,7 @@ impl VarRef {
                         .ir
                         .backend()
                         .buffer_uninit(scratch_items as usize * std::mem::size_of::<u64>());
-                    let scratch = scratch.as_any().downcast_ref::<cuda::Buffer>().unwrap();
+                    let scratch = scratch.downcast_ref::<cuda::Buffer>().unwrap();
 
                     let (block_count_init, thread_count_init) =
                         compress_large.launch_size(scratch_items as usize);
@@ -105,11 +105,13 @@ impl VarRef {
                         &mut scratch_items as *mut _ as *mut _,
                     ];
 
+                    dbg!(scratch.ptr());
+
                     scan_large_u32_init
                         .launch(&mut params, block_count_init, thread_count_init, 0)
                         .wait();
 
-                    let out = self.ir.array_uninit::<u32>(self.size());
+                    let out = self.ir.array_uninit::<u32>(size as _);
                     let count_out = self.ir.array_uninit::<u32>(1);
                     let mut in_ptr = self.ptr().unwrap();
                     let mut out_ptr = out.ptr().unwrap();
@@ -123,6 +125,11 @@ impl VarRef {
                         &mut scratch_ptr as *mut _ as *mut _,
                         &mut count_out_ptr as *mut _ as *mut _,
                     ];
+
+                    dbg!(in_ptr);
+                    dbg!(out_ptr);
+                    dbg!(scratch_ptr);
+                    dbg!(count_out_ptr);
 
                     let f =
                         compress_large.launch(&mut params, block_count, thread_count, shared_size);

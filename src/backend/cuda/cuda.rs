@@ -145,10 +145,6 @@ impl Buffer {
     }
 }
 impl backend::Buffer for Buffer {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn copy_to_host(&self, dst: &mut [u8]) {
         unsafe {
             let ctx = self.device.ctx();
@@ -276,10 +272,6 @@ impl Texture {
 unsafe impl Sync for Texture {}
 unsafe impl Send for Texture {}
 impl backend::Texture for Texture {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn channels(&self) -> usize {
         self.n_channels
     }
@@ -522,10 +514,6 @@ impl Kernel {
 unsafe impl Sync for Kernel {}
 unsafe impl Send for Kernel {}
 impl backend::Kernel for Kernel {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn execute_async(
         &self,
         env: &mut crate::schedule::Env,

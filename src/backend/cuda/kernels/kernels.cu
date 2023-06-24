@@ -7,8 +7,9 @@
     license that can be found in the LICENSE file.
 */
 
-#include "compress.cuh"
-#include "misc.cuh"
-#include "mkperm.cuh"
+// clang-format off
 #include "reduce.cuh"
 #include "scan.cuh"
+#include "compress.cuh"
+#include "mkperm.cuh"
+#include "misc.cuh"

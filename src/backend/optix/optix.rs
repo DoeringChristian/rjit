@@ -321,10 +321,6 @@ impl Kernel {
 unsafe impl Sync for Kernel {}
 unsafe impl Send for Kernel {}
 impl backend::Kernel for Kernel {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn execute_async(
         &self,
         env: &mut crate::schedule::Env,
@@ -552,11 +548,7 @@ impl Accel {
     }
 }
 
-impl backend::Accel for Accel {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl backend::Accel for Accel {}
 
 impl backend::CompileOptions {
     pub fn pco(&self) -> OptixPipelineCompileOptions {
