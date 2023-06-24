@@ -148,11 +148,15 @@ impl backend::Buffer for Buffer {
     fn copy_to_host(&self, dst: &mut [u8]) {
         unsafe {
             let ctx = self.device.ctx();
-            assert!(dst.len() <= self.size);
+            // assert!(self.size <= dst.len());
 
-            ctx.cuMemcpyDtoH_v2(dst.as_mut_ptr() as *mut _, self.dptr, self.size)
-                .check()
-                .unwrap();
+            ctx.cuMemcpyDtoH_v2(
+                dst.as_mut_ptr() as *mut _,
+                self.dptr,
+                dst.len().min(self.size),
+            )
+            .check()
+            .unwrap();
         }
     }
 

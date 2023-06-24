@@ -112,12 +112,12 @@ impl VarRef {
                         .wait();
 
                     let out = self.ir.array_uninit::<u32>(size as _);
-                    let count_out = self.ir.array_uninit::<u32>(1);
+                    let count_out = self.ir.array(&[0u32]);
                     let mut in_ptr = self.ptr().unwrap();
                     let mut out_ptr = out.ptr().unwrap();
                     let mut count_out_ptr = count_out.ptr().unwrap();
 
-                    let mut scratch_ptr = scratch.ptr() + 32;
+                    let mut scratch_ptr = scratch.ptr() + 32 * std::mem::size_of::<u64>() as u64;
 
                     let mut params = [
                         &mut in_ptr as *mut _ as *mut _,
@@ -130,11 +130,17 @@ impl VarRef {
                     dbg!(out_ptr);
                     dbg!(scratch_ptr);
                     dbg!(count_out_ptr);
+                    dbg!(block_count);
+                    dbg!(thread_count);
+
+                    std::fs::write("/tmp/dbg.txt", std::format!("in_ptr = {in_ptr:#018x}, out_ptr = {out_ptr:#018x}, scratch_ptr = {scratch_ptr:#018x}, count_out_ptr = {count_out_ptr:#018x}")).unwrap();
 
                     let f =
                         compress_large.launch(&mut params, block_count, thread_count, shared_size);
 
                     f.wait();
+
+                    drop(scratch);
                     // .wait();
 
                     let size = count_out.to_host_u32()[0];
@@ -167,19 +173,25 @@ mod test {
 
         println!("{:?}", i.to_host_u32());
     }
-    // #[test]
-    // fn compress_large() {
-    //     let ir = Trace::default();
-    //     ir.set_backend("cuda");
-    //
-    //     // let x = ir.array(&[true, false, true]);
-    //     let x = ir.array(&vec![true; 4098]);
-    //
-    //     let i = x.compress();
-    //
-    //     i.schedule();
-    //     ir.eval();
-    //
-    //     println!("{:?}", i.to_host_u32());
-    // }
+    #[test]
+    fn compress_large() {
+        let ir = Trace::default();
+        ir.set_backend("cuda");
+
+        // let x = ir.array(&[true, false, true]);
+        // let x = ir.array(&vec![true; 4096 * 4]);
+        // let x = ir.array(&vec![true; 4096 + 1024 + 512]);
+        let x = ir.array(&vec![true; 4096 + 1]);
+
+        let i = x.compress();
+
+        i.schedule();
+        ir.eval();
+
+        dbg!(i.size());
+        // dbg!(i.to_host_u32());
+
+        // println!("{:?}", i.to_host_u32());
+        // assert_eq!(i.to_host_u32(), (0..4098).collect::<Vec<_>>());
+    }
 }
