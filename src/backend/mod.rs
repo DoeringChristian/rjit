@@ -33,6 +33,7 @@ pub trait DeviceFuture: Debug + Sync + Send {
 pub trait Buffer: Debug + Sync + Send + DowncastSync {
     fn copy_to_host(&self, dst: &mut [u8]);
     fn ptr(&self) -> Option<u64>;
+    fn size(&self) -> usize;
 }
 impl_downcast!(sync Buffer);
 
@@ -49,6 +50,8 @@ pub trait Backend: Debug + Sync + Send + DowncastSync {
     fn set_miss_from_str(&mut self, entry_point: &str, source: &str);
     fn push_hit_from_str(&mut self, entry_point: &str, source: &str);
     fn ident(&self) -> &'static str;
+
+    fn compress(&self, mask: &dyn Buffer) -> (Arc<dyn Buffer>, usize);
 }
 impl_downcast!(sync Backend);
 

@@ -1,13 +1,28 @@
 use std::ffi::c_void;
 use std::fmt::{Debug, Write};
+use std::mem::size_of;
 use std::sync::Arc;
 use thiserror::Error;
 
 use super::cuda_core::{Device, Event, Function, Instance, Module, Stream};
-use crate::backend;
+use crate::backend::{self};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
+
+fn round_pow2(mut x: u32) -> u32 {
+    x = x.wrapping_sub(1);
+    x |= x.wrapping_shr(1);
+    x |= x.wrapping_shr(2);
+    x |= x.wrapping_shr(4);
+    x |= x.wrapping_shr(8);
+    x |= x.wrapping_shr(16);
+    x = x.wrapping_add(1);
+    x
+}
+pub fn align(n: usize, alignment: usize) -> usize {
+    ((n + (alignment - 1)) / alignment) * alignment
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -19,7 +34,7 @@ pub enum Error {
 pub struct Backend {
     device: Device,
     stream: Arc<Stream>,
-    kernels: Module, // Default kernels
+    kernels: Arc<Module>, // Default kernels
 }
 impl Backend {
     pub fn new() -> Result<Self, Error> {
@@ -28,7 +43,8 @@ impl Backend {
         let stream =
             Arc::new(device.create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)?);
 
-        let kernels = Module::from_ptx(&device, include_str!("./kernels/kernels_70.ptx")).unwrap();
+        let kernels =
+            Arc::new(Module::from_ptx(&device, include_str!("./kernels/kernels_70.ptx")).unwrap());
 
         Ok(Self {
             device,
@@ -94,6 +110,61 @@ impl backend::Backend for Backend {
     fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn backend::Kernel> {
         Arc::new(Kernel::assemble(&self.device, asm, entry_point))
     }
+
+    fn compress(&self, mask: &dyn backend::Buffer) -> (Arc<dyn backend::Buffer>, usize) {
+        let mask = mask.downcast_ref::<Buffer>().unwrap();
+        let size = mask.size();
+        if size <= 4096 {
+            let out = self.buffer_uninit(4 * size);
+
+            let count_out = self
+                .buffer_uninit(size_of::<u32>())
+                .downcast_arc::<Buffer>()
+                .unwrap();
+
+            let mut in_ptr = mask.ptr();
+            let mut out_ptr = out.ptr().unwrap();
+            let mut count_out_ptr = count_out.ptr();
+            let mut size = size as u32;
+
+            let items_per_thread = 4;
+            let thread_count = round_pow2((size + items_per_thread - 1) / items_per_thread);
+            let shared_size = thread_count * 2 * std::mem::size_of::<u32>() as u32;
+            let trailer = thread_count * items_per_thread - size;
+
+            // std::fs::write("/tmp/dbg.txt", std::format!("in_ptr = {in_ptr:#018x}, out_ptr = {out_ptr:#018x}, count_out_ptr = {count_out_ptr:#018x}")).unwrap();
+
+            let mut params = [
+                &mut in_ptr as *mut _ as *mut _,
+                &mut out_ptr as *mut _ as *mut _,
+                &mut size as *mut _ as *mut _,
+                &mut count_out_ptr as *mut _ as *mut _,
+            ];
+
+            let stream = self
+                .device
+                .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
+                .unwrap();
+
+            unsafe {
+                self.kernels
+                    .function("compress_small")
+                    .unwrap()
+                    .launch(&stream, &mut params, thread_count, 1, shared_size)
+                    .unwrap();
+            }
+            stream.synchronize().unwrap();
+
+            let mut size = 0u32;
+            backend::Buffer::copy_to_host(
+                &*count_out,
+                bytemuck::cast_slice_mut(std::slice::from_mut(&mut size)),
+            );
+            (out, size as _)
+        } else {
+            todo!()
+        }
+    }
 }
 
 impl Drop for Backend {
@@ -128,6 +199,7 @@ impl Buffer {
     pub fn from_slice(device: &Device, slice: &[u8]) -> Self {
         unsafe {
             let size = slice.len();
+            let size = align(size, 8);
 
             let ctx = device.ctx();
 
@@ -162,6 +234,10 @@ impl backend::Buffer for Buffer {
 
     fn ptr(&self) -> Option<u64> {
         Some(self.dptr)
+    }
+
+    fn size(&self) -> usize {
+        self.size
     }
 }
 

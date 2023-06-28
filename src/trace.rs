@@ -1004,6 +1004,22 @@ impl VarRef {
             _ => None,
         }
     }
+    pub fn compress(&self) -> Self {
+        assert_eq!(self.ty(), VarType::Bool);
+        self.schedule();
+        self.ir.eval();
+
+        let mask = self.var().data.buffer().unwrap().clone();
+        let (indices, size) = self.ir.backend().compress(mask.as_ref());
+
+        self.ir.push_var(Var {
+            ty: VarType::U32,
+            op: Op::Data,
+            size,
+            data: Data::Buffer(indices),
+            ..Default::default()
+        })
+    }
 }
 
 impl Clone for VarRef {

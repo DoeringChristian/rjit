@@ -211,6 +211,10 @@ impl backend::Backend for Backend {
             entry_point,
         ))
     }
+
+    fn compress(&self, mask: &dyn backend::Buffer) -> (Arc<dyn backend::Buffer>, usize) {
+        todo!()
+    }
 }
 
 pub struct Kernel {
