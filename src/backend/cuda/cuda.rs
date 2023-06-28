@@ -150,7 +150,7 @@ impl backend::Backend for Backend {
                 self.kernels
                     .function("compress_small")
                     .unwrap()
-                    .launch(&stream, &mut params, thread_count, 1, shared_size)
+                    .launch(&stream, &mut params, 1, thread_count, shared_size)
                     .unwrap();
             }
             stream.synchronize().unwrap();
@@ -162,7 +162,70 @@ impl backend::Backend for Backend {
             );
             (out, size as _)
         } else {
-            todo!()
+            let stream = self
+                .device
+                .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
+                .unwrap();
+
+            let compress_large = self.kernels.function("compress_large").unwrap();
+            let scan_large_u32_int = self.kernels.function("scan_large_u32_init").unwrap();
+
+            let size = size as u32;
+            let items_per_thread = 16u32;
+            let thread_count = 128u32;
+            let items_per_block = items_per_thread * thread_count;
+            let block_count = (size + items_per_block - 1) / items_per_block;
+            let shared_size = items_per_block * std::mem::size_of::<u32>() as u32;
+            let mut scratch_items = block_count + 32;
+            let trailer = items_per_block * block_count - size;
+
+            let scratch = self.buffer_uninit(scratch_items as usize * size_of::<u64>());
+
+            let (block_count_init, thread_count_init) =
+                unsafe { scan_large_u32_int.launch_size(scratch_items as _).unwrap() };
+
+            let mut params = [
+                &mut scratch.ptr().unwrap() as *mut _ as *mut _,
+                &mut scratch_items as *mut _ as *mut _,
+            ];
+
+            unsafe {
+                scan_large_u32_int
+                    .launch(&stream, &mut params, block_count_init, thread_count_init, 0)
+                    .unwrap();
+            }
+
+            let out = self.buffer_uninit(size_of::<u32>() * size as usize);
+            let count_out = self.buffer_uninit(size_of::<u32>());
+
+            let mut in_ptr = mask.ptr();
+            let mut out_ptr = out.ptr().unwrap();
+            let mut count_out_ptr = count_out.ptr().unwrap();
+
+            let mut scratch_ptr = scratch.ptr().unwrap() + 32 * std::mem::size_of::<u64>() as u64;
+
+            let mut params = [
+                &mut in_ptr as *mut _ as *mut _,
+                &mut out_ptr as *mut _ as *mut _,
+                &mut scratch_ptr as *mut _ as *mut _,
+                &mut count_out_ptr as *mut _ as *mut _,
+            ];
+
+            unsafe {
+                compress_large
+                    .launch(&stream, &mut params, block_count, thread_count, shared_size)
+                    .unwrap();
+            }
+
+            stream.synchronize().unwrap();
+
+            let mut size = 0u32;
+            backend::Buffer::copy_to_host(
+                &*count_out,
+                bytemuck::cast_slice_mut(std::slice::from_mut(&mut size)),
+            );
+            dbg!(size);
+            (out, size as _)
         }
     }
 }

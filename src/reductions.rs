@@ -170,25 +170,22 @@ mod test {
 
         assert_eq!(i.to_host_u32(), vec![0, 2, 4, 6]);
     }
-    // #[test]
-    // fn compress_large() {
-    //     let ir = Trace::default();
-    //     ir.set_backend("cuda");
-    //
-    //     // let x = ir.array(&[true, false, true]);
-    //     // let x = ir.array(&vec![true; 4096 * 4]);
-    //     // let x = ir.array(&vec![true; 4096 + 1024 + 512]);
-    //     let x = ir.array(&vec![true; 4096 + 1]);
-    //
-    //     let i = x.compress();
-    //
-    //     i.schedule();
-    //     ir.eval();
-    //
-    //     dbg!(i.size());
-    //     // dbg!(i.to_host_u32());
-    //
-    //     // println!("{:?}", i.to_host_u32());
-    //     // assert_eq!(i.to_host_u32(), (0..4098).collect::<Vec<_>>());
-    // }
+    #[test]
+    fn compress_large() {
+        let ir = Trace::default();
+        ir.set_backend("cuda");
+
+        // let x = ir.array(&[true, false, true]);
+        // let x = ir.array(&vec![true; 4096 * 4]);
+        // let x = ir.array(&vec![true; 4096 + 1024 + 512]);
+        let x = ir.array(&vec![true; 4096 + 1]);
+
+        let i = x.compress();
+
+        dbg!(i.size());
+        // dbg!(i.to_host_u32());
+
+        // println!("{:?}", i.to_host_u32());
+        // assert_eq!(i.to_host_u32(), (0..4098).collect::<Vec<_>>());
+    }
 }

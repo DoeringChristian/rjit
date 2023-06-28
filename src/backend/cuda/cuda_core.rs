@@ -506,12 +506,33 @@ impl Function {
     pub unsafe fn raw(&self) -> cuda_rs::CUfunction {
         self.func
     }
+    pub unsafe fn launch_size(&self, size: usize) -> Result<(usize, usize), Error> {
+        let ctx = self.module.0.device.ctx();
+        unsafe {
+            let mut unused = 0;
+            let mut block_size = 0;
+            ctx.cuOccupancyMaxPotentialBlockSize(
+                &mut unused,
+                &mut block_size,
+                self.raw(),
+                None,
+                0,
+                0,
+            )
+            .check()?;
+
+            let block_size = block_size as usize;
+            let grid_size = (size + block_size - 1) / block_size;
+
+            Ok((grid_size, block_size))
+        }
+    }
     pub unsafe fn launch(
         &self,
         stream: &Stream,
         args: &mut [*mut c_void],
-        block_size: impl Into<KernelSize>,
         grid_size: impl Into<KernelSize>,
+        block_size: impl Into<KernelSize>,
         shared_size: u32,
     ) -> Result<(), Error> {
         let ctx = self.module.0.device.ctx();
@@ -559,6 +580,36 @@ impl From<(u32, u32)> for KernelSize {
 impl From<(u32, u32, u32)> for KernelSize {
     fn from(value: (u32, u32, u32)) -> Self {
         Self(value.0, value.1, value.2)
+    }
+}
+impl From<usize> for KernelSize {
+    fn from(value: usize) -> Self {
+        Self(value as _, 1, 1)
+    }
+}
+impl From<(usize, usize)> for KernelSize {
+    fn from(value: (usize, usize)) -> Self {
+        Self(value.0 as _, value.1 as _, 1)
+    }
+}
+impl From<(usize, usize, usize)> for KernelSize {
+    fn from(value: (usize, usize, usize)) -> Self {
+        Self(value.0 as _, value.1 as _, value.2 as _)
+    }
+}
+impl From<i32> for KernelSize {
+    fn from(value: i32) -> Self {
+        Self(value as _, 1, 1)
+    }
+}
+impl From<(i32, i32)> for KernelSize {
+    fn from(value: (i32, i32)) -> Self {
+        Self(value.0 as _, value.1 as _, 1)
+    }
+}
+impl From<(i32, i32, i32)> for KernelSize {
+    fn from(value: (i32, i32, i32)) -> Self {
+        Self(value.0 as _, value.1 as _, value.2 as _)
     }
 }
 
