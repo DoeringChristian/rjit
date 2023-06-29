@@ -104,3 +104,28 @@ fn compress_large() {
 
     assert_eq!(i.to_host_u32(), (0..N).collect::<Vec<_>>());
 }
+#[test]
+fn compress_small_optix() {
+    let ir = Trace::default();
+    ir.set_backend("optix");
+
+    // let x = ir.array(&[true, false, true]);
+    let x = ir.array(&[true, false, true, false, true, false, true, false]);
+
+    let i = x.compress();
+
+    assert_eq!(i.to_host_u32(), vec![0, 2, 4, 6]);
+}
+#[test]
+fn compress_large_optix() {
+    let ir = Trace::default();
+    ir.set_backend("optix");
+
+    const N: u32 = 4100;
+
+    let x = ir.array(&vec![true; N as usize]);
+
+    let i = x.compress();
+
+    assert_eq!(i.to_host_u32(), (0..N).collect::<Vec<_>>());
+}

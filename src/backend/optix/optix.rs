@@ -3,7 +3,7 @@ use std::fmt::{Debug, Write};
 use std::sync::{Arc, Mutex};
 
 use crate::backend::cuda::cuda_core::{Event, Stream};
-use crate::backend::cuda::{cuda_core, Buffer, Texture};
+use crate::backend::cuda::{self, cuda_core, Buffer, Texture};
 use crate::backend::{self, CompileOptions};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
@@ -31,6 +31,7 @@ pub struct Backend {
     instance: Arc<optix_core::Instance>,
     device: optix_core::Device,
     stream: Arc<cuda_core::Stream>,
+    kernels: Arc<cuda_core::Module>,
     pub compile_options: backend::CompileOptions,
     pub miss: Option<(String, Arc<Module>)>,
     pub hit: Vec<(String, Arc<Module>)>,
@@ -96,10 +97,20 @@ impl Backend {
             )
             .unwrap(),
         );
+
+        let kernels = Arc::new(
+            cuda_core::Module::from_ptx(
+                device.cuda_device(),
+                include_str!("../cuda/kernels/kernels_70.ptx"),
+            )
+            .unwrap(),
+        );
+
         Ok(Self {
             device,
             instance,
             stream,
+            kernels,
             hit: vec![],
             miss: Some(("__miss__dr".into(), miss)),
             compile_options,
@@ -213,7 +224,7 @@ impl backend::Backend for Backend {
     }
 
     fn compress(&self, mask: &dyn backend::Buffer) -> Arc<dyn backend::Buffer> {
-        todo!()
+        cuda::compress::compress(mask, &self.kernels)
     }
 }
 
