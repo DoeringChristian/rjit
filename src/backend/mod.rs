@@ -51,7 +51,7 @@ pub trait Backend: Debug + Sync + Send + DowncastSync {
     fn push_hit_from_str(&mut self, entry_point: &str, source: &str);
     fn ident(&self) -> &'static str;
 
-    fn compress(&self, mask: &dyn Buffer) -> (Arc<dyn Buffer>, usize);
+    fn compress(&self, mask: &dyn Buffer) -> Arc<dyn Buffer>;
 }
 impl_downcast!(sync Backend);
 

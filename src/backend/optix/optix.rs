@@ -212,7 +212,7 @@ impl backend::Backend for Backend {
         ))
     }
 
-    fn compress(&self, mask: &dyn backend::Buffer) -> (Arc<dyn backend::Buffer>, usize) {
+    fn compress(&self, mask: &dyn backend::Buffer) -> Arc<dyn backend::Buffer> {
         todo!()
     }
 }

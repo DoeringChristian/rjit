@@ -23,6 +23,33 @@ fn round_pow2(mut x: u32) -> u32 {
 pub fn align(n: usize, alignment: usize) -> usize {
     ((n + (alignment - 1)) / alignment) * alignment
 }
+pub fn launch_config(device: &Device, size: u32) -> (u32, u32) {
+    let max_threads = 128;
+    let max_blocks_per_sm = 4u32;
+    let num_sm = device.info().num_sm as u32;
+
+    let blocks_avail = (size + max_threads - 1) / max_threads;
+
+    let blocks;
+    if blocks_avail < num_sm {
+        // Not enough work for 1 full wave
+        blocks = blocks_avail;
+    } else {
+        // Don't produce more than 4 blocks per SM
+        let mut blocks_per_sm = blocks_avail / num_sm;
+        if blocks_per_sm > max_blocks_per_sm {
+            blocks_per_sm = max_blocks_per_sm;
+        }
+        blocks = blocks_per_sm * num_sm;
+    }
+
+    let mut threads = max_threads;
+    if blocks <= 1 && size < max_threads {
+        threads = size;
+    }
+
+    (blocks, threads)
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -111,20 +138,21 @@ impl backend::Backend for Backend {
         Arc::new(Kernel::assemble(&self.device, asm, entry_point))
     }
 
-    fn compress(&self, mask: &dyn backend::Buffer) -> (Arc<dyn backend::Buffer>, usize) {
+    fn compress(&self, mask: &dyn backend::Buffer) -> Arc<dyn backend::Buffer> {
         let mask = mask.downcast_ref::<Buffer>().unwrap();
-        let size = mask.size();
-        if size <= 4096 {
-            let out = self.buffer_uninit(4 * size);
-
-            let count_out = self
-                .buffer_uninit(size_of::<u32>())
-                .downcast_arc::<Buffer>()
-                .unwrap();
+        let size = mask.size;
+        let count_out = self.buffer_uninit(size_of::<u32>());
+        let mut out = self.buffer_uninit(size_of::<u32>() * size as usize);
+        dbg!(size);
+        if size < 4096 {
+            // let count_out = self
+            //     .buffer_uninit(size_of::<u32>())
+            //     .downcast_arc::<Buffer>()
+            //     .unwrap();
 
             let mut in_ptr = mask.ptr();
             let mut out_ptr = out.ptr().unwrap();
-            let mut count_out_ptr = count_out.ptr();
+            let mut count_out_ptr = count_out.ptr().unwrap();
             let mut size = size as u32;
 
             let items_per_thread = 4;
@@ -154,13 +182,6 @@ impl backend::Backend for Backend {
                     .unwrap();
             }
             stream.synchronize().unwrap();
-
-            let mut size = 0u32;
-            backend::Buffer::copy_to_host(
-                &*count_out,
-                bytemuck::cast_slice_mut(std::slice::from_mut(&mut size)),
-            );
-            (out, size as _)
         } else {
             let stream = self
                 .device
@@ -181,8 +202,7 @@ impl backend::Backend for Backend {
 
             let scratch = self.buffer_uninit(scratch_items as usize * size_of::<u64>());
 
-            let (block_count_init, thread_count_init) =
-                unsafe { scan_large_u32_int.launch_size(scratch_items as _).unwrap() };
+            let (block_count_init, thread_count_init) = launch_config(&self.device, scratch_items);
 
             let mut params = [
                 &mut scratch.ptr().unwrap() as *mut _ as *mut _,
@@ -195,14 +215,22 @@ impl backend::Backend for Backend {
                     .unwrap();
             }
 
-            let out = self.buffer_uninit(size_of::<u32>() * size as usize);
-            let count_out = self.buffer_uninit(size_of::<u32>());
-
             let mut in_ptr = mask.ptr();
             let mut out_ptr = out.ptr().unwrap();
             let mut count_out_ptr = count_out.ptr().unwrap();
 
             let mut scratch_ptr = scratch.ptr().unwrap() + 32 * std::mem::size_of::<u64>() as u64;
+
+            if trailer > 0 {
+                unsafe {
+                    self.device
+                        .ctx()
+                        .cuMemsetD8Async(in_ptr + size as u64, 0, trailer as _, stream.raw())
+                        .check()
+                        .unwrap();
+                    // self.device.ctx().cuGetErrorString()
+                }
+            }
 
             let mut params = [
                 &mut in_ptr as *mut _ as *mut _,
@@ -218,15 +246,19 @@ impl backend::Backend for Backend {
             }
 
             stream.synchronize().unwrap();
-
-            let mut size = 0u32;
-            backend::Buffer::copy_to_host(
-                &*count_out,
-                bytemuck::cast_slice_mut(std::slice::from_mut(&mut size)),
-            );
-            dbg!(size);
-            (out, size as _)
         }
+
+        let mut size = 0u32;
+        backend::Buffer::copy_to_host(
+            &*count_out,
+            bytemuck::cast_slice_mut(std::slice::from_mut(&mut size)),
+        );
+        Arc::get_mut(&mut out)
+            .unwrap()
+            .downcast_mut::<Buffer>()
+            .unwrap()
+            .size = size as usize * size_of::<u32>();
+        out
     }
 }
 
@@ -238,7 +270,8 @@ impl Drop for Backend {
 pub struct Buffer {
     device: Device,
     dptr: u64,
-    size: usize,
+    size: usize, // Number of bytes requested.
+    cap: usize,  // Number of bytes actually allocated.
 }
 impl Buffer {
     pub fn ptr(&self) -> u64 {
@@ -249,25 +282,28 @@ impl Buffer {
     }
     pub fn uninit(device: &Device, size: usize) -> Self {
         unsafe {
+            let cap = round_pow2(size as _) as usize;
+
             let ctx = device.ctx();
             let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
+            ctx.cuMemAlloc_v2(&mut dptr, cap).check().unwrap();
             Self {
                 device: device.clone(),
                 dptr,
                 size,
+                cap,
             }
         }
     }
     pub fn from_slice(device: &Device, slice: &[u8]) -> Self {
         unsafe {
             let size = slice.len();
-            let size = align(size, 8);
+            let cap = round_pow2(size as _) as usize;
 
             let ctx = device.ctx();
 
             let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
+            ctx.cuMemAlloc_v2(&mut dptr, cap).check().unwrap();
             ctx.cuMemcpyHtoD_v2(dptr, slice.as_ptr() as _, size)
                 .check()
                 .unwrap();
@@ -275,6 +311,7 @@ impl Buffer {
                 device: device.clone(),
                 dptr,
                 size,
+                cap,
             }
         }
     }

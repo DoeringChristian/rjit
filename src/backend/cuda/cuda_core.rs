@@ -50,21 +50,26 @@ impl Drop for CtxRef {
     }
 }
 
+#[derive(Debug)]
+pub struct DeviceInfo {
+    pub pci_bus_id: i32,
+    pub pci_dom_id: i32,
+    pub pci_dev_id: i32,
+    pub num_sm: i32,
+    pub unified_addr: i32,
+    pub shared_memory_bytes: i32,
+    pub cc_minor: i32,
+    pub cc_major: i32,
+    pub memory_pool: i32,
+    pub mem_total: usize,
+    pub name: String,
+}
+
 pub struct InternalDevice {
     id: i32,
     ctx: CUcontext,
     instance: Arc<Instance>,
-    pci_bus_id: i32,
-    pci_dom_id: i32,
-    pci_dev_id: i32,
-    num_sm: i32,
-    unified_addr: i32,
-    shared_memory_bytes: i32,
-    cc_minor: i32,
-    cc_major: i32,
-    memory_pool: i32,
-    mem_total: usize,
-    name: String,
+    info: DeviceInfo,
 }
 
 impl Debug for InternalDevice {
@@ -73,17 +78,17 @@ impl Debug for InternalDevice {
             .field("id", &self.id)
             // .field("ctx", &self.ctx)
             .field("instance", &self.instance)
-            .field("pci_bus_id", &self.pci_bus_id)
-            .field("pci_dom_id", &self.pci_dom_id)
-            .field("pci_dev_id", &self.pci_dev_id)
-            .field("num_sm", &self.num_sm)
-            .field("unified_addr", &self.unified_addr)
-            .field("shared_memory_bytes", &self.shared_memory_bytes)
-            .field("cc_minor", &self.cc_minor)
-            .field("cc_major", &self.cc_major)
-            .field("memory_pool", &self.memory_pool)
-            .field("mem_total", &self.mem_total)
-            .field("name", &self.name)
+            .field("pci_bus_id", &self.info.pci_bus_id)
+            .field("pci_dom_id", &self.info.pci_dom_id)
+            .field("pci_dev_id", &self.info.pci_dev_id)
+            .field("num_sm", &self.info.num_sm)
+            .field("unified_addr", &self.info.unified_addr)
+            .field("shared_memory_bytes", &self.info.shared_memory_bytes)
+            .field("cc_minor", &self.info.cc_minor)
+            .field("cc_major", &self.info.cc_major)
+            .field("memory_pool", &self.info.memory_pool)
+            .field("mem_total", &self.info.mem_total)
+            .field("name", &self.info.name)
             .finish()
     }
 }
@@ -192,17 +197,19 @@ impl InternalDevice {
                 ctx,
                 instance: instance.clone(),
                 id,
-                pci_bus_id,
-                pci_dom_id,
-                pci_dev_id,
-                num_sm,
-                unified_addr,
-                shared_memory_bytes,
-                cc_minor,
-                cc_major,
-                memory_pool,
-                mem_total,
-                name,
+                info: DeviceInfo {
+                    pci_bus_id,
+                    pci_dom_id,
+                    pci_dev_id,
+                    num_sm,
+                    unified_addr,
+                    shared_memory_bytes,
+                    cc_minor,
+                    cc_major,
+                    memory_pool,
+                    mem_total,
+                    name,
+                },
             })
         }
     }
@@ -243,6 +250,9 @@ impl Device {
     }
     pub fn create_stream(&self, flags: cuda_rs::CUstream_flags_enum) -> Result<Stream, Error> {
         Stream::create(self, flags)
+    }
+    pub fn info(&self) -> &DeviceInfo {
+        &self.internal.info
     }
 }
 
@@ -654,3 +664,19 @@ impl Drop for Event {
         }
     }
 }
+
+// TODO: Buffer implementation
+//
+// pub struct Buffer {
+//     device: Device,
+//     ptr: u64,
+//     size: usize,
+// }
+//
+// impl Buffer{
+//     pub fn uninit(device: &Device) -> Result<Self, Error>{
+//         let ctx = device.ctx();
+//         unsafe{
+//         }
+//     }
+// }

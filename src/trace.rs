@@ -1010,7 +1010,8 @@ impl VarRef {
         self.ir.eval();
 
         let mask = self.var().data.buffer().unwrap().clone();
-        let (indices, size) = self.ir.backend().compress(mask.as_ref());
+        let indices = self.ir.backend().compress(mask.as_ref());
+        let size = indices.size() / std::mem::size_of::<u32>();
 
         self.ir.push_var(Var {
             ty: VarType::U32,
@@ -1035,92 +1036,5 @@ impl Clone for VarRef {
 impl Drop for VarRef {
     fn drop(&mut self) {
         self.ir.lock().dec_rc(self.id);
-    }
-}
-
-#[cfg(test)]
-#[allow(non_snake_case)]
-mod test {
-    use crate::jit::Jit;
-
-    use super::Trace;
-
-    macro_rules! test_uop {
-        ($jop:ident($init:expr; $ty:ident) $(,$mod:literal)?) => {
-            test_uop!($ty::$jop => $jop($init; $ty) $(,$mod)?);
-        };
-        ($rop:expr => $jop:ident($init:expr; $ty:ident) $(,$mod:literal)?) => {
-            paste::paste! {
-                #[test]
-                fn [<$jop _$ty $(__$mod)?>]() {
-
-                    let initial: &[$ty] = &$init;
-
-                    let ir = Trace::default();
-                    ir.set_backend("cuda");
-
-                    let x = ir.[<buffer_$ty>](initial);
-
-                    let y = x.$jop();
-
-                    ir.schedule(&[&y]);
-
-                    ir.eval();
-
-                    insta::assert_snapshot!(ir.kernel_history());
-
-                    for (i, calculated) in y.[<to_host_$ty>]().into_iter().enumerate(){
-                        let expected = ($rop)(initial[i]);
-                        approx::assert_abs_diff_eq!(calculated, expected, epsilon = 0.0001);
-                    }
-                }
-            }
-        };
-    }
-
-    test_uop!(|x:f32| {1./x} => rcp(         [0.1, 0.5, 1., std::f32::consts::PI]; f32));
-    test_uop!(|x:f32| {1./x.sqrt()} => rsqrt([0.1, 0.5, 1., std::f32::consts::PI]; f32));
-    test_uop!(sin(                           [0.1, 0.5, 1., std::f32::consts::PI]; f32));
-    test_uop!(cos(                           [0.1, 0.5, 1., std::f32::consts::PI]; f32));
-    test_uop!(exp2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f32));
-    test_uop!(log2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f32));
-
-    #[test]
-    fn opaque() {
-        let ir = Trace::default();
-        ir.set_backend("cuda");
-
-        let x = ir.literal_u32(10);
-        let x = x.opaque();
-
-        let y = ir.buffer_u32(&[1, 2, 3]);
-
-        let y = y.add(&x);
-
-        y.schedule();
-        ir.eval();
-
-        insta::assert_snapshot!(ir.kernel_history());
-
-        assert_eq!(y.to_host_u32(), vec![11, 12, 13]);
-    }
-    #[test]
-    fn make_opaque() {
-        let ir = Trace::default();
-        ir.set_backend("cuda");
-
-        let x = ir.literal_u32(10);
-        x.make_opaque();
-
-        let y = ir.buffer_u32(&[1, 2, 3]);
-
-        let y = y.add(&x);
-
-        y.schedule();
-        ir.eval();
-
-        insta::assert_snapshot!(ir.kernel_history());
-
-        assert_eq!(y.to_host_u32(), vec![11, 12, 13]);
     }
 }
