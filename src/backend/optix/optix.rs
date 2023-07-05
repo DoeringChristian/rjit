@@ -138,11 +138,11 @@ impl backend::Backend for Backend {
     }
 
     fn buffer_uninit(&self, size: usize) -> Arc<dyn backend::Buffer> {
-        Arc::new(Buffer::uninit(self.device.cuda_device(), size))
+        Arc::new(Buffer::uninit(&self.device.cuda_device(), size))
     }
 
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn backend::Buffer> {
-        Arc::new(Buffer::from_slice(self.device.cuda_device(), slice))
+        Arc::new(Buffer::from_slice(&self.device.cuda_device(), slice))
     }
 
     fn first_register(&self) -> usize {
@@ -231,11 +231,7 @@ impl backend::Backend for Backend {
 pub struct Kernel {
     device: Device,
     pub asm: String,
-    // entry_point: String,
     pipeline: optix_core::Pipeline,
-    // compile_options: backend::CompileOptions,
-    // miss: (String, Arc<Module>),
-    // hit: Vec<(String, Arc<Module>)>,
 }
 impl Kernel {
     const FIRST_REGISTER: usize = 4;
@@ -365,6 +361,7 @@ impl backend::Kernel for Kernel {
         // dbg!(&params);
         let params_buf =
             Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params));
+        // let params_buf = self.resources.from_slice(bytemuck::cast_slice(&params));
         // let params = Buffer::uninit(&self.device.cuda_device(), 8 * params.len());
 
         unsafe {

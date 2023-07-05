@@ -3,6 +3,10 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use parking_lot::Mutex;
+use resource_pool::hashpool::*;
+use resource_pool::prelude::*;
+
 use cuda_rs::{
     CUcontext, CUdevice_attribute, CUevent, CUevent_flags, CUstream, CudaApi, CudaError,
 };
@@ -213,6 +217,9 @@ impl InternalDevice {
             })
         }
     }
+    pub fn ctx(self: &Arc<InternalDevice>) -> CtxRef {
+        CtxRef::create(self)
+    }
 }
 impl Drop for InternalDevice {
     fn drop(&mut self) {
@@ -226,9 +233,14 @@ impl Drop for InternalDevice {
     }
 }
 
+impl InternalDevice {
+    pub fn t(self: &Arc<InternalDevice>) {}
+}
+
 #[derive(Clone)]
 pub struct Device {
     internal: Arc<InternalDevice>,
+    buffer_pool: Arc<Mutex<HashPool<Buffer>>>,
 }
 unsafe impl Sync for Device {}
 unsafe impl Send for Device {}
@@ -242,7 +254,10 @@ impl Device {
     pub fn create(instance: &Arc<Instance>, id: i32) -> Result<Self, Error> {
         let internal = Arc::new(InternalDevice::new(&instance, id)?);
 
-        Ok(Self { internal })
+        Ok(Self {
+            internal,
+            buffer_pool: Arc::new(Mutex::new(Default::default())),
+        })
     }
     // TODO: better context switch operation
     pub fn ctx(&self) -> CtxRef {
@@ -253,6 +268,12 @@ impl Device {
     }
     pub fn info(&self) -> &DeviceInfo {
         &self.internal.info
+    }
+    pub fn buffer_uninit(&self, size: usize) -> Buffer {
+        Buffer::uninit(self, size)
+    }
+    pub fn lease_buffer(&self, size: usize) -> Lease<Buffer> {
+        self.buffer_pool.lock().lease(&size, self)
     }
 }
 
@@ -325,7 +346,7 @@ impl Drop for Instance {
 pub struct Stream {
     events: Vec<Arc<Event>>,
     raw: CUstream,
-    device: Device,
+    device: Arc<InternalDevice>,
 }
 
 impl Stream {
@@ -337,7 +358,7 @@ impl Stream {
 
             Ok(Self {
                 raw: stream,
-                device: device.clone(),
+                device: device.internal.clone(),
                 events: vec![],
             })
         }
@@ -384,7 +405,7 @@ impl Drop for Stream {
 #[derive(Debug)]
 pub struct InternalModule {
     module: cuda_rs::CUmodule,
-    device: Device,
+    device: Arc<InternalDevice>,
 }
 
 impl Drop for InternalModule {
@@ -487,7 +508,7 @@ impl Module {
 
             Ok(Self(Arc::new(InternalModule {
                 module,
-                device: device.clone(),
+                device: device.internal.clone(),
             })))
         }
     }
@@ -626,7 +647,7 @@ impl From<(i32, i32, i32)> for KernelSize {
 #[derive(Debug)]
 pub struct Event {
     // stream: Option<Arc<Stream>>,
-    device: Device,
+    device: Arc<InternalDevice>,
     event: CUevent,
 }
 
@@ -638,7 +659,7 @@ impl Event {
             ctx.cuEventCreate(&mut event, CUevent_flags::CU_EVENT_DEFAULT as _)
                 .check()?;
             Ok(Self {
-                device: device.clone(),
+                device: device.internal.clone(),
                 // stream: None,
                 event,
             })
@@ -667,7 +688,7 @@ impl Drop for Event {
 
 #[derive(Debug)]
 pub struct Buffer {
-    device: Device,
+    device: Arc<InternalDevice>,
     dptr: u64,
     size: usize,
 }
@@ -685,14 +706,11 @@ impl Buffer {
             let mut dptr = 0;
             ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
             Self {
-                device: device.clone(),
+                device: device.internal.clone(),
                 dptr,
                 size,
             }
         }
-    }
-    pub fn device(&self) -> &Device {
-        &self.device
     }
     pub fn copy_from_slice(&self, slice: &[u8]) {
         unsafe {
@@ -725,4 +743,28 @@ impl Drop for Buffer {
             self.device.ctx().cuMemFree_v2(self.dptr).check().unwrap();
         }
     }
+}
+
+fn round_pow2(mut x: u32) -> u32 {
+    x = x.wrapping_sub(1);
+    x |= x.wrapping_shr(1);
+    x |= x.wrapping_shr(2);
+    x |= x.wrapping_shr(4);
+    x |= x.wrapping_shr(8);
+    x |= x.wrapping_shr(16);
+    x = x.wrapping_add(1);
+    x
+}
+
+impl Resource for Buffer {
+    type Info = usize;
+
+    type Context = Device;
+
+    fn create(size: &Self::Info, device: &Self::Context) -> Self {
+        let size = round_pow2(*size as _) as usize;
+        Self::uninit(device, size)
+    }
+
+    fn clear(&mut self) {}
 }

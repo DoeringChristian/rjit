@@ -1,3 +1,5 @@
+use resource_pool::hashpool::{HashPool, Lease};
+use resource_pool::prelude::*;
 use std::ffi::c_void;
 use std::fmt::{Debug, Write};
 use std::mem::size_of;
@@ -46,9 +48,9 @@ impl Backend {
             Arc::new(Module::from_ptx(&device, include_str!("./kernels/kernels_70.ptx")).unwrap());
 
         Ok(Self {
-            device,
             stream,
             kernels,
+            device,
         })
     }
 }
@@ -117,9 +119,9 @@ impl Drop for Backend {
 
 #[derive(Debug)]
 pub struct Buffer {
-    buf: cuda_core::Buffer,
-    pub(super) size: usize, // Number of bytes requested.
-                            // cap: usize,             // Number of bytes actually allocated.
+    buf: Lease<cuda_core::Buffer>,
+    pub(super) size: usize,
+    device: Device,
 }
 impl Buffer {
     pub fn ptr(&self) -> u64 {
@@ -129,25 +131,27 @@ impl Buffer {
         self.size
     }
     pub fn uninit(device: &Device, size: usize) -> Self {
-        let cap = round_pow2(size as _) as usize;
-
         Self {
-            buf: cuda_core::Buffer::uninit(device, cap),
+            buf: device.lease_buffer(size),
             size,
+            device: device.clone(),
         }
     }
     pub fn from_slice(device: &Device, slice: &[u8]) -> Self {
-        let size = slice.len();
-        let cap = round_pow2(size as _) as usize;
-
-        let buf = cuda_core::Buffer::uninit(device, cap);
+        let buf = device.lease_buffer(slice.len());
         buf.copy_from_slice(slice);
-        Self { size, buf }
+        Self {
+            size: slice.len(),
+            buf,
+            device: device.clone(),
+        }
     }
     pub fn device(&self) -> &Device {
-        self.buf.device()
+        &self.device
     }
 }
+unsafe impl Sync for Buffer {}
+unsafe impl Send for Buffer {}
 impl backend::Buffer for Buffer {
     fn copy_to_host(&self, dst: &mut [u8]) {
         self.buf.copy_to_host(dst);
