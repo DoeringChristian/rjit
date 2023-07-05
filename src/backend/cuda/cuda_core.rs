@@ -273,6 +273,7 @@ impl Device {
         Buffer::uninit(self, size)
     }
     pub fn lease_buffer(&self, size: usize) -> Lease<Buffer> {
+        let size = round_pow2(size as _) as usize;
         self.buffer_pool.lock().lease(&size, self)
     }
 }
@@ -762,8 +763,7 @@ impl Resource for Buffer {
     type Context = Device;
 
     fn create(size: &Self::Info, device: &Self::Context) -> Self {
-        let size = round_pow2(*size as _) as usize;
-        Self::uninit(device, size)
+        Self::uninit(device, *size)
     }
 
     fn clear(&mut self) {}
