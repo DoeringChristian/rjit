@@ -42,14 +42,18 @@ fn launch_config(device: &Device, size: u32) -> (u32, u32) {
 
     (blocks, threads)
 }
-pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend::Buffer> {
+pub fn compress(
+    backend: &super::Backend,
+    mask: &dyn backend::Buffer,
+    kernels: &Module,
+) -> Arc<dyn backend::Buffer> {
     let mask = mask.downcast_ref::<Buffer>().unwrap();
 
     let device = mask.device();
 
     let size = mask.size();
-    let count_out = Buffer::uninit(device, size_of::<u32>());
-    let mut out = Buffer::uninit(device, size as usize * size_of::<u32>());
+    let count_out = backend.buffer_uninit(size_of::<u32>());
+    let mut out = backend.buffer_uninit(size as usize * size_of::<u32>());
 
     if size <= 4096 {
         let mut in_ptr = mask.ptr();
@@ -98,7 +102,8 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend
         let mut scratch_items = block_count + 32;
         let trailer = items_per_block * block_count - size;
 
-        let scratch = Buffer::uninit(&device, scratch_items as usize * size_of::<u64>());
+        let scratch = backend.buffer_uninit(scratch_items as usize * size_of::<u64>());
+        // let scratch = Buffer::uninit(&device, scratch_items as usize * size_of::<u64>());
 
         let (block_count_init, thread_count_init) = launch_config(&device, scratch_items);
 

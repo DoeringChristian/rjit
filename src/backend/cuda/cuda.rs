@@ -1,16 +1,15 @@
-use std::ffi::c_void;
-use std::fmt::{Debug, Write};
-use std::mem::size_of;
+use parking_lot::Mutex;
+use resource_pool::hashpool;
+use resource_pool::prelude::*;
+use std::fmt::Debug;
 use std::sync::Arc;
 use thiserror::Error;
 
 use super::cuda_core::{self, Device, Event, Function, Instance, Module, Stream};
 use crate::backend::{self};
 use crate::schedule::{Env, SVarId, ScheduleIr};
-use crate::trace::VarType;
-use crate::var::ParamType;
 
-fn round_pow2(mut x: u32) -> u32 {
+pub fn round_pow2(mut x: u32) -> u32 {
     x = x.wrapping_sub(1);
     x |= x.wrapping_shr(1);
     x |= x.wrapping_shr(2);
@@ -34,6 +33,7 @@ pub struct Backend {
     device: Device,
     stream: Arc<Stream>,
     kernels: Arc<Module>, // Default kernels
+    pool: Arc<Mutex<hashpool::HashPool<cuda_core::Buffer>>>,
 }
 impl Backend {
     pub fn new() -> Result<Self, Error> {
@@ -49,8 +49,21 @@ impl Backend {
             device,
             stream,
             kernels,
+            pool: Arc::new(Mutex::new(Default::default())),
         })
     }
+    // pub fn buffer_uninit(&self, size: usize) -> Buffer {
+    //     let cap = round_pow2(size as _) as usize;
+    //     let buf = self.pool.lock().lease(&cap, &self.device);
+    //     Buffer { buf, size }
+    // }
+    // pub fn buffer_from_slice(&self, slice: &[u8]) -> Buffer {
+    //     let size = slice.len();
+    //     let cap = round_pow2(size as _) as usize;
+    //     let buf = self.pool.lock().lease(&cap, &self.device);
+    //     buf.copy_from_slice(slice);
+    //     Buffer { buf, size }
+    // }
 }
 
 unsafe impl Sync for Backend {}
@@ -60,10 +73,10 @@ impl backend::Backend for Backend {
         Arc::new(Texture::create(&self.device, shape, n_channels))
     }
     fn buffer_uninit(&self, size: usize) -> Arc<dyn crate::backend::Buffer> {
-        Arc::new(Buffer::uninit(&self.device, size))
+        Arc::new(Buffer::uninit(&self.device, &mut self.pool.lock(), size))
     }
     fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn crate::backend::Buffer> {
-        Arc::new(Buffer::from_slice(&self.device, slice))
+        Arc::new(self.buffer_from_slice(slice))
     }
 
     fn first_register(&self) -> usize {
@@ -107,7 +120,7 @@ impl backend::Backend for Backend {
     }
 
     fn compress(&self, mask: &dyn backend::Buffer) -> Arc<dyn backend::Buffer> {
-        super::compress::compress(mask, &self.kernels)
+        super::compress::compress(self, mask, &self.kernels)
     }
 }
 
@@ -115,11 +128,19 @@ impl Drop for Backend {
     fn drop(&mut self) {}
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct Buffer {
-    buf: cuda_core::Buffer,
-    pub(super) size: usize, // Number of bytes requested.
-                            // cap: usize,             // Number of bytes actually allocated.
+    pub buf: hashpool::Lease<cuda_core::Buffer>,
+    pub size: usize, // Number of bytes requested.
+                     // cap: usize,             // Number of bytes actually allocated.
+}
+impl Debug for Buffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Buffer")
+            // .field("buf", &self.buf)
+            .field("size", &self.size)
+            .finish()
+    }
 }
 impl Buffer {
     pub fn ptr(&self) -> u64 {
@@ -128,19 +149,27 @@ impl Buffer {
     pub fn size(&self) -> usize {
         self.size
     }
-    pub fn uninit(device: &Device, size: usize) -> Self {
+    pub fn uninit(
+        device: &Device,
+        pool: &mut hashpool::HashPool<cuda_core::Buffer>,
+        size: usize,
+    ) -> Self {
         let cap = round_pow2(size as _) as usize;
 
         Self {
-            buf: cuda_core::Buffer::uninit(device, cap),
+            buf: pool.lease(&cap, device),
             size,
         }
     }
-    pub fn from_slice(device: &Device, slice: &[u8]) -> Self {
+    pub fn from_slice(
+        device: &Device,
+        pool: &mut hashpool::HashPool<cuda_core::Buffer>,
+        slice: &[u8],
+    ) -> Self {
         let size = slice.len();
         let cap = round_pow2(size as _) as usize;
 
-        let buf = cuda_core::Buffer::uninit(device, cap);
+        let buf = pool.lease(&cap, device);
         buf.copy_from_slice(slice);
         Self { size, buf }
     }

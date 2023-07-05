@@ -7,6 +7,8 @@ use cuda_rs::{
     CUcontext, CUdevice_attribute, CUevent, CUevent_flags, CUstream, CudaApi, CudaError,
 };
 
+use parking_lot::Mutex;
+use resource_pool::hashpool;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -229,6 +231,7 @@ impl Drop for InternalDevice {
 #[derive(Clone)]
 pub struct Device {
     internal: Arc<InternalDevice>,
+    pool: Arc<Mutex<hashpool::HashPool<Buffer>>>,
 }
 unsafe impl Sync for Device {}
 unsafe impl Send for Device {}
@@ -242,7 +245,10 @@ impl Device {
     pub fn create(instance: &Arc<Instance>, id: i32) -> Result<Self, Error> {
         let internal = Arc::new(InternalDevice::new(&instance, id)?);
 
-        Ok(Self { internal })
+        Ok(Self {
+            internal,
+            pool: Arc::new(Mutex::new(Default::default())),
+        })
     }
     // TODO: better context switch operation
     pub fn ctx(&self) -> CtxRef {
@@ -253,6 +259,9 @@ impl Device {
     }
     pub fn info(&self) -> &DeviceInfo {
         &self.internal.info
+    }
+    pub fn lease_buffer(&self, size: usize) -> Result<Lease<Buffer>, Error> {
+        self.pool.lock().lease()
     }
 }
 
@@ -693,6 +702,11 @@ impl Buffer {
     }
     pub fn device(&self) -> &Device {
         &self.device
+    }
+    pub fn from_slice(device: &Device, slice: &[u8]) -> Self {
+        let buf = Self::uninit(device, slice.len());
+        buf.copy_from_slice(slice);
+        buf
     }
     pub fn copy_from_slice(&self, slice: &[u8]) {
         unsafe {

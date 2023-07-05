@@ -1,9 +1,11 @@
+use parking_lot::{Mutex, MutexGuard};
+use resource_pool::prelude::*;
 use std::ffi::{CStr, CString};
 use std::fmt::{Debug, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::backend::cuda::cuda_core::{Event, Stream};
-use crate::backend::cuda::{self, cuda_core, Buffer, Texture};
+use crate::backend::cuda::{self, cuda_core, round_pow2, Buffer, Texture};
 use crate::backend::{self, CompileOptions};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
@@ -32,6 +34,7 @@ pub struct Backend {
     device: optix_core::Device,
     stream: Arc<cuda_core::Stream>,
     kernels: Arc<cuda_core::Module>,
+    pool: Arc<Mutex<hashpool::HashPool<cuda_core::Buffer>>>,
     pub compile_options: backend::CompileOptions,
     pub miss: Option<(String, Arc<Module>)>,
     pub hit: Vec<(String, Arc<Module>)>,
@@ -43,6 +46,18 @@ impl Debug for Backend {
 }
 
 impl Backend {
+    fn buffer_uninit(&self, size: usize) -> cuda::Buffer {
+        let cap = round_pow2(size as _) as usize;
+        let buf = self.pool.lock().lease(&cap, &self.device.cuda_device());
+        Buffer { buf, size }
+    }
+    fn buffer_from_slice(&self, slice: &[u8]) -> cuda::Buffer {
+        let size = slice.len();
+        let cap = round_pow2(size as _) as usize;
+        let buf = self.pool.lock().lease(&cap, &self.device.cuda_device());
+        buf.copy_from_slice(slice);
+        Buffer { buf, size }
+    }
     pub fn set_hit_from_strs(&mut self, hit: &[(&str, &str)]) {
         self.hit.extend(hit.iter().map(|(ep, ptx)| {
             (
@@ -111,6 +126,7 @@ impl Backend {
             instance,
             stream,
             kernels,
+            pool: Arc::new(Mutex::new(Default::default())),
             hit: vec![],
             miss: Some(("__miss__dr".into(), miss)),
             compile_options,
@@ -137,12 +153,11 @@ impl backend::Backend for Backend {
         ))
     }
 
-    fn buffer_uninit(&self, size: usize) -> Arc<dyn backend::Buffer> {
-        Arc::new(Buffer::uninit(self.device.cuda_device(), size))
+    fn buffer_uninit(&self, size: usize) -> Arc<dyn crate::backend::Buffer> {
+        Arc::new(self.buffer_uninit(size))
     }
-
-    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn backend::Buffer> {
-        Arc::new(Buffer::from_slice(self.device.cuda_device(), slice))
+    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn crate::backend::Buffer> {
+        Arc::new(self.buffer_from_slice(slice))
     }
 
     fn first_register(&self) -> usize {
@@ -154,7 +169,7 @@ impl backend::Backend for Backend {
     }
 
     fn create_accel(&self, desc: backend::AccelDesc) -> Arc<dyn backend::Accel> {
-        Arc::new(Accel::create(&self.device, &self.stream, desc).unwrap())
+        Arc::new(Accel::create(self, desc).unwrap())
     }
 
     fn set_compile_options(&mut self, compile_options: &backend::CompileOptions) {
@@ -224,7 +239,8 @@ impl backend::Backend for Backend {
     }
 
     fn compress(&self, mask: &dyn backend::Buffer) -> Arc<dyn backend::Buffer> {
-        cuda::compress::compress(mask, &self.kernels)
+        // cuda::compress::compress(self, mask, &self.kernels)
+        todo!()
     }
 }
 
@@ -363,8 +379,10 @@ impl backend::Kernel for Kernel {
         log::trace!("Optix Kernel Launch with {size} threads.");
 
         // dbg!(&params);
-        let params_buf =
-            Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params));
+        let params_buf = cuda_core::Buffer::from_slice(
+            &self.device.cuda_device(),
+            bytemuck::cast_slice(&params),
+        );
         // let params = Buffer::uninit(&self.device.cuda_device(), 8 * params.len());
 
         unsafe {
@@ -418,11 +436,9 @@ impl Accel {
     pub fn ptr(&self) -> u64 {
         self.tlas.0
     }
-    pub fn create(
-        device: &Device,
-        stream: &Stream,
-        desc: backend::AccelDesc,
-    ) -> Result<Self, Error> {
+    pub fn create(backend: &Backend, desc: backend::AccelDesc) -> Result<Self, Error> {
+        let device = &backend.device;
+
         let build_options = OptixAccelBuildOptions {
             // buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_NONE as u32,
             buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_PREFER_FAST_TRACE as u32
@@ -446,8 +462,8 @@ impl Accel {
                     .check()
                     .unwrap()
             };
-            let gas_tmp = Buffer::uninit(device.cuda_device(), buffer_size.tempSizeInBytes);
-            let gas = Buffer::uninit(device.cuda_device(), buffer_size.outputSizeInBytes);
+            let gas_tmp = backend.buffer_uninit(buffer_size.tempSizeInBytes);
+            let gas = backend.buffer_uninit(buffer_size.outputSizeInBytes);
             // dbg!(gas.ptr());
             let mut accel = 0;
             unsafe {
@@ -455,7 +471,7 @@ impl Accel {
                     .api()
                     .optixAccelBuild(
                         *device.ctx(),
-                        stream.raw(),
+                        backend.stream.raw(),
                         &build_options,
                         build_inputs.as_ptr(),
                         build_inputs.len() as _,
@@ -470,7 +486,7 @@ impl Accel {
                     .check()
                     .unwrap();
                 // TODO: Async construction needs to keep gas_tmp and gas buffers arround
-                stream.synchronize().unwrap();
+                backend.stream.synchronize().unwrap();
                 (accel, gas)
             }
         };
@@ -531,7 +547,7 @@ impl Accel {
         // dbg!(&instances);
 
         let instance_buf = unsafe {
-            Buffer::from_slice(
+            cuda_core::Buffer::from_slice(
                 device.cuda_device(),
                 std::slice::from_raw_parts(
                     instances.as_ptr() as *const _,
@@ -588,7 +604,7 @@ unsafe impl Send for DeviceFuture {}
 #[derive(Debug)]
 pub struct DeviceFuture {
     event: Arc<Event>,
-    params: Buffer,
+    params: cuda_core::Buffer,
     stream: Stream,
 }
 
