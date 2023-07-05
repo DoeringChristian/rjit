@@ -4,7 +4,7 @@ use std::mem::size_of;
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::cuda_core::{Device, Event, Function, Instance, Module, Stream};
+use super::cuda_core::{self, Device, Event, Function, Instance, Module, Stream};
 use crate::backend::{self};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
@@ -117,87 +117,48 @@ impl Drop for Backend {
 
 #[derive(Debug)]
 pub struct Buffer {
-    device: Device,
-    dptr: u64,
+    buf: cuda_core::Buffer,
     pub(super) size: usize, // Number of bytes requested.
-    cap: usize,             // Number of bytes actually allocated.
+                            // cap: usize,             // Number of bytes actually allocated.
 }
 impl Buffer {
     pub fn ptr(&self) -> u64 {
-        self.dptr
+        self.buf.ptr()
     }
     pub fn size(&self) -> usize {
         self.size
     }
     pub fn uninit(device: &Device, size: usize) -> Self {
-        unsafe {
-            let cap = round_pow2(size as _) as usize;
+        let cap = round_pow2(size as _) as usize;
 
-            let ctx = device.ctx();
-            let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, cap).check().unwrap();
-            Self {
-                device: device.clone(),
-                dptr,
-                size,
-                cap,
-            }
+        Self {
+            buf: cuda_core::Buffer::uninit(device, cap),
+            size,
         }
     }
     pub fn from_slice(device: &Device, slice: &[u8]) -> Self {
-        unsafe {
-            let size = slice.len();
-            let cap = round_pow2(size as _) as usize;
+        let size = slice.len();
+        let cap = round_pow2(size as _) as usize;
 
-            let ctx = device.ctx();
-
-            let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, cap).check().unwrap();
-            ctx.cuMemcpyHtoD_v2(dptr, slice.as_ptr() as _, size)
-                .check()
-                .unwrap();
-            Self {
-                device: device.clone(),
-                dptr,
-                size,
-                cap,
-            }
-        }
+        let buf = cuda_core::Buffer::uninit(device, cap);
+        buf.copy_from_slice(slice);
+        Self { size, buf }
     }
     pub fn device(&self) -> &Device {
-        &self.device
+        self.buf.device()
     }
 }
 impl backend::Buffer for Buffer {
     fn copy_to_host(&self, dst: &mut [u8]) {
-        unsafe {
-            let ctx = self.device.ctx();
-            // assert!(self.size <= dst.len());
-
-            ctx.cuMemcpyDtoH_v2(
-                dst.as_mut_ptr() as *mut _,
-                self.dptr,
-                dst.len().min(self.size),
-            )
-            .check()
-            .unwrap();
-        }
+        self.buf.copy_to_host(dst);
     }
 
     fn ptr(&self) -> Option<u64> {
-        Some(self.dptr)
+        Some(self.buf.ptr())
     }
 
     fn size(&self) -> usize {
         self.size
-    }
-}
-
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.ctx().cuMemFree_v2(self.dptr).check().unwrap();
-        }
     }
 }
 

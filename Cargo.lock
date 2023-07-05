@@ -710,6 +710,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
 
 [[package]]
+name = "resource-pool"
+version = "0.1.0"
+source = "git+https://github.com/DoeringChristian/resource-pool.git#ba8941118700a482767f45dde4c32c450e14e5ae"
+
+[[package]]
 name = "rjit"
 version = "0.1.0"
 dependencies = [
@@ -732,6 +737,7 @@ dependencies = [
  "paste",
  "pretty_env_logger",
  "rayon",
+ "resource-pool",
  "rusty-hook",
  "slotmap",
  "smallvec",

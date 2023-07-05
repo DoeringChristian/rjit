@@ -665,18 +665,64 @@ impl Drop for Event {
     }
 }
 
-// TODO: Buffer implementation
-//
-// pub struct Buffer {
-//     device: Device,
-//     ptr: u64,
-//     size: usize,
-// }
-//
-// impl Buffer{
-//     pub fn uninit(device: &Device) -> Result<Self, Error>{
-//         let ctx = device.ctx();
-//         unsafe{
-//         }
-//     }
-// }
+#[derive(Debug)]
+pub struct Buffer {
+    device: Device,
+    dptr: u64,
+    size: usize,
+}
+
+impl Buffer {
+    pub fn ptr(&self) -> u64 {
+        self.dptr
+    }
+    pub fn size(&self) -> usize {
+        self.size
+    }
+    pub fn uninit(device: &Device, size: usize) -> Self {
+        unsafe {
+            let ctx = device.ctx();
+            let mut dptr = 0;
+            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
+            Self {
+                device: device.clone(),
+                dptr,
+                size,
+            }
+        }
+    }
+    pub fn device(&self) -> &Device {
+        &self.device
+    }
+    pub fn copy_from_slice(&self, slice: &[u8]) {
+        unsafe {
+            assert!(slice.len() <= self.size);
+            let ctx = self.device.ctx();
+
+            ctx.cuMemcpyHtoD_v2(self.dptr, slice.as_ptr() as _, slice.len())
+                .check()
+                .unwrap();
+        }
+    }
+    pub fn copy_to_host(&self, dst: &mut [u8]) {
+        unsafe {
+            let ctx = self.device.ctx();
+            // assert!(self.size <= dst.len());
+
+            ctx.cuMemcpyDtoH_v2(
+                dst.as_mut_ptr() as *mut _,
+                self.dptr,
+                dst.len().min(self.size),
+            )
+            .check()
+            .unwrap();
+        }
+    }
+}
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.ctx().cuMemFree_v2(self.dptr).check().unwrap();
+        }
+    }
+}
