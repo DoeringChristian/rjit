@@ -1,10 +1,13 @@
+use anyhow::{anyhow, bail, ensure};
 use half::f16;
 use itertools::Itertools;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
+use resource_pool::hashpool::HashPool;
 use std::cell::{RefCell, RefMut};
+use std::collections::HashMap;
 use std::fmt::Debug;
+use std::iter::IntoIterator;
 use std::ops::Deref;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use bytemuck::cast_slice;
@@ -12,6 +15,7 @@ use slotmap::{DefaultKey, SlotMap};
 use smallvec::smallvec;
 
 use crate::backend::Backend;
+use crate::registry::BACKEND_REGISTRY;
 use crate::schedule::Env;
 pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
 use crate::{AsVarType, Jit};
@@ -35,12 +39,15 @@ pub struct AccelDesc<'a> {
 /// A wrapper arrund an Intermediate Representation.
 ///
 #[derive(Clone, Debug, Default)]
-pub struct Trace(Arc<Mutex<Internal>>, pub Arc<Mutex<Jit>>);
+pub struct Trace {
+    internal: Arc<Mutex<Internal>>,
+    pub jit: Arc<Mutex<Jit>>,
+}
 impl Deref for Trace {
     type Target = Arc<Mutex<Internal>>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.internal
     }
 }
 
@@ -62,7 +69,7 @@ impl Trace {
     }
     fn var_info(&self, refs: &[&VarRef]) -> VarInfo {
         for (a, b) in refs.iter().tuple_windows() {
-            assert!(Arc::ptr_eq(&a.ir.0, &b.ir.0))
+            assert!(Arc::ptr_eq(&a.ir.internal, &b.ir.internal))
         }
         let ty = refs.first().unwrap().var().ty.clone(); // TODO: Fix (first non void)
 
@@ -78,7 +85,7 @@ impl Trace {
         let mut deps: smallvec::SmallVec<[VarId; 4]> = deps
             .iter()
             .map(|r| {
-                assert!(Arc::ptr_eq(&self.0, &r.ir));
+                assert!(Arc::ptr_eq(&self.internal, &r.ir));
                 r.id()
             })
             .collect();
@@ -91,22 +98,42 @@ impl Trace {
         });
         ret
     }
-    pub fn set_backend(&self, backend: impl AsRef<str>) {
-        if self.lock().backend.is_some() {
-            return;
+    pub fn set_backend<'a>(
+        &self,
+        backends: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> anyhow::Result<()> {
+        ensure!(
+            self.lock().backend.is_none(),
+            "Overwriting the backend is currently not supported!"
+        );
+
+        let backend_registry = BACKEND_REGISTRY.lock();
+
+        for name in backends.into_iter() {
+            let name = name.as_ref();
+            let factory = backend_registry
+                .get(name)
+                .ok_or(anyhow!("Could not find {name} backend!"))?;
+
+            match factory() {
+                Ok(backend) => {
+                    log::trace!("Selected backend {name}");
+                    self.lock().backend = Some(backend);
+                    break;
+                }
+                Err(err) => bail!("Could not initialize {name} backend with error: {err}"),
+            }
         }
-        let backend = backend.as_ref();
-        if backend == "cuda" {
-            self.lock().backend = Some(Box::new(crate::backend::cuda::Backend::new().unwrap()));
-        } else if backend == "optix" {
-            self.lock().backend = Some(Box::new(crate::backend::optix::Backend::new().unwrap()));
-        }
+
+        Ok(())
     }
     pub fn backend(&self) -> MappedMutexGuard<dyn Backend> {
-        MutexGuard::map(self.0.lock(), |ir| ir.backend.as_mut().unwrap().as_mut())
+        MutexGuard::map(self.internal.lock(), |ir| {
+            ir.backend.as_mut().unwrap().as_mut()
+        })
     }
     pub fn backend_as<T: Backend + 'static>(&self) -> MappedMutexGuard<T> {
-        MutexGuard::map(self.0.lock(), |ir| {
+        MutexGuard::map(self.internal.lock(), |ir| {
             ir.backend
                 .as_mut()
                 .unwrap()
@@ -118,23 +145,23 @@ impl Trace {
     }
     pub fn schedule(&self, refs: &[&VarRef]) {
         for r in refs {
-            assert!(Arc::ptr_eq(&r.ir, &self.0));
+            assert!(Arc::ptr_eq(&r.ir, &self.internal));
             self.lock().schedule(&[r.id()])
         }
     }
     pub fn eval(&self) {
-        self.1.lock().eval(&mut self.0.lock())
+        self.jit.lock().eval(&mut self.internal.lock())
     }
     pub fn kernel_history(&self) -> String {
-        self.1.lock().kernel_history()
+        self.jit.lock().kernel_history()
     }
     pub fn register_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn crate::backend::Kernel> {
-        self.1
+        self.jit
             .lock()
             .kernels
             .entry(crate::KernelKey::Name(String::from(entry_point)))
             .or_insert(
-                self.0
+                self.internal
                     .lock()
                     .backend
                     .as_ref()
@@ -303,7 +330,7 @@ impl Trace {
     pub fn texture(&self, shape: &[usize], n_channels: usize) -> VarRef {
         let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
         let texture = self
-            .0
+            .internal
             .lock()
             .backend
             .as_ref()

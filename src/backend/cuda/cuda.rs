@@ -9,22 +9,7 @@ use thiserror::Error;
 use super::cuda_core::{self, Device, Event, Function, Instance, Module, Stream};
 use crate::backend::{self};
 use crate::schedule::{Env, SVarId, ScheduleIr};
-use crate::trace::VarType;
-use crate::var::ParamType;
 
-fn round_pow2(mut x: u32) -> u32 {
-    x = x.wrapping_sub(1);
-    x |= x.wrapping_shr(1);
-    x |= x.wrapping_shr(2);
-    x |= x.wrapping_shr(4);
-    x |= x.wrapping_shr(8);
-    x |= x.wrapping_shr(16);
-    x = x.wrapping_add(1);
-    x
-}
-pub fn align(n: usize, alignment: usize) -> usize {
-    ((n + (alignment - 1)) / alignment) * alignment
-}
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("{}", .0)]

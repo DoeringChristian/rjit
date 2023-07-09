@@ -1,6 +1,7 @@
 pub mod backend;
 mod jit;
 mod loop_record;
+mod registry;
 mod schedule;
 mod trace;
 mod var;

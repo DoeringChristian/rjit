@@ -34,6 +34,7 @@ fasthash = "0.4.0"
 glam = "0.24.0"
 downcast-rs = "1.2.0"
 resource-pool = { git = "https://github.com/DoeringChristian/resource-pool.git" }
+anyhow = { version = "1.0.71", features = ["backtrace"]}
 
 [dev-dependencies]
 insta = { version = "1.28.0" }

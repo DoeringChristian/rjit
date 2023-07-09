@@ -6,7 +6,7 @@ use crate::{backend, AccelDesc, GeometryDesc, InstanceDesc};
 #[test]
 fn refcounting() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.array(&[1f32; 10]);
     assert_eq!(x.var().rc, 1, "rc of x should be 1 (in x)");
@@ -49,7 +49,7 @@ fn refcounting() {
 #[test]
 fn load_add_f32() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.array(&[1f32; 10]);
     // let y = ir::add(&x, &x);
@@ -65,7 +65,7 @@ fn load_add_f32() {
 #[test]
 fn load_gather_f32() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.buffer_f32(&[1., 2., 3., 4., 5.]);
     let i = ir.buffer_u32(&[0, 1, 4]);
@@ -81,7 +81,7 @@ fn load_gather_f32() {
 #[test]
 fn reindex() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.index(10);
 
@@ -101,7 +101,7 @@ fn reindex() {
 #[test]
 fn index() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let i = ir.index(10);
 
@@ -115,7 +115,7 @@ fn index() {
 #[test]
 fn gather_eval() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let r = {
         let x = ir.index(3);
@@ -140,7 +140,7 @@ fn gather_eval() {
 #[test]
 fn paralell() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.index(10);
 
@@ -157,7 +157,7 @@ fn paralell() {
 #[test]
 fn load_gather() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.buffer_f32(&[1., 2., 3.]);
 
@@ -171,7 +171,7 @@ fn load_gather() {
 #[test]
 fn eval_scatter() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.buffer_u32(&[0, 0, 0, 0]);
     let c = ir.literal_u32(1);
@@ -193,7 +193,7 @@ fn eval_scatter() {
 #[test]
 fn scatter_twice() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
@@ -219,7 +219,7 @@ fn scatter_twice() {
 #[test]
 fn scatter_twice_add() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
@@ -250,7 +250,7 @@ fn scatter_twice_add() {
 #[test]
 fn scatter_reduce() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
@@ -271,7 +271,7 @@ fn scatter_reduce() {
 #[test]
 fn tex_lookup() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.buffer_f32(&[0.5]);
     let y = ir.buffer_f32(&[0.5]);
@@ -295,7 +295,7 @@ fn tex_lookup() {
 #[test]
 fn trace_ray() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let miss_and_closesthit_ptx = r##"
 .version 8.0
@@ -425,7 +425,7 @@ fn trace_ray() {
 #[test]
 fn trace_ray_scatter() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let miss_and_closesthit_ptx = r##"
 .version 8.0
@@ -542,7 +542,7 @@ fn trace_ray_scatter() {
 #[test]
 fn sized_literal() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     let x = ir.sized_literal(0f32, 10);
     let x = x.add(&ir.literal(0f32));

@@ -4,7 +4,7 @@ use crate::trace::{ReduceOp, Trace};
 #[test]
 fn refcounting() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_f32(&[1.; 10]);
     assert_eq!(x.var().rc, 1, "rc of x should be 1 (in x)");
@@ -47,7 +47,7 @@ fn refcounting() {
 #[test]
 fn load_add_f32() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_f32(&[1.; 10]);
     // let y = ir::add(&x, &x);
@@ -63,7 +63,7 @@ fn load_add_f32() {
 #[test]
 fn load_gather_f32() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_f32(&[1., 2., 3., 4., 5.]);
     let i = ir.buffer_u32(&[0, 1, 4]);
@@ -79,7 +79,7 @@ fn load_gather_f32() {
 #[test]
 fn reindex() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.index(10);
 
@@ -99,7 +99,7 @@ fn reindex() {
 #[test]
 fn index() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(&["cuda"]);
 
     let i = ir.index(10);
 
@@ -113,7 +113,7 @@ fn index() {
 #[test]
 fn gather_eval() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let r = {
         let x = ir.index(3);
@@ -137,7 +137,7 @@ fn gather_eval() {
 #[test]
 fn paralell() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.index(10);
 
@@ -154,7 +154,7 @@ fn paralell() {
 #[test]
 fn _load_gather() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_f32(&[1., 2., 3.]);
 
@@ -168,7 +168,7 @@ fn _load_gather() {
 #[test]
 fn eval_scatter() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_u32(&[0, 0, 0, 0]);
     let c = ir.literal_u32(1);
@@ -191,7 +191,7 @@ fn eval_scatter() {
 #[test]
 fn scatter_twice() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
@@ -218,7 +218,7 @@ fn scatter_twice() {
 #[test]
 fn scatter_twice_add() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
@@ -250,7 +250,7 @@ fn scatter_twice_add() {
 #[test]
 fn scatter_reduce() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_u32(&[0, 0, 0, 0]);
 
@@ -271,7 +271,7 @@ fn scatter_reduce() {
 #[test]
 fn tex_lookup() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_f32(&[0.5]);
     let y = ir.buffer_f32(&[0.5]);
@@ -295,7 +295,7 @@ fn tex_lookup() {
 #[test]
 fn cast() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_u32(&[1, 2, 3]);
     let x = x.cast(&crate::VarType::U64);
@@ -311,7 +311,7 @@ fn cast() {
 #[test]
 fn bitcast() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.buffer_u32(&[0x3f800000, 0x40000000, 0x40400000]);
 
@@ -328,7 +328,7 @@ fn bitcast() {
 #[test]
 fn scatter_const_mask() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.literal(1f32);
     let mask = ir.buffer_bool(&[true, false, true]);
@@ -345,7 +345,7 @@ fn scatter_const_mask() {
 #[test]
 fn scatter_gather() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let dst = ir.buffer_u32(&[0, 0, 0]);
     let idx = ir.index(3);

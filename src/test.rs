@@ -12,7 +12,7 @@ macro_rules! test_uop {
                     let initial: &[$ty] = &$init;
 
                     let ir = Trace::default();
-                    ir.set_backend("cuda");
+                    ir.set_backend(["cuda"]);
 
                     let x = ir.[<buffer_$ty>](initial);
 
@@ -43,7 +43,7 @@ test_uop!(log2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f
 #[test]
 fn opaque() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.literal_u32(10);
     let x = x.opaque();
@@ -62,7 +62,7 @@ fn opaque() {
 #[test]
 fn make_opaque() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     let x = ir.literal_u32(10);
     x.make_opaque();
@@ -82,7 +82,7 @@ fn make_opaque() {
 #[test]
 fn compress_small() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     // let x = ir.array(&[true, false, true]);
     let x = ir.array(&[true, false, true, false, true, false, true, false]);
@@ -94,7 +94,7 @@ fn compress_small() {
 #[test]
 fn compress_large() {
     let ir = Trace::default();
-    ir.set_backend("cuda");
+    ir.set_backend(["cuda"]);
 
     const N: u32 = 4100;
 
@@ -107,7 +107,7 @@ fn compress_large() {
 #[test]
 fn compress_small_optix() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     // let x = ir.array(&[true, false, true]);
     let x = ir.array(&[true, false, true, false, true, false, true, false]);
@@ -119,7 +119,7 @@ fn compress_small_optix() {
 #[test]
 fn compress_large_optix() {
     let ir = Trace::default();
-    ir.set_backend("optix");
+    ir.set_backend(["optix"]);
 
     const N: u32 = 4100;
 
