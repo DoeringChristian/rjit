@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use resource_pool::hashpool::*;
-use resource_pool::prelude::*;
 
 use cuda_rs::{
     CUcontext, CUdevice_attribute, CUevent, CUevent_flags, CUstream, CudaApi, CudaError,
