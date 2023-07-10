@@ -146,7 +146,7 @@ impl Trace {
             self.lock().schedule(&[r.id()])
         }
     }
-    pub fn eval(&self) {
+    pub fn eval(&self) -> Result<()> {
         self.jit.lock().eval(&mut self.internal.lock())
     }
     pub fn kernel_history(&self) -> String {

@@ -4,6 +4,7 @@ use std::fmt::Write;
 use std::ops::Range;
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -63,9 +64,10 @@ impl Jit {
     ///
     /// A the end, all scheduled variables are overwritten with the calculated data.
     ///
-    pub fn eval(&mut self, ir: &mut Internal) {
+    pub fn eval(&mut self, ir: &mut Internal) -> Result<()> {
         if ir.scheduled.len() == 0 {
-            return;
+            log::trace!("Nothing to evaluate.");
+            return Ok(());
         }
         let mut schedule = ir.scheduled.clone();
 
@@ -78,7 +80,11 @@ impl Jit {
             if !var.data.is_buffer() && var.ty.size() > 0 {
                 let size = ir.var(id).size;
                 let ty_size = ir.var(id).ty.size();
-                let buffer = ir.backend.as_ref().unwrap().buffer_uninit(size * ty_size);
+                let buffer = ir
+                    .backend
+                    .as_ref()
+                    .ok_or(anyhow!("Backend not initialized!"))?
+                    .buffer_uninit(size * ty_size);
 
                 let mut var = ir.var_mut(id);
                 var.data = Data::Buffer(buffer);
@@ -132,7 +138,7 @@ impl Jit {
 
         // TODO: synchronisation here
         for future in futures {
-            future.wait();
+            future?.wait();
         }
         ir.backend.as_ref().unwrap().synchronize();
 
@@ -158,13 +164,7 @@ impl Jit {
             ir.dec_rc(id);
         }
         ir.scheduled.clear();
-    }
-    pub fn launch_kernel(&mut self, name: &str, env: &mut Env, size: usize) {
-        self.kernels
-            .get_mut(&KernelKey::Name(String::from(name)))
-            .unwrap()
-            .execute_async(env, size)
-            .wait();
+        Ok(())
     }
     // pub fn launch_kernel(&self, ir: &mut Internal) {}
     ///

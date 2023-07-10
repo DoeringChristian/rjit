@@ -1,5 +1,5 @@
 use crate::Trace;
-use anyhow::Result;
+use anyhow::*;
 
 macro_rules! test_uop {
         ($jop:ident($init:expr; $ty:ident) $(,$mod:literal)?) => {

@@ -1,11 +1,12 @@
 pub mod cuda;
 pub mod optix;
 
+use anyhow::Result;
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use downcast_rs::{impl_downcast, Downcast, DowncastSync};
+use downcast_rs::{impl_downcast, DowncastSync};
 
 use crate::schedule::{Env, ScheduleIr};
 
@@ -20,7 +21,7 @@ impl_downcast!(sync Texture);
 
 pub trait Kernel: Debug + Sync + Send + DowncastSync {
     fn into_any(self: Arc<Self>) -> Arc<dyn Any>;
-    fn execute_async(&self, env: &mut Env, size: usize) -> Arc<dyn DeviceFuture>;
+    fn execute_async(&self, env: &mut Env, size: usize) -> Result<Arc<dyn DeviceFuture>>;
     fn assembly(&self) -> &str;
     fn backend_ident(&self) -> &'static str;
 }

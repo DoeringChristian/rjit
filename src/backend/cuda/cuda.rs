@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use resource_pool::hashpool::{HashPool, Lease};
 use resource_pool::prelude::*;
 use std::ffi::c_void;
@@ -411,7 +412,7 @@ impl Kernel {
         &self,
         params: &mut [*mut std::ffi::c_void],
         size: usize,
-    ) -> Arc<DeviceFuture> {
+    ) -> Result<Arc<DeviceFuture>, Error> {
         let ctx = self.device.ctx();
         unsafe {
             let mut stream = self
@@ -453,7 +454,7 @@ impl Kernel {
 
             let event = Arc::new(Event::create(&self.device).unwrap());
             stream.record_event(&event).unwrap();
-            Arc::new(DeviceFuture { event, stream })
+            Ok(Arc::new(DeviceFuture { event, stream }))
         }
     }
     pub fn launch(
@@ -500,20 +501,23 @@ impl backend::Kernel for Kernel {
         &self,
         env: &mut crate::schedule::Env,
         size: usize,
-    ) -> Arc<dyn backend::DeviceFuture> {
-        let mut params = vec![size as u64];
-        params.extend(env.opaques());
-        params.extend(
-            env.buffers()
-                .iter()
-                .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().ptr()),
-        );
-        params.extend(
-            env.textures()
-                .iter()
-                .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
-        );
-        self.launch_with_size(&mut [params.as_mut_ptr() as *mut _], size)
+    ) -> anyhow::Result<Arc<dyn backend::DeviceFuture>> {
+        let mut params = [Ok(size as u64)]
+            .into_iter()
+            .chain(env.opaques().iter().map(|o| Ok(*o)))
+            .chain(env.buffers().iter().map(|b| {
+                b.downcast_ref::<Buffer>()
+                    .ok_or(anyhow!("Could not downcast Buffer!"))
+                    .map(|b| b.ptr())
+            }))
+            .chain(env.textures().iter().map(|t| {
+                t.downcast_ref::<Texture>()
+                    .ok_or(anyhow!("Could not downcast Texture!"))
+                    .map(|t| t.ptr())
+            }))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        Ok(self.launch_with_size(&mut [params.as_mut_ptr() as *mut _], size)?)
     }
 
     fn assembly(&self) -> &str {

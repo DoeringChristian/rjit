@@ -8,6 +8,7 @@ use crate::backend::{self, CompileOptions};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
+use anyhow::{anyhow, Result};
 use optix_rs::{
     OptixAccelBufferSizes, OptixAccelBuildOptions, OptixAccelEmitDesc, OptixApi, OptixBuildFlags,
     OptixBuildInput, OptixBuildInputInstanceArray, OptixBuildInputTriangleArray,
@@ -336,33 +337,31 @@ impl backend::Kernel for Kernel {
         &self,
         env: &mut crate::schedule::Env,
         size: usize,
-    ) -> Arc<dyn backend::DeviceFuture> {
-        let params = [size as u32, 0u32];
-        let mut params = Vec::from(bytemuck::cast_slice(&params));
-        params.extend(
-            env.buffers()
-                .iter()
-                .map(|b| b.as_any().downcast_ref::<Buffer>().unwrap().ptr()),
-        );
-        params.extend(
-            env.textures()
-                .iter()
-                .map(|b| b.as_any().downcast_ref::<Texture>().unwrap().ptr()),
-        );
-        params.extend(
-            env.accels()
-                .iter()
-                .map(|a| a.as_any().downcast_ref::<Accel>().unwrap().ptr()),
-        );
+    ) -> Result<Arc<dyn backend::DeviceFuture>> {
+        let params = [Ok(bytemuck::cast::<_, u64>([size as u32, 0u32]))]
+            .into_iter()
+            .chain(env.opaques().iter().map(|o| Ok(*o)))
+            .chain(env.buffers().iter().map(|b| {
+                b.downcast_ref::<Buffer>()
+                    .ok_or(anyhow!("Could not downcast Buffer!"))
+                    .map(|b| b.ptr())
+            }))
+            .chain(env.textures().iter().map(|t| {
+                t.downcast_ref::<Texture>()
+                    .ok_or(anyhow!("Could not downcast Texture!"))
+                    .map(|t| t.ptr())
+            }))
+            .chain(env.accels().iter().map(|a| {
+                a.downcast_ref::<Accel>()
+                    .ok_or(anyhow!("Could not downcast Acceleratin Structure!"))
+                    .map(|a| a.ptr())
+            }))
+            .collect::<Result<Vec<_>>>()?;
 
-        log::trace!("params: {:02x?}", bytemuck::cast_slice::<_, u8>(&params));
         log::trace!("Optix Kernel Launch with {size} threads.");
 
-        // dbg!(&params);
         let params_buf =
             Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params));
-        // let params_buf = self.resources.from_slice(bytemuck::cast_slice(&params));
-        // let params = Buffer::uninit(&self.device.cuda_device(), 8 * params.len());
 
         unsafe {
             let mut stream = self
@@ -379,11 +378,11 @@ impl backend::Kernel for Kernel {
 
             let event = Arc::new(Event::create(&self.device.cuda_device()).unwrap());
             stream.record_event(&event).unwrap();
-            Arc::new(DeviceFuture {
+            Ok(Arc::new(DeviceFuture {
                 event,
                 params: params_buf,
                 stream,
-            })
+            }))
         }
     }
 
