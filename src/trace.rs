@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Result};
 use half::f16;
 use itertools::Itertools;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use bytemuck::cast_slice;
 use slotmap::{DefaultKey, SlotMap};
-use smallvec::smallvec;
+use smallvec::{smallvec, SmallVec};
 
 use crate::backend::Backend;
 use crate::registry::BACKEND_REGISTRY;
@@ -67,9 +67,9 @@ impl Trace {
         let id = VarId(self.lock().vars.insert(v));
         VarRef::steal_from(&self, id)
     }
-    fn var_info(&self, refs: &[&VarRef]) -> VarInfo {
+    fn var_info(&self, refs: &[&VarRef]) -> Result<VarInfo> {
         for (a, b) in refs.iter().tuple_windows() {
-            assert!(Arc::ptr_eq(&a.ir.internal, &b.ir.internal))
+            ensure!(Arc::ptr_eq(&a.ir.internal, &b.ir.internal))
         }
         let ty = refs.first().unwrap().var().ty.clone(); // TODO: Fix (first non void)
 
@@ -79,16 +79,13 @@ impl Trace {
             .reduce(|s0, s1| s0.max(s1))
             .unwrap()
             .clone();
-        VarInfo { ty, size }
+        Ok(VarInfo { ty, size })
     }
-    fn push_var_op(&self, op: Op, deps: &[&VarRef], ty: VarType, size: usize) -> VarRef {
-        let mut deps: smallvec::SmallVec<[VarId; 4]> = deps
-            .iter()
-            .map(|r| {
-                assert!(Arc::ptr_eq(&self.internal, &r.ir));
-                r.id()
-            })
-            .collect();
+    fn push_var_op(&self, op: Op, deps: &[&VarRef], ty: VarType, size: usize) -> Result<VarRef> {
+        for dep in deps {
+            ensure!(Arc::ptr_eq(&self.internal, &dep.ir));
+        }
+        let mut deps: smallvec::SmallVec<[VarId; 4]> = deps.iter().map(|r| r.id()).collect();
         let ret = self.push_var(Var {
             op,
             deps,
@@ -96,12 +93,12 @@ impl Trace {
             size,
             ..Default::default()
         });
-        ret
+        Ok(ret)
     }
     pub fn set_backend<'a>(
         &self,
         backends: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         ensure!(
             self.lock().backend.is_none(),
             "Overwriting the backend is currently not supported!"
@@ -171,102 +168,24 @@ impl Trace {
             .clone()
     }
 }
-macro_rules! buffer {
-    ($TY:ident, $ty:ident) => {
-        paste::paste! {
-            pub fn [<buffer_$ty>](&self, slice: &[$ty]) -> VarRef {
-                let buffer = self.lock()
-                        .backend
-                        .as_ref()
-                        .unwrap()
-                        .buffer_from_slice(cast_slice(slice));
-                self.push_var(Var {
-                    data: Data::Buffer(buffer),
-                    size: slice.len(),
-                    ty: VarType::$TY,
-                    op: Op::Data,
-                    ..Default::default()
-                })
-            }
-            pub fn [<uninit_buffer_$ty>](&self, size: usize) -> VarRef {
-                let buffer = self.lock()
-                        .backend
-                        .as_ref()
-                        .unwrap()
-                        .buffer_uninit(size * VarType::$TY.size());
-                self.push_var(Var {
-                    data: Data::Buffer(buffer),
-                    size,
-                    ty: VarType::$TY,
-                    op: Op::Data,
-                    ..Default::default()
-                })
-            }
-        }
-    };
-}
-
-macro_rules! literal {
-    ($TY:ident, $i:ident, $ty:ident) => {
-        paste::paste! {
-            pub fn [<literal_$ty>](&self, val: $ty) -> VarRef {
-                self.literal::<$ty>(val)
-            }
-            pub fn [<sized_literal_$ty>](&self, val: $ty, size: usize) -> VarRef {
-                self.sized_literal::<$ty>(val, size)
-            }
-        }
-    };
-}
-
 impl Trace {
-    pub unsafe fn buffer_ty(&self, slice: &[u8], ty: &VarType) -> VarRef {
-        assert!(slice.len() % ty.size() == 0);
-        let buffer = self
-            .lock()
-            .backend
-            .as_ref()
-            .unwrap()
-            .buffer_from_slice(cast_slice(slice));
-        self.push_var(Var {
-            data: Data::Buffer(buffer),
-            size: slice.len() / ty.size(),
-            ty: ty.clone(),
-            op: Op::Data,
-            ..Default::default()
-        })
-    }
-    // Buffer initializers:
-    buffer!(Bool, bool);
-    buffer!(I8, i8);
-    buffer!(U8, u8);
-    buffer!(I16, i16);
-    buffer!(U16, u16);
-    buffer!(I32, i32);
-    buffer!(U32, u32);
-    buffer!(I64, i64);
-    buffer!(U64, u64);
-    buffer!(F16, f16);
-    buffer!(F32, f32);
-    buffer!(F64, f64);
-
-    pub fn array<T: AsVarType>(&self, slice: &[T]) -> VarRef {
+    pub fn array<T: AsVarType>(&self, slice: &[T]) -> Result<VarRef> {
         let ty = T::as_var_type();
         let buffer = self
             .lock()
             .backend
             .as_ref()
-            .unwrap()
+            .ok_or(anyhow!("Backend not initialized!"))?
             .buffer_from_slice(unsafe {
                 std::slice::from_raw_parts(slice.as_ptr() as *const _, slice.len() * ty.size())
             });
-        self.push_var(Var {
+        Ok(self.push_var(Var {
             data: Data::Buffer(buffer),
             size: slice.len(),
             ty,
             op: Op::Data,
             ..Default::default()
-        })
+        }))
     }
     pub fn array_uninit<T: AsVarType>(&self, size: usize) -> VarRef {
         let ty = T::as_var_type();
@@ -285,37 +204,23 @@ impl Trace {
         })
     }
 
-    pub fn literal<T: AsVarType>(&self, val: T) -> VarRef {
+    pub fn literal<T: AsVarType>(&self, val: T) -> Result<VarRef> {
         self.sized_literal(val, 1)
     }
-    pub fn sized_literal<T: AsVarType>(&self, val: T, size: usize) -> VarRef {
+    pub fn sized_literal<T: AsVarType>(&self, val: T, size: usize) -> Result<VarRef> {
         let ty = T::as_var_type();
-        assert_eq!(ty.size(), std::mem::size_of::<T>());
+        ensure!(ty.size() == std::mem::size_of::<T>());
         let mut data: u64 = 0;
         unsafe { *(&mut data as *mut _ as *mut T) = val };
-        self.push_var(Var {
+        Ok(self.push_var(Var {
             op: Op::Literal,
             deps: smallvec![],
             ty,
             data: Data::Literal(data),
             size,
             ..Default::default()
-        })
+        }))
     }
-    // Literal initializers:
-    literal!(Bool, u8, bool);
-    literal!(I8, u8, i8);
-    literal!(U8, u8, u8);
-    literal!(I16, u16, i16);
-    literal!(U16, u16, u16);
-    literal!(I32, u32, i32);
-    literal!(U32, u32, u32);
-    literal!(I64, u64, i64);
-    literal!(U64, u64, u64);
-    literal!(F16, u16, f16);
-    literal!(F32, u32, f32);
-    literal!(F64, u64, f64);
-
     // Special operations:
     pub fn index(&self, size: usize) -> VarRef {
         let v = self.push_var(Var {
@@ -491,9 +396,9 @@ impl VarRef {
 macro_rules! bop {
     ($Op:ident $(-> $ty:ident)?) => {
         paste::paste! {
-            pub fn [<$Op:lower>](&self, rhs: &VarRef) -> VarRef {
+            pub fn [<$Op:lower>](&self, rhs: &VarRef) -> Result<VarRef> {
                 #[allow(unused_mut)]
-                let mut info = self.ir.var_info(&[self, &rhs]);
+                let mut info = self.ir.var_info(&[self, &rhs])?;
                 $(info.ty = VarType::$ty;)?
                 self.ir
                     .push_var_op(Op::$Op, &[self, &rhs], info.ty, info.size)
@@ -501,28 +406,11 @@ macro_rules! bop {
         }
     };
 }
-macro_rules! to_host {
-    ($Ty:ident) => {
-        paste::paste! {
-            pub fn [<to_host_$Ty:lower>](&self) -> Vec<[<$Ty:lower>]> {
-                let var = self.var();
-                assert_eq!(var.ty, VarType::$Ty);
-
-                let mut dst = Vec::with_capacity(var.size);
-                unsafe{dst.set_len(var.size)};
-
-                var.data.buffer().unwrap().copy_to_host(bytemuck::cast_slice_mut(&mut dst));
-                dst
-            }
-        }
-    };
-}
-
 macro_rules! uop {
     ($Op:ident) => {
         paste::paste! {
-            pub fn [<$Op:lower>](&self) -> Self {
-                let info = self.ir.var_info(&[self]);
+            pub fn [<$Op:lower>](&self) -> Result<Self> {
+                let info = self.ir.var_info(&[self])?;
                 self.ir.push_var_op(Op::$Op, &[self], info.ty, info.size)
             }
         }
@@ -531,8 +419,8 @@ macro_rules! uop {
 macro_rules! top {
     ($Op:ident) => {
         paste::paste! {
-            pub fn [<$Op:lower>](&self, d1: &VarRef, d2: &VarRef) -> VarRef {
-                let info = self.ir.var_info(&[self, &d1, &d2]);
+            pub fn [<$Op:lower>](&self, d1: &VarRef, d2: &VarRef) -> Result<VarRef> {
+                let info = self.ir.var_info(&[self, &d1, &d2])?;
                 self.ir
                     .push_var_op(Op::$Op, &[self, &d1, &d2], info.ty, info.size)
             }
@@ -569,49 +457,36 @@ impl VarRef {
     // Recursive expansion of the to_host! macro
     // =========================================
 
-    pub fn to_host_bool(&self) -> Vec<bool> {
+    pub fn to_host<T: AsVarType>(&self) -> Result<Vec<T>> {
         let var = self.var();
-        assert_eq!(var.ty, VarType::Bool);
+        let ty = T::as_var_type();
+        ensure!(
+            var.ty == ty,
+            "Type of variable {:?} does not match requested type {:?}!",
+            var.ty,
+            ty
+        );
 
         let mut dst = Vec::with_capacity(var.size);
         unsafe { dst.set_len(var.size) };
         unsafe {
             var.data
                 .buffer()
-                .unwrap()
+                .ok_or(anyhow!("Variable is not a buffer!"))?
                 .copy_to_host(std::slice::from_raw_parts_mut(
                     dst.as_mut_ptr() as *mut _,
-                    dst.len(),
+                    dst.len() * ty.size(),
                 ));
         }
-        dst
-    }
-    pub fn to_slice(&self, slice: &mut [u8]) {
-        let var = self.var();
-        assert_eq!(self.size() * self.ty().size(), slice.len());
-        var.data
-            .buffer()
-            .unwrap()
-            .copy_to_host(bytemuck::cast_slice_mut(slice));
+        Ok(dst)
     }
 
-    to_host!(I8);
-    to_host!(U8);
-    to_host!(I16);
-    to_host!(U16);
-    to_host!(I32);
-    to_host!(U32);
-    to_host!(I64);
-    to_host!(U64);
-    to_host!(F16);
-    to_host!(F32);
-    to_host!(F64);
     // Unarry operations:
-    pub fn cast(&self, ty: &VarType) -> VarRef {
+    pub fn cast(&self, ty: &VarType) -> Result<VarRef> {
         self.ir
             .push_var_op(Op::Cast, &[self], ty.clone(), self.size())
     }
-    pub fn bitcast(&self, ty: &VarType) -> VarRef {
+    pub fn bitcast(&self, ty: &VarType) -> Result<VarRef> {
         assert_eq!(self.var().ty.size(), ty.size());
         self.ir
             .push_var_op(Op::Bitcast, &[self], ty.clone(), self.size())
@@ -661,16 +536,16 @@ impl VarRef {
     top!(Fma);
     top!(Select);
 
-    pub fn modulo(&self, rhs: &VarRef) -> VarRef {
-        let info = self.ir.var_info(&[self, &rhs]);
+    pub fn modulo(&self, rhs: &VarRef) -> Result<VarRef> {
+        let info = self.ir.var_info(&[self, &rhs])?;
         self.ir
             .push_var_op(Op::Mod, &[self, &rhs], info.ty, info.size)
     }
     bop!(Mulhi);
 
-    pub fn and(&self, rhs: &VarRef) -> VarRef {
+    pub fn and(&self, rhs: &VarRef) -> Result<VarRef> {
         assert!(Arc::ptr_eq(&self.ir, &rhs.ir));
-        let info = self.ir.var_info(&[self, &rhs]);
+        let info = self.ir.var_info(&[self, &rhs])?;
 
         let ty_lhs = self.var().ty.clone();
         let ty_rhs = rhs.var().ty.clone();
@@ -685,7 +560,7 @@ impl VarRef {
         ret
     }
 
-    pub fn to_texture(&self, shape: &[usize], n_channels: usize) -> Self {
+    pub fn to_texture(&self, shape: &[usize], n_channels: usize) -> Result<Self> {
         self.schedule();
         self.ir.eval();
 
@@ -708,20 +583,20 @@ impl VarRef {
             data: Data::Texture(texture),
             ..Default::default()
         });
-        dst
+        Ok(dst)
     }
-    pub fn tex_to_buffer(&self) -> Self {
-        let dst = self.ir.buffer_f32(&vec![0.; self.size()]);
+    pub fn tex_to_buffer(&self) -> Result<Self> {
+        let dst = self.ir.array(&vec![0.; self.size()])?;
         let buf = dst.var().data.buffer().unwrap().clone();
         self.var()
             .data
             .texture()
-            .unwrap()
+            .ok_or(anyhow!("Variable is not a texture!"))?
             .copy_to_buffer(buf.as_ref());
-        dst
+        Ok(dst)
     }
 
-    pub fn tex_lookup(&self, pos: &[&VarRef]) -> smallvec::SmallVec<[Self; 4]> {
+    pub fn tex_lookup(&self, pos: &[&VarRef]) -> Result<SmallVec<[Self; 4]>> {
         assert_eq!(pos[0].size(), pos[1].size());
         let size = pos[0].size();
         assert!(pos.iter().all(|p| p.size() == size));
@@ -746,7 +621,7 @@ impl VarRef {
                 self.ir
                     .push_var_op(Op::Extract { offset: i }, &[&lookup], VarType::F32, size)
             })
-            .collect::<smallvec::SmallVec<_>>()
+            .collect()
     }
     /// Reindex a variable with a new index and size.
     /// (Normally size is the size of the index)
@@ -754,7 +629,7 @@ impl VarRef {
     /// For now we construct a separate set of variables in the Ir.
     /// However, it should sometimes be possible to reuse the old ones.
     ///
-    fn reindex(&self, new_idx: &VarRef, size: usize) -> Option<VarRef> {
+    fn reindex(&self, new_idx: &VarRef, size: usize) -> Result<VarRef> {
         assert!(Arc::ptr_eq(&self.ir, &new_idx.ir));
         // let mut ir = self.ir.lock();
 
@@ -764,7 +639,7 @@ impl VarRef {
         let v_deps = v.deps.clone();
 
         if is_data {
-            return None;
+            return bail!("The variable contains data and cannot be reindexed!");
         }
 
         drop(v);
@@ -773,11 +648,7 @@ impl VarRef {
         if !is_literal {
             for dep in v_deps {
                 let dep = VarRef::borrow_from(&self.ir, dep);
-                if let Some(dep) = dep.reindex(new_idx, size) {
-                    deps.push(dep.id());
-                } else {
-                    return None;
-                }
+                deps.push(dep.reindex(new_idx, size)?.id());
             }
         }
 
@@ -795,9 +666,9 @@ impl VarRef {
         drop(v);
 
         if op == Op::Idx {
-            return Some(new_idx.clone());
+            return Ok(new_idx.clone());
         } else {
-            return Some(self.ir.push_var(Var {
+            return Ok(self.ir.push_var(Var {
                 op,
                 deps,
                 ty,
@@ -814,7 +685,7 @@ impl VarRef {
         idx: &Self,
         mask: Option<&Self>,
         reduce_op: ReduceOp,
-    ) {
+    ) -> Result<()> {
         target.schedule();
         self.ir.eval();
 
@@ -823,7 +694,7 @@ impl VarRef {
                 assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
-            .unwrap_or(self.ir.literal_bool(true));
+            .unwrap_or(self.ir.literal(true)?);
 
         let size = idx.var().size;
 
@@ -835,9 +706,10 @@ impl VarRef {
         });
         target.var().dirty = true;
         res.schedule();
+        Ok(())
     }
-    pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) {
-        self.scatter_reduce(dst, idx, mask, ReduceOp::None);
+    pub fn scatter(&self, dst: &Self, idx: &Self, mask: Option<&Self>) -> Result<()> {
+        self.scatter_reduce(dst, idx, mask, ReduceOp::None)
     }
     ///
     /// For gather operations there are three ways to resolve them:
@@ -852,7 +724,7 @@ impl VarRef {
     /// Finally, if the variable depends on Inputs we need to launch multiple Kernels (this
     /// is not yet implemented).
     ///
-    pub fn gather(&self, index: &VarRef, mask: Option<&VarRef>) -> VarRef {
+    pub fn gather(&self, index: &VarRef, mask: Option<&VarRef>) -> Result<VarRef> {
         assert!(Arc::ptr_eq(&self.ir, &index.ir));
 
         let size = index.var().size;
@@ -867,7 +739,7 @@ impl VarRef {
                 assert!(Arc::ptr_eq(&self.ir, &m.ir));
                 m.clone()
             })
-            .unwrap_or(self.ir.literal_bool(true));
+            .unwrap_or(self.ir.literal(true)?);
 
         // let res = self.as_ptr();
 
@@ -879,14 +751,19 @@ impl VarRef {
                 size,
                 ..Default::default()
             });
-            return ret;
+            return Ok(ret);
         }
 
         let res = self.reindex(&index, size);
 
-        if let Some(res) = res {
-            let res = res.and(&mask);
-            return res;
+        match res {
+            Ok(res) => {
+                let res = res.and(&mask);
+                return res;
+            }
+            Err(err) => {
+                log::trace!("Reindexing failed. Adding gather operation");
+            }
         }
 
         self.schedule();
@@ -899,7 +776,7 @@ impl VarRef {
             size,
             ..Default::default()
         });
-        return ret;
+        return Ok(ret);
     }
 
     pub fn trace_ray(
@@ -916,44 +793,14 @@ impl VarRef {
         sbt_stride: Option<&Self>,
         miss_sbt: Option<&Self>,
         mask: Option<&Self>,
-    ) -> Vec<Self> {
-        let null = self.ir.literal_u32(0);
-        let mask: Self = mask
-            .map(|m| {
-                assert!(Arc::ptr_eq(&self.ir, &m.ir));
-                m.clone()
-            })
-            .unwrap_or(self.ir.literal_bool(true));
-        let vis_mask = vis_mask
-            .map(|m| {
-                assert!(Arc::ptr_eq(&self.ir, &m.ir));
-                m.clone()
-            })
-            .unwrap_or(self.ir.literal_u32(255));
-        let flags = flags
-            .map(|m| {
-                assert!(Arc::ptr_eq(&self.ir, &m.ir));
-                m.clone()
-            })
-            .unwrap_or(null.clone());
-        let sbt_offset = sbt_offset
-            .map(|m| {
-                assert!(Arc::ptr_eq(&self.ir, &m.ir));
-                m.clone()
-            })
-            .unwrap_or(null.clone());
-        let sbt_stride = sbt_stride
-            .map(|m| {
-                assert!(Arc::ptr_eq(&self.ir, &m.ir));
-                m.clone()
-            })
-            .unwrap_or(null.clone());
-        let miss_sbt = miss_sbt
-            .map(|m| {
-                assert!(Arc::ptr_eq(&self.ir, &m.ir));
-                m.clone()
-            })
-            .unwrap_or(null.clone());
+    ) -> Result<Vec<Self>> {
+        let null = self.ir.literal(0u32)?;
+        let mask: Self = mask.cloned().unwrap_or(self.ir.literal(true)?);
+        let vis_mask = vis_mask.cloned().unwrap_or(self.ir.literal(255u32)?);
+        let flags = flags.cloned().unwrap_or(null.clone());
+        let sbt_offset = sbt_offset.cloned().unwrap_or(null.clone());
+        let sbt_stride = sbt_stride.cloned().unwrap_or(null.clone());
+        let miss_sbt = miss_sbt.cloned().unwrap_or(null.clone());
 
         // assert_eq!(o[0].size(), o[1].size());
         // assert_eq!(o[0].size(), o[2].size());
@@ -1000,14 +847,13 @@ impl VarRef {
         v.deps.extend(payload.iter().map(|i| i.id()));
         let rt = self.ir.push_var(v);
 
-        let ret = (0..payload.len())
+        (0..payload.len())
             .into_iter()
             .map(|i| {
                 self.ir
                     .push_var_op(Op::Extract { offset: i }, &[&rt], VarType::U32, size)
             })
-            .collect::<Vec<_>>();
-        ret
+            .collect()
     }
     pub fn make_opaque(&self) {
         if self.var().is_literal() {
@@ -1031,22 +877,32 @@ impl VarRef {
             _ => None,
         }
     }
-    pub fn compress(&self) -> Self {
-        assert_eq!(self.ty(), VarType::Bool);
+    pub fn compress(&self) -> Result<Self> {
+        let ty = self.ty();
+        ensure!(
+            ty == VarType::Bool,
+            "Cannot compress array of type {:?}!",
+            ty
+        );
         self.schedule();
         self.ir.eval();
 
-        let mask = self.var().data.buffer().unwrap().clone();
+        let mask = self
+            .var()
+            .data
+            .buffer()
+            .ok_or(anyhow!("Mask is not data after evaluation!"))?
+            .clone();
         let indices = self.ir.backend().compress(mask.as_ref());
         let size = indices.size() / std::mem::size_of::<u32>();
 
-        self.ir.push_var(Var {
+        Ok(self.ir.push_var(Var {
             ty: VarType::U32,
             op: Op::Data,
             size,
             data: Data::Buffer(indices),
             ..Default::default()
-        })
+        }))
     }
 }
 

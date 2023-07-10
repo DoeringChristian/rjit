@@ -2,15 +2,16 @@ use crate::backend::CompileOptions;
 use crate::jit::Jit;
 use crate::trace::{ReduceOp, Trace, VarType};
 use crate::{backend, AccelDesc, GeometryDesc, InstanceDesc};
+use anyhow::Result;
 
 #[test]
-fn refcounting() {
+fn refcounting() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.array(&[1f32; 10]);
+    let x = ir.array(&[1f32; 10])?;
     assert_eq!(x.var().rc, 1, "rc of x should be 1 (in x)");
-    let y = x.add(&x);
+    let y = x.add(&x)?;
     // let y = ir::add(&x, &x);
 
     assert_eq!(
@@ -44,62 +45,66 @@ fn refcounting() {
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(y.to_host_f32(), vec![2f32; 10]);
+    assert_eq!(y.to_host::<f32>().unwrap(), vec![2f32; 10]);
+    Ok(())
 }
 #[test]
-fn load_add_f32() {
+fn load_add_f32() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.array(&[1f32; 10]);
+    let x = ir.array(&[1f32; 10])?;
     // let y = ir::add(&x, &x);
-    let y = x.add(&x);
+    let y = x.add(&x)?;
 
     ir.schedule(&[&y]);
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(y.to_host_f32(), vec![2f32; 10]);
+    assert_eq!(y.to_host::<f32>().unwrap(), vec![2f32; 10]);
+    Ok(())
 }
 #[test]
-fn load_gather_f32() {
+fn load_gather_f32() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.buffer_f32(&[1., 2., 3., 4., 5.]);
-    let i = ir.buffer_u32(&[0, 1, 4]);
-    let y = x.gather(&i, None);
+    let x = ir.array(&[1f32, 2., 3., 4., 5.])?;
+    let i = ir.array(&[0u32, 1, 4])?;
+    let y = x.gather(&i, None)?;
 
     ir.schedule(&[&y]);
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(y.to_host_f32(), vec![1., 2., 5.]);
+    assert_eq!(y.to_host::<f32>().unwrap(), vec![1., 2., 5.]);
+    Ok(())
 }
 #[test]
-fn reindex() {
+fn reindex() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
     let x = ir.index(10);
 
     let i = ir.index(3);
-    let c = ir.literal_u32(2);
-    let i = i.add(&c);
+    let c = ir.literal(2u32)?;
+    let i = i.add(&c)?;
 
-    let y = x.gather(&i, None);
+    let y = x.gather(&i, None)?;
 
     ir.schedule(&[&y]);
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(y.to_host_u32(), vec![2, 3, 4]);
+    assert_eq!(y.to_host::<u32>().unwrap(), vec![2, 3, 4]);
+    Ok(())
 }
 #[test]
-fn index() {
+fn index() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
@@ -110,21 +115,25 @@ fn index() {
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(i.to_host_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    assert_eq!(
+        i.to_host::<u32>().unwrap(),
+        vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    );
+    Ok(())
 }
 #[test]
-fn gather_eval() {
+fn gather_eval() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
     let r = {
         let x = ir.index(3);
-        let y = ir.buffer_u32(&[1, 2, 3]);
+        let y = ir.array(&[1u32, 2, 3])?;
 
         // let z = ir::add(&x, &y);
-        let z = x.add(&y);
+        let z = x.add(&y)?;
 
-        let r = z.gather(&ir.index(3), None);
+        let r = z.gather(&ir.index(3), None)?;
         dbg!();
         r
     };
@@ -135,10 +144,11 @@ fn gather_eval() {
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(r.to_host_u32(), vec![1, 3, 5]);
+    assert_eq!(r.to_host::<u32>().unwrap(), vec![1, 3, 5]);
+    Ok(())
 }
 #[test]
-fn paralell() {
+fn paralell() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
@@ -151,114 +161,122 @@ fn paralell() {
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(x.to_host_u32(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    assert_eq!(y.to_host_u32(), vec![0, 1, 2]);
+    assert_eq!(
+        x.to_host::<u32>().unwrap(),
+        vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    );
+    assert_eq!(y.to_host::<u32>().unwrap(), vec![0, 1, 2]);
+    Ok(())
 }
 #[test]
-fn load_gather() {
+fn load_gather() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.buffer_f32(&[1., 2., 3.]);
+    let x = ir.array(&[1.0f32, 2., 3.])?;
 
     ir.schedule(&[&x]);
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(x.to_host_f32(), vec![1., 2., 3.]);
+    assert_eq!(x.to_host::<f32>().unwrap(), vec![1., 2., 3.]);
+    Ok(())
 }
 #[test]
-fn eval_scatter() {
+fn eval_scatter() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.buffer_u32(&[0, 0, 0, 0]);
-    let c = ir.literal_u32(1);
-    let x = x.add(&c); // x: [1, 1, 1, 1]
+    let x = ir.array(&[0u32, 0, 0, 0])?;
+    let c = ir.literal(1u32)?;
+    let x = x.add(&c)?; // x: [1, 1, 1, 1]
 
     let i = ir.index(3);
-    let c = ir.literal_u32(1);
-    let i = i.add(&c); // i: [1, 2, 3]
+    let c = ir.literal(1u32)?;
+    let i = i.add(&c)?; // i: [1, 2, 3]
 
-    let y = ir.literal_u32(2);
+    let y = ir.literal(2u32)?;
 
-    y.scatter(&x, &i, None); // x: [1, 2, 2, 2]
+    y.scatter(&x, &i, None)?; // x: [1, 2, 2, 2]
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(x.to_host_u32(), vec![1, 2, 2, 2]);
+    assert_eq!(x.to_host::<u32>().unwrap(), vec![1, 2, 2, 2]);
+    Ok(())
 }
 #[test]
-fn scatter_twice() {
+fn scatter_twice() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.buffer_u32(&[0, 0, 0, 0]);
+    let x = ir.array(&[0u32, 0, 0, 0])?;
 
     let i = ir.index(3);
-    let c = ir.literal_u32(1);
-    let i = i.add(&c);
+    let c = ir.literal(1u32)?;
+    let i = i.add(&c)?;
 
-    let y = ir.literal_u32(2);
+    let y = ir.literal(2u32)?;
 
-    y.scatter(&x, &i, None);
+    y.scatter(&x, &i, None)?;
 
     let i = ir.index(2);
 
-    let y = ir.literal_u32(3);
+    let y = ir.literal(3u32)?;
 
     y.scatter(&x, &i, None);
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(x.to_host_u32(), vec![3, 3, 2, 2]);
+    assert_eq!(x.to_host::<u32>().unwrap(), vec![3, 3, 2, 2]);
+    Ok(())
 }
 #[test]
-fn scatter_twice_add() {
+fn scatter_twice_add() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.buffer_u32(&[0, 0, 0, 0]);
+    let x = ir.array(&[0u32, 0, 0, 0])?;
 
     let i = ir.index(3);
-    let c = ir.literal_u32(1);
-    let i = i.add(&c);
+    let c = ir.literal(1u32)?;
+    let i = i.add(&c)?;
 
-    let y = ir.literal_u32(2);
+    let y = ir.literal(2u32)?;
 
-    y.scatter(&x, &i, None);
+    y.scatter(&x, &i, None)?;
 
     let i = ir.index(2);
 
-    let y = ir.literal_u32(3);
+    let y = ir.literal(3u32)?;
 
-    y.scatter(&x, &i, None);
+    y.scatter(&x, &i, None)?;
 
-    let c = ir.literal_u32(1);
-    let x = x.add(&c);
+    let c = ir.literal(1u32)?;
+    let x = x.add(&c)?;
 
     ir.schedule(&[&x]);
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(x.to_host_u32(), vec![4, 4, 3, 3]);
+    assert_eq!(x.to_host::<u32>().unwrap(), vec![4, 4, 3, 3]);
+    Ok(())
 }
 #[test]
-fn scatter_reduce() {
+fn scatter_reduce() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.buffer_u32(&[0, 0, 0, 0]);
+    let x = ir.array(&[0u32, 0, 0, 0])?;
 
-    let i = ir.buffer_u32(&[0, 0, 0]);
+    let i = ir.array(&[0u32, 0, 0])?;
 
-    let y = ir.literal_u32(1);
+    let y = ir.literal(1u32)?;
 
-    y.scatter_reduce(&x, &i, None, ReduceOp::Add);
+    y.scatter_reduce(&x, &i, None, ReduceOp::Add)?;
 
     ir.eval();
 
@@ -266,21 +284,22 @@ fn scatter_reduce() {
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(x.to_host_u32(), vec![3, 0, 0, 0]);
+    assert_eq!(x.to_host::<u32>().unwrap(), vec![3, 0, 0, 0]);
+    Ok(())
 }
 #[test]
-fn tex_lookup() {
+fn tex_lookup() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.buffer_f32(&[0.5]);
-    let y = ir.buffer_f32(&[0.5]);
+    let x = ir.array(&[0.5f32])?;
+    let y = ir.array(&[0.5f32])?;
 
-    let data = ir.buffer_f32(&[1.; 400]);
+    let data = ir.array(&[1.0f32; 400])?;
 
-    let tex = data.to_texture(&[10, 10], 4);
+    let tex = data.to_texture(&[10, 10], 4)?;
 
-    let res = tex.tex_lookup(&[&x, &y]);
+    let res = tex.tex_lookup(&[&x, &y])?;
 
     let r = res[0].clone();
 
@@ -290,10 +309,11 @@ fn tex_lookup() {
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(r.to_host_f32(), vec![1.]);
+    assert_eq!(r.to_host::<f32>().unwrap(), vec![1.]);
+    Ok(())
 }
 #[test]
-fn trace_ray() {
+fn trace_ray() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
@@ -349,8 +369,8 @@ fn trace_ray() {
         backend.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
         backend.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
     }
-    let indices = ir.buffer_u32(&[0, 1, 2]);
-    let vertices = ir.buffer_f32(&[1., 0., 1., 0., 1., 1., 1., 1., 1.]);
+    let indices = ir.array(&[0u32, 1, 2])?;
+    let vertices = ir.array(&[1.0f32, 0., 1., 0., 1., 1., 1., 1., 1.])?;
 
     let desc = AccelDesc {
         geometries: &[GeometryDesc::Triangles {
@@ -366,42 +386,42 @@ fn trace_ray() {
 
     let payload = accel.trace_ray(
         &[
-            &ir.literal_u32(0),
-            &ir.literal_u32(0),
-            &ir.literal_u32(0),
-            &ir.literal_u32(0),
-            &ir.literal_u32(0),
+            &ir.literal(0u32)?,
+            &ir.literal(0u32)?,
+            &ir.literal(0u32)?,
+            &ir.literal(0u32)?,
+            &ir.literal(0u32)?,
         ],
         [
-            &ir.buffer_f32(&[0.6, 0.6]),
-            &ir.literal_f32(0.6),
-            &ir.literal_f32(0.),
+            &ir.array(&[0.6f32, 0.6])?,
+            &ir.literal(0.6f32)?,
+            &ir.literal(0.0f32)?,
         ],
         [
-            &ir.literal_f32(0.),
-            &ir.literal_f32(0.),
-            &ir.buffer_f32(&[1., -1.]),
+            &ir.literal(0.0f32)?,
+            &ir.literal(0.0f32)?,
+            &ir.array(&[1.0f32, -1.])?,
         ],
-        &ir.literal_f32(0.001),
-        &ir.literal_f32(1000.),
-        &ir.literal_f32(0.),
+        &ir.literal(0.001f32)?,
+        &ir.literal(1000.0f32)?,
+        &ir.literal(0.0f32)?,
         None,
         None,
         None,
         None,
         None,
         None,
-    );
+    )?;
 
     // for p in payload.iter() {
     //     p.schedule();
     // }
-    let valid = payload[0].cast(&VarType::Bool);
+    let valid = payload[0].cast(&VarType::Bool)?;
 
-    let u = payload[3].bitcast(&VarType::F32);
-    let v = payload[4].bitcast(&VarType::F32);
+    let u = payload[3].bitcast(&VarType::F32)?;
+    let v = payload[4].bitcast(&VarType::F32)?;
 
-    let dst = ir.array(&[0f32, 1f32]);
+    let dst = ir.array(&[0f32, 1f32])?;
     u.scatter(&dst, &ir.index(2), None);
 
     valid.schedule();
@@ -410,20 +430,21 @@ fn trace_ray() {
 
     ir.eval();
 
-    dbg!(&dst.to_host_f32());
+    dbg!(&dst.to_host::<f32>());
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(valid.to_host_bool(), vec![true, false]);
-    let u = dst.to_host_f32();
-    let v = v.to_host_f32();
+    assert_eq!(valid.to_host::<bool>().unwrap(), vec![true, false]);
+    let u = dst.to_host::<f32>().unwrap();
+    let v = v.to_host::<f32>().unwrap();
     approx::assert_ulps_eq!(u[0], 0.39999998);
     approx::assert_ulps_eq!(u[1], 0.);
     approx::assert_ulps_eq!(v[0], 0.20000005);
     approx::assert_ulps_eq!(v[1], 0.);
+    Ok(())
 }
 #[test]
-fn trace_ray_scatter() {
+fn trace_ray_scatter() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
@@ -479,8 +500,8 @@ fn trace_ray_scatter() {
         backend.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
         backend.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
     }
-    let indices = ir.buffer_u32(&[0, 1, 2]);
-    let vertices = ir.buffer_f32(&[1., 0., 1., 0., 1., 1., 1., 1., 1.]);
+    let indices = ir.array(&[0u32, 1, 2])?;
+    let vertices = ir.array(&[1.0f32, 0., 1., 0., 1., 1., 1., 1., 1.])?;
 
     let desc = AccelDesc {
         geometries: &[GeometryDesc::Triangles {
@@ -496,61 +517,63 @@ fn trace_ray_scatter() {
 
     let payload = accel.trace_ray(
         &[
-            &ir.literal_u32(0),
-            &ir.literal_u32(0),
-            &ir.literal_u32(0),
-            &ir.literal_u32(0),
-            &ir.literal_u32(0),
+            &ir.literal(0u32)?,
+            &ir.literal(0u32)?,
+            &ir.literal(0u32)?,
+            &ir.literal(0u32)?,
+            &ir.literal(0u32)?,
         ],
         [
-            &ir.buffer_f32(&[0.6, 0.6]),
-            &ir.literal_f32(0.6),
-            &ir.literal_f32(0.),
+            &ir.array(&[0.6f32, 0.6])?,
+            &ir.literal(0.6f32)?,
+            &ir.literal(0.0f32)?,
         ],
         [
-            &ir.literal_f32(0.),
-            &ir.literal_f32(0.),
-            &ir.buffer_f32(&[1., -1.]),
+            &ir.literal(0.0f32)?,
+            &ir.literal(0.0f32)?,
+            &ir.array(&[1.0f32, -1.])?,
         ],
-        &ir.literal_f32(0.001),
-        &ir.literal_f32(1000.),
-        &ir.literal_f32(0.),
+        &ir.literal(0.001f32)?,
+        &ir.literal(1000.0f32)?,
+        &ir.literal(0.0f32)?,
         None,
         None,
         None,
         None,
         None,
         None,
-    );
+    )?;
 
-    let valid = payload[0].cast(&VarType::Bool);
+    let valid = payload[0].cast(&VarType::Bool)?;
 
-    let u = payload[3].bitcast(&VarType::F32);
+    let u = payload[3].bitcast(&VarType::F32)?;
 
-    let dst = ir.array(&[0f32, 0f32]);
-    u.scatter(&dst, &ir.index(2), Some(&valid));
+    let dst = ir.array(&[0f32, 0f32])?;
+    u.scatter(&dst, &ir.index(2), Some(&valid))?;
 
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
     // assert_eq!(valid.to_host_bool(), vec![true, false]);
-    let u = dst.to_host_f32();
+    let u = dst.to_host::<f32>().unwrap();
     approx::assert_ulps_eq!(u[0], 0.39999998);
     approx::assert_ulps_eq!(u[1], 0.);
+    Ok(())
 }
 #[test]
-fn sized_literal() {
+fn sized_literal() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
-    let x = ir.sized_literal(0f32, 10);
-    let x = x.add(&ir.literal(0f32));
+    let x = ir.sized_literal(0f32, 10)?;
+    let x = x.add(&ir.literal(0f32)?)?;
     x.schedule();
 
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(x.to_host_f32(), vec![0f32; 10]);
+    assert_eq!(x.to_host::<f32>().unwrap(), vec![0f32; 10]);
+    Ok(())
 }

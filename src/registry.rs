@@ -7,7 +7,6 @@ use parking_lot::{Mutex, RwLock};
 use crate::backend::{self, Backend};
 
 type BackendFactory = Arc<dyn Fn() -> anyhow::Result<Box<dyn Backend>> + Send + Sync>;
-// type BackendFactory = Arc<dyn Fn() -> i32 + Send + Sync>;
 
 fn default_backends() -> HashMap<String, BackendFactory> {
     fn factory(
@@ -28,7 +27,7 @@ fn default_backends() -> HashMap<String, BackendFactory> {
 pub static BACKEND_REGISTRY: Lazy<Mutex<HashMap<String, BackendFactory>>> =
     Lazy::new(|| Mutex::new(default_backends()));
 
-fn register_backend(
+pub fn register_backend(
     name: &str,
     f: impl Fn() -> anyhow::Result<Box<dyn Backend>> + 'static + Send + Sync,
 ) -> anyhow::Result<()> {

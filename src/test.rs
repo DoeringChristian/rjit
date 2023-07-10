@@ -1,4 +1,5 @@
 use crate::Trace;
+use anyhow::Result;
 
 macro_rules! test_uop {
         ($jop:ident($init:expr; $ty:ident) $(,$mod:literal)?) => {
@@ -7,16 +8,16 @@ macro_rules! test_uop {
         ($rop:expr => $jop:ident($init:expr; $ty:ident) $(,$mod:literal)?) => {
             paste::paste! {
                 #[test]
-                fn [<$jop _$ty $(__$mod)?>]() {
+                fn [<$jop _$ty $(__$mod)?>]() -> Result<()> {
 
                     let initial: &[$ty] = &$init;
 
                     let ir = Trace::default();
                     ir.set_backend(["cuda"]);
 
-                    let x = ir.[<buffer_$ty>](initial);
+                    let x = ir.array(initial)?;
 
-                    let y = x.$jop();
+                    let y = x.$jop()?;
 
                     ir.schedule(&[&y]);
 
@@ -24,10 +25,11 @@ macro_rules! test_uop {
 
                     insta::assert_snapshot!(ir.kernel_history());
 
-                    for (i, calculated) in y.[<to_host_$ty>]().into_iter().enumerate(){
+                    for (i, calculated) in y.to_host::<$ty>()?.into_iter().enumerate(){
                         let expected = ($rop)(initial[i]);
                         approx::assert_abs_diff_eq!(calculated, expected, epsilon = 0.0001);
                     }
+                    Ok(())
                 }
             }
         };
@@ -41,91 +43,97 @@ test_uop!(exp2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f
 test_uop!(log2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f32));
 
 #[test]
-fn opaque() {
+fn opaque() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["cuda"]);
 
-    let x = ir.literal_u32(10);
+    let x = ir.literal(10u32)?;
     let x = x.opaque();
 
-    let y = ir.buffer_u32(&[1, 2, 3]);
+    let y = ir.array(&[1u32, 2, 3])?;
 
-    let y = y.add(&x);
+    let y = y.add(&x)?;
 
     y.schedule();
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(y.to_host_u32(), vec![11, 12, 13]);
+    assert_eq!(y.to_host::<u32>()?, vec![11u32, 12, 13]);
+    Ok(())
 }
 #[test]
-fn make_opaque() {
+fn make_opaque() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["cuda"]);
 
-    let x = ir.literal_u32(10);
+    let x = ir.literal(10u32)?;
     x.make_opaque();
 
-    let y = ir.buffer_u32(&[1, 2, 3]);
+    let y = ir.array(&[1u32, 2, 3])?;
 
-    let y = y.add(&x);
+    let y = y.add(&x)?;
 
     y.schedule();
     ir.eval();
 
     insta::assert_snapshot!(ir.kernel_history());
 
-    assert_eq!(y.to_host_u32(), vec![11, 12, 13]);
+    assert_eq!(y.to_host::<u32>().unwrap(), vec![11, 12, 13]);
+    Ok(())
 }
 
 #[test]
-fn compress_small() {
+fn compress_small() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["cuda"]);
 
     // let x = ir.array(&[true, false, true]);
-    let x = ir.array(&[true, false, true, false, true, false, true, false]);
+    let x = ir.array(&[true, false, true, false, true, false, true, false])?;
 
-    let i = x.compress();
+    let i = x.compress()?;
 
-    assert_eq!(i.to_host_u32(), vec![0, 2, 4, 6]);
+    assert_eq!(i.to_host::<u32>().unwrap(), vec![0, 2, 4, 6]);
+    Ok(())
 }
 #[test]
-fn compress_large() {
+fn compress_large() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["cuda"]);
 
     const N: u32 = 4100;
 
-    let x = ir.array(&vec![true; N as usize]);
+    let x = ir.array(&vec![true; N as usize])?;
 
-    let i = x.compress();
+    let i = x.compress()?;
 
-    assert_eq!(i.to_host_u32(), (0..N).collect::<Vec<_>>());
+    assert_eq!(i.to_host::<u32>().unwrap(), (0..N).collect::<Vec<_>>());
+    Ok(())
 }
 #[test]
-fn compress_small_optix() {
+fn compress_small_optix() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
     // let x = ir.array(&[true, false, true]);
-    let x = ir.array(&[true, false, true, false, true, false, true, false]);
+    let x = ir.array(&[true, false, true, false, true, false, true, false])?;
 
-    let i = x.compress();
+    let i = x.compress()?;
 
-    assert_eq!(i.to_host_u32(), vec![0, 2, 4, 6]);
+    assert_eq!(i.to_host::<u32>().unwrap(), vec![0, 2, 4, 6]);
+    Ok(())
 }
 #[test]
-fn compress_large_optix() {
+fn compress_large_optix() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"]);
 
     const N: u32 = 4100;
 
-    let x = ir.array(&vec![true; N as usize]);
+    let x = ir.array(&vec![true; N as usize])?;
 
-    let i = x.compress();
+    let i = x.compress()?;
 
-    assert_eq!(i.to_host_u32(), (0..N).collect::<Vec<_>>());
+    assert_eq!(i.to_host::<u32>().unwrap(), (0..N).collect::<Vec<_>>());
+    Ok(())
 }
