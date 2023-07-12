@@ -14,13 +14,12 @@ pub trait Texture: Debug + Sync + Send + DowncastSync {
     fn channels(&self) -> usize;
     fn dimensions(&self) -> usize;
     fn shape(&self) -> &[usize];
-    fn copy_from_buffer(&self, buf: &dyn Buffer);
-    fn copy_to_buffer(&self, buf: &dyn Buffer);
+    fn copy_from_buffer(&self, buf: &dyn Buffer) -> Result<()>;
+    fn copy_to_buffer(&self, buf: &dyn Buffer) -> Result<()>;
 }
 impl_downcast!(sync Texture);
 
 pub trait Kernel: Debug + Sync + Send + DowncastSync {
-    fn into_any(self: Arc<Self>) -> Arc<dyn Any>;
     fn execute_async(&self, env: &mut Env, size: usize) -> Result<Arc<dyn DeviceFuture>>;
     fn assembly(&self) -> &str;
     fn backend_ident(&self) -> &'static str;
@@ -39,20 +38,20 @@ pub trait Buffer: Debug + Sync + Send + DowncastSync {
 impl_downcast!(sync Buffer);
 
 pub trait Backend: Debug + Sync + Send + DowncastSync {
-    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Arc<dyn Kernel>;
-    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn Kernel>;
-    fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn Texture>;
-    fn buffer_uninit(&self, size: usize) -> Arc<dyn Buffer>;
-    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn Buffer>;
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Result<Arc<dyn Kernel>>;
+    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn Kernel>>;
+    fn create_texture(&self, shape: &[usize], n_channels: usize) -> Result<Arc<dyn Texture>>;
+    fn buffer_uninit(&self, size: usize) -> Result<Arc<dyn Buffer>>;
+    fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn Buffer>>;
     fn first_register(&self) -> usize;
-    fn synchronize(&self);
-    fn create_accel(&self, desc: AccelDesc) -> Arc<dyn Accel>;
+    fn synchronize(&self) -> Result<()>;
+    fn create_accel(&self, desc: AccelDesc) -> Result<Arc<dyn Accel>>;
     fn set_compile_options(&mut self, compile_options: &CompileOptions);
-    fn set_miss_from_str(&mut self, entry_point: &str, source: &str);
-    fn push_hit_from_str(&mut self, entry_point: &str, source: &str);
+    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) -> Result<()>;
+    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) -> Result<()>;
     fn ident(&self) -> &'static str;
 
-    fn compress(&self, mask: &dyn Buffer) -> Arc<dyn Buffer>;
+    fn compress(&self, mask: &dyn Buffer) -> Result<Arc<dyn Buffer>>;
 }
 impl_downcast!(sync Backend);
 

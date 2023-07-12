@@ -268,8 +268,13 @@ impl Device {
     pub fn info(&self) -> &DeviceInfo {
         &self.internal.info
     }
-    pub fn buffer_uninit(&self, size: usize) -> Buffer {
+    pub fn buffer_uninit(&self, size: usize) -> Result<Buffer, Error> {
         Buffer::uninit(self, size)
+    }
+    pub fn buffer_from_slice(&self, slice: &[u8]) -> Result<Buffer, Error> {
+        let buf = Buffer::uninit(self, slice.len())?;
+        buf.copy_from_slice(slice)?;
+        Ok(buf)
     }
     pub fn lease_buffer(&self, size: usize) -> Lease<Buffer> {
         let size = round_pow2(size as _) as usize;
@@ -700,26 +705,26 @@ impl Buffer {
     pub fn size(&self) -> usize {
         self.size
     }
-    pub fn uninit(device: &Device, size: usize) -> Self {
+    pub fn uninit(device: &Device, size: usize) -> Result<Self, Error> {
         unsafe {
             let ctx = device.ctx();
             let mut dptr = 0;
-            ctx.cuMemAlloc_v2(&mut dptr, size).check().unwrap();
-            Self {
+            ctx.cuMemAlloc_v2(&mut dptr, size).check()?;
+            Ok(Self {
                 device: device.internal.clone(),
                 dptr,
                 size,
-            }
+            })
         }
     }
-    pub fn copy_from_slice(&self, slice: &[u8]) {
+    pub fn copy_from_slice(&self, slice: &[u8]) -> Result<(), Error> {
         unsafe {
             assert!(slice.len() <= self.size);
             let ctx = self.device.ctx();
 
             ctx.cuMemcpyHtoD_v2(self.dptr, slice.as_ptr() as _, slice.len())
-                .check()
-                .unwrap();
+                .check()?;
+            Ok(())
         }
     }
     pub fn copy_to_host(&self, dst: &mut [u8]) {
@@ -762,7 +767,7 @@ impl Resource for Buffer {
     type Context = Device;
 
     fn create(size: &Self::Info, device: &Self::Context) -> Self {
-        Self::uninit(device, *size)
+        Self::uninit(device, *size).unwrap()
     }
 
     fn clear(&mut self) {}

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use resource_pool::hashpool::{HashPool, Lease};
 use resource_pool::prelude::*;
 use std::ffi::c_void;
@@ -44,26 +44,31 @@ impl Backend {
 unsafe impl Sync for Backend {}
 unsafe impl Send for Backend {}
 impl backend::Backend for Backend {
-    fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
-        Arc::new(Texture::create(&self.device, shape, n_channels))
+    fn create_texture(
+        &self,
+        shape: &[usize],
+        n_channels: usize,
+    ) -> Result<Arc<dyn backend::Texture>> {
+        Ok(Arc::new(Texture::create(&self.device, shape, n_channels)?))
     }
-    fn buffer_uninit(&self, size: usize) -> Arc<dyn crate::backend::Buffer> {
-        Arc::new(Buffer::uninit(&self.device, size))
+    fn buffer_uninit(&self, size: usize) -> Result<Arc<dyn crate::backend::Buffer>> {
+        Ok(Arc::new(Buffer::uninit(&self.device, size)?))
     }
-    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn crate::backend::Buffer> {
-        Arc::new(Buffer::from_slice(&self.device, slice))
+    fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn crate::backend::Buffer>> {
+        Ok(Arc::new(Buffer::from_slice(&self.device, slice)?))
     }
 
     fn first_register(&self) -> usize {
         Kernel::FIRST_REGISTER
     }
 
-    fn synchronize(&self) {
-        self.stream.synchronize().unwrap();
+    fn synchronize(&self) -> Result<()> {
+        self.stream.synchronize()?;
+        Ok(())
     }
 
-    fn create_accel(&self, desc: backend::AccelDesc) -> Arc<dyn backend::Accel> {
-        todo!()
+    fn create_accel(&self, desc: backend::AccelDesc) -> Result<Arc<dyn backend::Accel>> {
+        bail!("Not implemented for CUDA backend!");
     }
 
     // fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
@@ -74,28 +79,28 @@ impl backend::Backend for Backend {
         todo!()
     }
 
-    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) {
-        todo!()
+    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) -> Result<()> {
+        bail!("Not implemented for CUDA backend!");
     }
 
-    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) {
-        todo!()
+    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) -> Result<()> {
+        bail!("Not implemented for CUDA backend!");
     }
 
-    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Arc<dyn backend::Kernel> {
-        Arc::new(Kernel::compile(&self.device, ir, env))
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Result<Arc<dyn backend::Kernel>> {
+        Ok(Arc::new(Kernel::compile(&self.device, ir, env)?))
     }
 
     fn ident(&self) -> &'static str {
         "CUDA"
     }
 
-    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn backend::Kernel> {
-        Arc::new(Kernel::assemble(&self.device, asm, entry_point))
+    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn backend::Kernel>> {
+        Ok(Arc::new(Kernel::assemble(&self.device, asm, entry_point)?))
     }
 
-    fn compress(&self, mask: &dyn backend::Buffer) -> Arc<dyn backend::Buffer> {
-        super::compress::compress(mask, &self.kernels)
+    fn compress(&self, mask: &dyn backend::Buffer) -> Result<Arc<dyn backend::Buffer>> {
+        Ok(super::compress::compress(mask, &self.kernels)?)
     }
 }
 
@@ -116,21 +121,21 @@ impl Buffer {
     pub fn size(&self) -> usize {
         self.size
     }
-    pub fn uninit(device: &Device, size: usize) -> Self {
-        Self {
+    pub fn uninit(device: &Device, size: usize) -> Result<Self> {
+        Ok(Self {
             buf: device.lease_buffer(size),
             size,
             device: device.clone(),
-        }
+        })
     }
-    pub fn from_slice(device: &Device, slice: &[u8]) -> Self {
+    pub fn from_slice(device: &Device, slice: &[u8]) -> Result<Self> {
         let buf = device.lease_buffer(slice.len());
         buf.copy_from_slice(slice);
-        Self {
+        Ok(Self {
             size: slice.len(),
             buf,
             device: device.clone(),
-        }
+        })
     }
     pub fn device(&self) -> &Device {
         &self.device
@@ -174,7 +179,7 @@ impl Texture {
     pub fn ptr(&self) -> u64 {
         self.tex
     }
-    pub fn create(device: &Device, shape: &[usize], n_channels: usize) -> Self {
+    pub fn create(device: &Device, shape: &[usize], n_channels: usize) -> Result<Self> {
         let ctx = device.ctx();
         unsafe {
             let mut tex = 0;
@@ -186,9 +191,7 @@ impl Texture {
                     Format: cuda_rs::CUarray_format::CU_AD_FORMAT_FLOAT,
                     NumChannels: n_channels as _,
                 };
-                ctx.cuArrayCreate_v2(&mut array, &array_desc)
-                    .check()
-                    .unwrap();
+                ctx.cuArrayCreate_v2(&mut array, &array_desc).check()?;
             } else if shape.len() == 3 {
                 let array_desc = cuda_rs::CUDA_ARRAY3D_DESCRIPTOR {
                     Width: shape[0],
@@ -199,9 +202,7 @@ impl Texture {
                     NumChannels: n_channels as _,
                 };
                 let mut array = std::ptr::null_mut();
-                ctx.cuArray3DCreate_v2(&mut array, &array_desc)
-                    .check()
-                    .unwrap();
+                ctx.cuArray3DCreate_v2(&mut array, &array_desc).check()?;
             } else {
                 panic!("Shape not supported!");
             };
@@ -239,15 +240,14 @@ impl Texture {
                 ..Default::default()
             };
             ctx.cuTexObjectCreate(&mut tex, &res_desc, &tex_desc, &view_desc)
-                .check()
-                .unwrap();
-            Self {
+                .check()?;
+            Ok(Self {
                 n_channels,
                 shape: smallvec::SmallVec::from(shape),
                 array,
                 tex,
                 device: device.clone(),
-            }
+            })
         }
     }
 }
@@ -267,7 +267,7 @@ impl backend::Texture for Texture {
         &self.shape
     }
 
-    fn copy_from_buffer(&self, buf: &dyn backend::Buffer) {
+    fn copy_from_buffer(&self, buf: &dyn backend::Buffer) -> Result<()> {
         let buf = buf.as_any().downcast_ref::<Buffer>().unwrap();
         let ctx = self.device.ctx();
         unsafe {
@@ -287,7 +287,8 @@ impl backend::Texture for Texture {
                     },
                     ..Default::default()
                 };
-                ctx.cuMemcpy2D_v2(&op).check().unwrap();
+                ctx.cuMemcpy2D_v2(&op).check()?;
+                Ok(())
             } else {
                 let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
                 let op = cuda_rs::CUDA_MEMCPY3D {
@@ -301,12 +302,13 @@ impl backend::Texture for Texture {
                     Depth: self.shape[2],
                     ..Default::default()
                 };
-                ctx.cuMemcpy3D_v2(&op).check().unwrap();
+                ctx.cuMemcpy3D_v2(&op).check()?;
+                Ok(())
             }
         }
     }
 
-    fn copy_to_buffer(&self, buf: &dyn backend::Buffer) {
+    fn copy_to_buffer(&self, buf: &dyn backend::Buffer) -> Result<()> {
         let buf = buf.as_any().downcast_ref::<Buffer>().unwrap();
         let ctx = self.device.ctx();
         unsafe {
@@ -326,7 +328,8 @@ impl backend::Texture for Texture {
                     },
                     ..Default::default()
                 };
-                ctx.cuMemcpy2D_v2(&op).check().unwrap();
+                ctx.cuMemcpy2D_v2(&op).check()?;
+                Ok(())
             } else {
                 let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
                 let op = cuda_rs::CUDA_MEMCPY3D {
@@ -340,7 +343,8 @@ impl backend::Texture for Texture {
                     Depth: self.shape[2],
                     ..Default::default()
                 };
-                ctx.cuMemcpy3D_v2(&op).check().unwrap();
+                ctx.cuMemcpy3D_v2(&op).check()?;
+                Ok(())
             }
         }
     }
@@ -361,26 +365,26 @@ impl Kernel {
 }
 
 impl Kernel {
-    pub fn assemble(device: &Device, asm: &str, entry_point: &str) -> Self {
-        let module = Module::from_ptx(&device, &asm).unwrap();
-        let func = module.function(entry_point).unwrap();
+    pub fn assemble(device: &Device, asm: &str, entry_point: &str) -> Result<Self> {
+        let module = Module::from_ptx(&device, &asm)?;
+        let func = module.function(entry_point)?;
 
-        Self {
+        Ok(Self {
             asm: String::from(asm),
             module,
             func,
             device: device.clone(),
-        }
+        })
     }
-    pub fn compile(device: &Device, ir: &ScheduleIr, env: &Env) -> Self {
+    pub fn compile(device: &Device, ir: &ScheduleIr, env: &Env) -> Result<Self> {
         assert!(env.accels().is_empty());
         // Assemble:
 
         let mut asm = String::new();
 
-        super::codegen::assemble_entry(&mut asm, ir, env, Kernel::ENTRY_POINT).unwrap();
+        super::codegen::assemble_entry(&mut asm, ir, env, Kernel::ENTRY_POINT)?;
 
-        std::fs::write("/tmp/tmp.ptx", &asm).unwrap();
+        std::fs::write("/tmp/tmp.ptx", &asm).ok();
 
         log::trace!("{}", asm);
 
@@ -526,10 +530,6 @@ impl backend::Kernel for Kernel {
 
     fn backend_ident(&self) -> &'static str {
         "CUDA"
-    }
-
-    fn into_any(self: Arc<Self>) -> Arc<dyn std::any::Any> {
-        self
     }
 }
 

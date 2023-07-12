@@ -84,7 +84,7 @@ impl Jit {
                     .backend
                     .as_ref()
                     .ok_or(anyhow!("Backend not initialized!"))?
-                    .buffer_uninit(size * ty_size);
+                    .buffer_uninit(size * ty_size)?;
 
                 let mut var = ir.var_mut(id);
                 var.data = Data::Buffer(buffer);
@@ -121,10 +121,12 @@ impl Jit {
                 let hash = s.internal_hash();
                 let key = KernelKey::Hash(hash);
 
-                let kernel = self
-                    .kernels
-                    .entry(key.clone())
-                    .or_insert(ir.backend.as_ref().unwrap().compile_kernel(&s, &env));
+                let kernel = self.kernels.entry(key.clone()).or_insert(
+                    ir.backend
+                        .as_ref()
+                        .ok_or(anyhow!("Backend not initialized!"))?
+                        .compile_kernel(&s, &env)?,
+                );
 
                 self.kernel_history.push(KernelHistroyEntry {
                     key,

@@ -382,7 +382,7 @@ fn trace_ray() -> Result<()> {
             transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
         }],
     };
-    let accel = ir.accel(desc);
+    let accel = ir.accel(desc)?;
 
     let payload = accel.trace_ray(
         &[
@@ -513,7 +513,7 @@ fn trace_ray_scatter() -> Result<()> {
             transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
         }],
     };
-    let accel = ir.accel(desc);
+    let accel = ir.accel(desc)?;
 
     let payload = accel.trace_ray(
         &[

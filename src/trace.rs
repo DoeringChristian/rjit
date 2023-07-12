@@ -152,8 +152,13 @@ impl Trace {
     pub fn kernel_history(&self) -> String {
         self.jit.lock().kernel_history()
     }
-    pub fn register_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn crate::backend::Kernel> {
-        self.jit
+    pub fn register_kernel(
+        &self,
+        asm: &str,
+        entry_point: &str,
+    ) -> Result<Arc<dyn crate::backend::Kernel>> {
+        Ok(self
+            .jit
             .lock()
             .kernels
             .entry(crate::KernelKey::Name(String::from(entry_point)))
@@ -162,10 +167,10 @@ impl Trace {
                     .lock()
                     .backend
                     .as_ref()
-                    .unwrap()
-                    .assemble_kernel(asm, entry_point),
+                    .ok_or(anyhow!("Backend not initialized!"))?
+                    .assemble_kernel(asm, entry_point)?,
             )
-            .clone()
+            .clone())
     }
 }
 impl Trace {
@@ -178,7 +183,7 @@ impl Trace {
             .ok_or(anyhow!("Backend not initialized!"))?
             .buffer_from_slice(unsafe {
                 std::slice::from_raw_parts(slice.as_ptr() as *const _, slice.len() * ty.size())
-            });
+            })?;
         Ok(self.push_var(Var {
             data: Data::Buffer(buffer),
             size: slice.len(),
@@ -187,21 +192,21 @@ impl Trace {
             ..Default::default()
         }))
     }
-    pub fn array_uninit<T: AsVarType>(&self, size: usize) -> VarRef {
+    pub fn array_uninit<T: AsVarType>(&self, size: usize) -> Result<VarRef> {
         let ty = T::as_var_type();
         let buffer = self
             .lock()
             .backend
             .as_ref()
             .unwrap()
-            .buffer_uninit(size * ty.size());
-        self.push_var(Var {
+            .buffer_uninit(size * ty.size())?;
+        Ok(self.push_var(Var {
             data: Data::Buffer(buffer),
             size,
             ty,
             op: Op::Data,
             ..Default::default()
-        })
+        }))
     }
 
     pub fn literal<T: AsVarType>(&self, val: T) -> Result<VarRef> {
@@ -232,7 +237,7 @@ impl Trace {
         });
         v
     }
-    pub fn texture(&self, shape: &[usize], n_channels: usize) -> VarRef {
+    pub fn texture(&self, shape: &[usize], n_channels: usize) -> Result<VarRef> {
         let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
         let texture = self
             .internal
@@ -240,16 +245,16 @@ impl Trace {
             .backend
             .as_ref()
             .unwrap()
-            .create_texture(shape, n_channels);
-        self.push_var(Var {
+            .create_texture(shape, n_channels)?;
+        Ok(self.push_var(Var {
             op: Op::Nop,
             ty: VarType::Void,
             size,
             data: Data::Texture(texture),
             ..Default::default()
-        })
+        }))
     }
-    pub fn accel(&self, desc: AccelDesc) -> VarRef {
+    pub fn accel(&self, desc: AccelDesc) -> Result<VarRef> {
         let gds = desc
             .geometries
             .iter()
@@ -275,14 +280,14 @@ impl Trace {
         };
         // let vertices = vertices.var().data.buffer().unwrap().clone();
         // let indices = indices.var().data.buffer().unwrap().clone();
-        let accel = self.lock().backend.as_ref().unwrap().create_accel(desc);
-        self.push_var(Var {
+        let accel = self.lock().backend.as_ref().unwrap().create_accel(desc)?;
+        Ok(self.push_var(Var {
             op: Op::Nop,
             ty: VarType::Void,
             size: 0,
             data: Data::Accel(accel),
             ..Default::default()
-        })
+        }))
     }
     pub fn loop_record(&self, before: &[&VarRef], after: &[&VarRef]) {
         let after = after.iter().map(|r| (*r).clone()).collect::<Vec<_>>();
@@ -573,7 +578,7 @@ impl VarRef {
             .backend
             .as_ref()
             .unwrap()
-            .create_texture(shape, n_channels);
+            .create_texture(shape, n_channels)?;
         texture.copy_from_buffer(self.var().data.buffer().unwrap().as_ref());
         let dst = self.ir.push_var(Var {
             op: Op::Nop,
@@ -885,7 +890,7 @@ impl VarRef {
             ty
         );
         self.schedule();
-        self.ir.eval();
+        self.ir.eval()?;
 
         let mask = self
             .var()
@@ -893,7 +898,7 @@ impl VarRef {
             .buffer()
             .ok_or(anyhow!("Mask is not data after evaluation!"))?
             .clone();
-        let indices = self.ir.backend().compress(mask.as_ref());
+        let indices = self.ir.backend().compress(mask.as_ref())?;
         let size = indices.size() / std::mem::size_of::<u32>();
 
         Ok(self.ir.push_var(Var {

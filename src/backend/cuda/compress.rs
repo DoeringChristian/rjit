@@ -1,6 +1,8 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
+
 use super::super::super::backend;
 use super::cuda::Buffer;
 use super::cuda_core::{Device, Module};
@@ -42,14 +44,16 @@ fn launch_config(device: &Device, size: u32) -> (u32, u32) {
 
     (blocks, threads)
 }
-pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend::Buffer> {
-    let mask = mask.downcast_ref::<Buffer>().unwrap();
+pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Result<Arc<dyn backend::Buffer>> {
+    let mask = mask
+        .downcast_ref::<Buffer>()
+        .ok_or(anyhow!("Could not downcas Buffer!"))?;
 
     let device = mask.device();
 
     let size = mask.size();
-    let count_out = Buffer::uninit(device, size_of::<u32>());
-    let mut out = Buffer::uninit(device, size as usize * size_of::<u32>());
+    let count_out = Buffer::uninit(device, size_of::<u32>())?;
+    let mut out = Buffer::uninit(device, size as usize * size_of::<u32>())?;
 
     if size <= 4096 {
         let mut in_ptr = mask.ptr();
@@ -69,25 +73,23 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend
             &mut count_out_ptr as *mut _ as *mut _,
         ];
 
-        let stream = device
-            .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
-            .unwrap();
+        let stream = device.create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)?;
 
         unsafe {
-            kernels
-                .function("compress_small")
-                .unwrap()
-                .launch(&stream, &mut params, 1, thread_count, shared_size)
-                .unwrap();
+            kernels.function("compress_small")?.launch(
+                &stream,
+                &mut params,
+                1,
+                thread_count,
+                shared_size,
+            )?;
         }
-        stream.synchronize().unwrap();
+        stream.synchronize()?;
     } else {
-        let stream = device
-            .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
-            .unwrap();
+        let stream = device.create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)?;
 
-        let compress_large = kernels.function("compress_large").unwrap();
-        let scan_large_u32_int = kernels.function("scan_large_u32_init").unwrap();
+        let compress_large = kernels.function("compress_large")?;
+        let scan_large_u32_int = kernels.function("scan_large_u32_init")?;
 
         let size = size as u32;
         let items_per_thread = 16u32;
@@ -98,7 +100,7 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend
         let mut scratch_items = block_count + 32;
         let trailer = items_per_block * block_count - size;
 
-        let scratch = Buffer::uninit(&device, scratch_items as usize * size_of::<u64>());
+        let scratch = Buffer::uninit(&device, scratch_items as usize * size_of::<u64>())?;
 
         let (block_count_init, thread_count_init) = launch_config(&device, scratch_items);
 
@@ -108,9 +110,13 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend
         ];
 
         unsafe {
-            scan_large_u32_int
-                .launch(&stream, &mut params, block_count_init, thread_count_init, 0)
-                .unwrap();
+            scan_large_u32_int.launch(
+                &stream,
+                &mut params,
+                block_count_init,
+                thread_count_init,
+                0,
+            )?;
         }
 
         let mut in_ptr = mask.ptr();
@@ -124,8 +130,7 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend
                 device
                     .ctx()
                     .cuMemsetD8Async(in_ptr + size as u64, 0, trailer as _, stream.raw())
-                    .check()
-                    .unwrap();
+                    .check()?;
             }
         }
 
@@ -137,12 +142,10 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend
         ];
 
         unsafe {
-            compress_large
-                .launch(&stream, &mut params, block_count, thread_count, shared_size)
-                .unwrap();
+            compress_large.launch(&stream, &mut params, block_count, thread_count, shared_size)?;
         }
 
-        stream.synchronize().unwrap();
+        stream.synchronize()?;
     }
 
     let mut size = 0u32;
@@ -151,5 +154,5 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Arc<dyn backend
         bytemuck::cast_slice_mut(std::slice::from_mut(&mut size)),
     );
     out.size = size as usize * size_of::<u32>();
-    Arc::new(out)
+    Ok(Arc::new(out))
 }

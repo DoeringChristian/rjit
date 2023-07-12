@@ -26,6 +26,8 @@ use super::optix_core::{self, Device, Module, Pipeline, ProgramGroup};
 pub enum Error {
     #[error("{}", .0)]
     OptixError(#[from] optix_core::Error),
+    #[error("{}", .0)]
+    CudaError(#[from] cuda_core::Error),
 }
 
 pub struct Backend {
@@ -130,32 +132,40 @@ impl backend::Backend for Backend {
     //     self
     // }
 
-    fn create_texture(&self, shape: &[usize], n_channels: usize) -> Arc<dyn backend::Texture> {
-        Arc::new(Texture::create(
+    fn create_texture(
+        &self,
+        shape: &[usize],
+        n_channels: usize,
+    ) -> Result<Arc<dyn backend::Texture>> {
+        Ok(Arc::new(Texture::create(
             self.device.cuda_device(),
             shape,
             n_channels,
-        ))
+        )?))
     }
 
-    fn buffer_uninit(&self, size: usize) -> Arc<dyn backend::Buffer> {
-        Arc::new(Buffer::uninit(&self.device.cuda_device(), size))
+    fn buffer_uninit(&self, size: usize) -> Result<Arc<dyn backend::Buffer>> {
+        Ok(Arc::new(Buffer::uninit(&self.device.cuda_device(), size)?))
     }
 
-    fn buffer_from_slice(&self, slice: &[u8]) -> Arc<dyn backend::Buffer> {
-        Arc::new(Buffer::from_slice(&self.device.cuda_device(), slice))
+    fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn backend::Buffer>> {
+        Ok(Arc::new(Buffer::from_slice(
+            &self.device.cuda_device(),
+            slice,
+        )?))
     }
 
     fn first_register(&self) -> usize {
         Kernel::FIRST_REGISTER
     }
 
-    fn synchronize(&self) {
-        self.stream.synchronize().unwrap();
+    fn synchronize(&self) -> Result<()> {
+        self.stream.synchronize()?;
+        Ok(())
     }
 
-    fn create_accel(&self, desc: backend::AccelDesc) -> Arc<dyn backend::Accel> {
-        Arc::new(Accel::create(&self.device, &self.stream, desc).unwrap())
+    fn create_accel(&self, desc: backend::AccelDesc) -> Result<Arc<dyn backend::Accel>> {
+        Ok(Arc::new(Accel::create(&self.device, &self.stream, desc)?))
     }
 
     fn set_compile_options(&mut self, compile_options: &backend::CompileOptions) {
@@ -163,52 +173,48 @@ impl backend::Backend for Backend {
         self.compile_options = compile_options.clone();
     }
 
-    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) {
+    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) -> Result<()> {
         self.miss = Some((
             String::from(entry_point),
-            Arc::new(
-                Module::create(
-                    &self.device,
-                    source,
-                    self.compile_options.mco(),
-                    self.compile_options.pco(),
-                )
-                .unwrap(),
-            ),
+            Arc::new(Module::create(
+                &self.device,
+                source,
+                self.compile_options.mco(),
+                self.compile_options.pco(),
+            )?),
         ));
+        Ok(())
     }
 
-    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) {
+    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) -> Result<()> {
         self.hit.push((
             String::from(entry_point),
-            Arc::new(
-                Module::create(
-                    &self.device,
-                    source,
-                    self.compile_options.mco(),
-                    self.compile_options.pco(),
-                )
-                .unwrap(),
-            ),
-        ))
+            Arc::new(Module::create(
+                &self.device,
+                source,
+                self.compile_options.mco(),
+                self.compile_options.pco(),
+            )?),
+        ));
+        Ok(())
     }
 
-    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Arc<dyn backend::Kernel> {
+    fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Result<Arc<dyn backend::Kernel>> {
         if env.accels().is_empty() {
-            Arc::new(crate::backend::cuda::Kernel::compile(
+            Ok(Arc::new(crate::backend::cuda::Kernel::compile(
                 self.device.cuda_device(),
                 ir,
                 env,
-            ))
+            )?))
         } else {
-            Arc::new(Kernel::compile(
+            Ok(Arc::new(Kernel::compile(
                 &self.device,
                 &self.compile_options,
                 self.miss.as_ref().unwrap(),
                 &self.hit,
                 ir,
                 env,
-            ))
+            )?))
         }
     }
 
@@ -216,15 +222,15 @@ impl backend::Backend for Backend {
         "OptiX"
     }
 
-    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Arc<dyn backend::Kernel> {
-        Arc::new(crate::backend::cuda::Kernel::assemble(
+    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn backend::Kernel>> {
+        Ok(Arc::new(crate::backend::cuda::Kernel::assemble(
             self.device.cuda_device(),
             asm,
             entry_point,
-        ))
+        )?))
     }
 
-    fn compress(&self, mask: &dyn backend::Buffer) -> Arc<dyn backend::Buffer> {
+    fn compress(&self, mask: &dyn backend::Buffer) -> Result<Arc<dyn backend::Buffer>> {
         cuda::compress::compress(mask, &self.kernels)
     }
 }
@@ -255,7 +261,7 @@ impl Kernel {
         hit: &[(String, Arc<Module>)],
         ir: &ScheduleIr,
         env: &Env,
-    ) -> Self {
+    ) -> Result<Self> {
         let entry_point = "__raygen__cujit";
         // Assemble
         let mut asm = String::new();
@@ -270,26 +276,26 @@ impl Kernel {
 
         // let compile_options = self.compile_options.clone();
 
-        let rgen = Arc::new(
-            optix_core::Module::create(device, &asm, compile_options.mco(), compile_options.pco())
-                .unwrap(),
-        );
+        let rgen = Arc::new(optix_core::Module::create(
+            device,
+            &asm,
+            compile_options.mco(),
+            compile_options.pco(),
+        )?);
         let rgen_pg = optix_core::ProgramGroup::create(
             &device,
             optix_core::ProgramGroupDesc::RayGen {
                 module: &rgen,
                 entry_point,
             },
-        )
-        .unwrap();
+        )?;
         let miss_pg = optix_core::ProgramGroup::create(
             &device,
             optix_core::ProgramGroupDesc::Miss {
                 entry_point: &miss.0,
                 module: &miss.1,
             },
-        )
-        .unwrap();
+        )?;
 
         let hit_pgs = hit
             .iter()
@@ -322,11 +328,11 @@ impl Kernel {
             [miss_pg],
         )
         .unwrap();
-        Self {
+        Ok(Self {
             pipeline,
             device: device.clone(),
             asm,
-        }
+        })
     }
 }
 
@@ -361,23 +367,19 @@ impl backend::Kernel for Kernel {
         log::trace!("Optix Kernel Launch with {size} threads.");
 
         let params_buf =
-            Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params));
+            Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params))?;
 
         unsafe {
             let mut stream = self
                 .device
                 .cuda_device()
-                .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)
-                .unwrap();
+                .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)?;
 
             self.pipeline
-                // .as_ref()
-                // .unwrap()
-                .launch(&stream, params_buf.ptr(), params_buf.size(), size as u32)
-                .unwrap();
+                .launch(&stream, params_buf.ptr(), params_buf.size(), size as u32)?;
 
-            let event = Arc::new(Event::create(&self.device.cuda_device()).unwrap());
-            stream.record_event(&event).unwrap();
+            let event = Arc::new(Event::create(&self.device.cuda_device())?);
+            stream.record_event(&event)?;
             Ok(Arc::new(DeviceFuture {
                 event,
                 params: params_buf,
@@ -393,10 +395,6 @@ impl backend::Kernel for Kernel {
     fn backend_ident(&self) -> &'static str {
         "OptiX"
     }
-
-    fn into_any(self: Arc<Self>) -> Arc<dyn std::any::Any> {
-        self
-    }
 }
 
 unsafe impl Sync for Accel {}
@@ -405,8 +403,8 @@ unsafe impl Send for Accel {}
 #[derive(Debug)]
 pub struct Accel {
     device: Device,
-    tlas: (u64, Buffer),
-    blaccels: Vec<(u64, Buffer)>,
+    tlas: (u64, cuda_core::Buffer),
+    blaccels: Vec<(u64, cuda_core::Buffer)>,
     buffers: Vec<Arc<dyn backend::Buffer>>, // Keep buffers arround
 }
 
@@ -427,49 +425,56 @@ impl Accel {
             ..Default::default()
         };
 
-        let build_accel = |build_inputs: &[OptixBuildInput]| {
-            let mut buffer_size = OptixAccelBufferSizes::default();
-            unsafe {
-                device
-                    .api()
-                    .optixAccelComputeMemoryUsage(
-                        *device.ctx(),
-                        &build_options,
-                        build_inputs.as_ptr(),
-                        build_inputs.len() as _,
-                        &mut buffer_size,
-                    )
-                    .check()
-                    .unwrap()
+        let build_accel =
+            |build_inputs: &[OptixBuildInput]| -> Result<(u64, cuda_core::Buffer), Error> {
+                let mut buffer_size = OptixAccelBufferSizes::default();
+                unsafe {
+                    device
+                        .api()
+                        .optixAccelComputeMemoryUsage(
+                            *device.ctx(),
+                            &build_options,
+                            build_inputs.as_ptr(),
+                            build_inputs.len() as _,
+                            &mut buffer_size,
+                        )
+                        .check()
+                        .unwrap()
+                };
+                // let gas_tmp = Buffer::uninit(device.cuda_device(), buffer_size.tempSizeInBytes)?;
+                // let gas = Buffer::uninit(device.cuda_device(), buffer_size.outputSizeInBytes)?;
+                let gas_tmp = device
+                    .cuda_device()
+                    .buffer_uninit(buffer_size.tempSizeInBytes)?;
+                let gas = device
+                    .cuda_device()
+                    .buffer_uninit(buffer_size.outputSizeInBytes)?;
+                // dbg!(gas.ptr());
+                let mut accel = 0;
+                unsafe {
+                    device
+                        .api()
+                        .optixAccelBuild(
+                            *device.ctx(),
+                            stream.raw(),
+                            &build_options,
+                            build_inputs.as_ptr(),
+                            build_inputs.len() as _,
+                            gas_tmp.ptr(),
+                            buffer_size.tempSizeInBytes,
+                            gas.ptr(),
+                            buffer_size.outputSizeInBytes,
+                            &mut accel,
+                            std::ptr::null(),
+                            0,
+                        )
+                        .check()
+                        .unwrap();
+                    // TODO: Async construction needs to keep gas_tmp and gas buffers arround
+                    stream.synchronize().unwrap();
+                    Ok((accel, gas))
+                }
             };
-            let gas_tmp = Buffer::uninit(device.cuda_device(), buffer_size.tempSizeInBytes);
-            let gas = Buffer::uninit(device.cuda_device(), buffer_size.outputSizeInBytes);
-            // dbg!(gas.ptr());
-            let mut accel = 0;
-            unsafe {
-                device
-                    .api()
-                    .optixAccelBuild(
-                        *device.ctx(),
-                        stream.raw(),
-                        &build_options,
-                        build_inputs.as_ptr(),
-                        build_inputs.len() as _,
-                        gas_tmp.ptr(),
-                        buffer_size.tempSizeInBytes,
-                        gas.ptr(),
-                        buffer_size.outputSizeInBytes,
-                        &mut accel,
-                        std::ptr::null(),
-                        0,
-                    )
-                    .check()
-                    .unwrap();
-                // TODO: Async construction needs to keep gas_tmp and gas buffers arround
-                stream.synchronize().unwrap();
-                (accel, gas)
-            }
-        };
 
         let mut blaccels = vec![];
         let mut buffers: Vec<Arc<dyn backend::Buffer>> = vec![];
@@ -506,7 +511,7 @@ impl Accel {
                 }
             };
 
-            blaccels.push(build_accel(&build_inputs));
+            blaccels.push(build_accel(&build_inputs)?);
         }
 
         let instances = desc
@@ -527,14 +532,20 @@ impl Accel {
         // dbg!(&instances);
 
         let instance_buf = unsafe {
-            Buffer::from_slice(
-                device.cuda_device(),
-                std::slice::from_raw_parts(
+            device
+                .cuda_device()
+                .buffer_from_slice(std::slice::from_raw_parts(
                     instances.as_ptr() as *const _,
                     std::mem::size_of::<OptixInstance>() * instances.len(),
-                ),
-            )
-        };
+                ))
+            // Buffer::from_slice(
+            //     device.cuda_device(),
+            //     std::slice::from_raw_parts(
+            //         instances.as_ptr() as *const _,
+            //         std::mem::size_of::<OptixInstance>() * instances.len(),
+            //     ),
+            // )
+        }?;
 
         let mut build_input = OptixBuildInput {
             type_: OptixBuildInputType::OPTIX_BUILD_INPUT_TYPE_INSTANCES,
@@ -547,7 +558,7 @@ impl Accel {
             }
         };
 
-        let tlas = build_accel(&[build_input]);
+        let tlas = build_accel(&[build_input])?;
 
         Ok(Self {
             device: device.clone(),
