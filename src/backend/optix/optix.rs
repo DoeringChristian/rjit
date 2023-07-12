@@ -326,8 +326,7 @@ impl Kernel {
             rgen_pg,
             hit_pgs,
             [miss_pg],
-        )
-        .unwrap();
+        )?;
         Ok(Self {
             pipeline,
             device: device.clone(),

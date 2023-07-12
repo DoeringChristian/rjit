@@ -2,7 +2,6 @@ pub mod cuda;
 pub mod optix;
 
 use anyhow::Result;
-use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 

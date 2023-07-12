@@ -85,7 +85,7 @@ impl Trace {
         for dep in deps {
             ensure!(Arc::ptr_eq(&self.internal, &dep.ir));
         }
-        let mut deps: smallvec::SmallVec<[VarId; 4]> = deps.iter().map(|r| r.id()).collect();
+        let deps: smallvec::SmallVec<[VarId; 4]> = deps.iter().map(|r| r.id()).collect();
         let ret = self.push_var(Var {
             op,
             deps,
@@ -432,17 +432,6 @@ macro_rules! top {
         }
     };
 }
-macro_rules! qop {
-    ($Op:ident) => {
-        paste::paste! {
-            pub fn [<$Op:lower>](&self, d1: &VarRef, d2: &VarRef, d3: &VarRef) -> VarRef {
-                let info = self.ir.var_info(&[self, &d1, &d2, &d3]);
-                self.ir
-                    .push_var_op(Op::$Op, &[self, &d1, &d2, &d3], info.ty, info.size)
-            }
-        }
-    };
-}
 
 impl VarRef {
     pub fn ty(&self) -> VarType {
@@ -567,7 +556,7 @@ impl VarRef {
 
     pub fn to_texture(&self, shape: &[usize], n_channels: usize) -> Result<Self> {
         self.schedule();
-        self.ir.eval();
+        self.ir.eval()?;
 
         let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
         assert_eq!(self.size(), size,);
@@ -579,7 +568,7 @@ impl VarRef {
             .as_ref()
             .unwrap()
             .create_texture(shape, n_channels)?;
-        texture.copy_from_buffer(self.var().data.buffer().unwrap().as_ref());
+        texture.copy_from_buffer(self.var().data.buffer().unwrap().as_ref())?;
         let dst = self.ir.push_var(Var {
             op: Op::Nop,
             deps: smallvec![self.id()],
@@ -597,7 +586,7 @@ impl VarRef {
             .data
             .texture()
             .ok_or(anyhow!("Variable is not a texture!"))?
-            .copy_to_buffer(buf.as_ref());
+            .copy_to_buffer(buf.as_ref())?;
         Ok(dst)
     }
 
@@ -644,7 +633,7 @@ impl VarRef {
         let v_deps = v.deps.clone();
 
         if is_data {
-            return bail!("The variable contains data and cannot be reindexed!");
+            bail!("The variable contains data and cannot be reindexed!");
         }
 
         drop(v);
@@ -692,7 +681,7 @@ impl VarRef {
         reduce_op: ReduceOp,
     ) -> Result<()> {
         target.schedule();
-        self.ir.eval();
+        self.ir.eval()?;
 
         let mask: VarRef = mask
             .map(|m| {
@@ -736,7 +725,7 @@ impl VarRef {
         let ty = self.var().ty.clone();
 
         if self.var().dirty || index.var().dirty {
-            self.ir.eval();
+            self.ir.eval()?;
         }
 
         let mask: VarRef = mask
@@ -772,7 +761,7 @@ impl VarRef {
         }
 
         self.schedule();
-        self.ir.eval();
+        self.ir.eval()?;
 
         let ret = self.ir.push_var(Var {
             op: Op::Gather,
