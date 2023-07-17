@@ -276,9 +276,9 @@ impl Device {
         buf.copy_from_slice(slice)?;
         Ok(buf)
     }
-    pub fn lease_buffer(&self, size: usize) -> Lease<Buffer> {
+    pub fn lease_buffer(&self, size: usize) -> Result<Lease<Buffer>, Error> {
         let size = round_pow2(size as _) as usize;
-        self.buffer_pool.lock().lease(&size, self)
+        self.buffer_pool.lock().try_lease(&size, self)
     }
 }
 
@@ -767,8 +767,15 @@ impl Resource for Buffer {
     type Context = Device;
 
     fn create(size: &Self::Info, device: &Self::Context) -> Self {
-        Self::uninit(device, *size).unwrap()
+        Self::try_create(size, device).unwrap()
     }
 
     fn clear(&mut self) {}
+}
+impl TryResource for Buffer {
+    type Error = Error;
+
+    fn try_create(size: &Self::Info, device: &Self::Context) -> Result<Self, Self::Error> {
+        Self::uninit(device, *size)
+    }
 }

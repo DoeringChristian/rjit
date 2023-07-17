@@ -3,9 +3,9 @@ source: src/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 16011953357897490663 with 3 elements
+Launched CUDA Kernel 13024897214643680041 with 3 elements
 ===============================================
-Kernel 16011953357897490663:
+Kernel 13024897214643680041:
 
 .version 8.0
 .target sm_86
@@ -33,15 +33,15 @@ Kernel 16011953357897490663:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 5, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 3 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 5, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+16];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.u32 %r5, [%rd0];
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, opaque: Some(0), literal: 0, size: 1 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, opaque: Some(0), literal: 0, size: 1, sbt_hash: 0 } =>
 	ld.param.b32 %r6, [params+8];
 
-	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: Output, reg: 4, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 3 } =>
+	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: Output, reg: 4, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
 	add.u32 %r4, %r5, %r6;
 
 	// Store:

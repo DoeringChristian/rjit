@@ -1,16 +1,19 @@
 use resource_pool::hashpool::Lease;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::fmt::{Debug, Write};
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 use crate::backend::cuda::cuda_core::{Event, Stream};
 use crate::backend::cuda::{self, cuda_core, Buffer, Texture};
-use crate::backend::{self, CompileOptions};
+use crate::backend::{self, CompileOptions, HitGroupDesc, MissGroupDesc, ModuleDesc, SBTDesc};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use optix_rs::{
     OptixAccelBufferSizes, OptixAccelBuildOptions, OptixAccelEmitDesc, OptixApi, OptixBuildFlags,
     OptixBuildInput, OptixBuildInputInstanceArray, OptixBuildInputTriangleArray,
@@ -38,9 +41,9 @@ pub struct InternalBackend {
     instance: Arc<optix_core::Instance>,
     device: optix_core::Device,
     cuda_backend: cuda::Backend,
-    pub compile_options: Mutex<backend::CompileOptions>,
-    pub miss: Mutex<Option<(String, Arc<Module>)>>,
-    pub hit: Mutex<Vec<(String, Arc<Module>)>>,
+    // pub compile_options: Mutex<backend::CompileOptions>,
+    // pub miss: Mutex<Option<(String, Arc<Module>)>>,
+    // pub hit: Mutex<Vec<(String, Arc<Module>)>>,
 }
 
 pub struct Backend(Arc<InternalBackend>);
@@ -59,36 +62,36 @@ impl Debug for Backend {
 }
 
 impl Backend {
-    pub fn set_hit_from_strs(&mut self, hit: &[(&str, &str)]) {
-        self.hit.lock().unwrap().extend(hit.iter().map(|(ep, ptx)| {
-            (
-                String::from(*ep),
-                Arc::new(
-                    Module::create(
-                        &self.device,
-                        ptx,
-                        self.compile_options.lock().unwrap().mco(),
-                        self.compile_options.lock().unwrap().pco(),
-                    )
-                    .unwrap(),
-                ),
-            )
-        }));
-    }
-    pub fn set_miss_from_str(&mut self, miss: (&str, &str)) {
-        *self.miss.lock().unwrap() = Some((
-            String::from(miss.0),
-            Arc::new(
-                Module::create(
-                    &self.device,
-                    miss.1,
-                    self.compile_options.lock().unwrap().mco(),
-                    self.compile_options.lock().unwrap().pco(),
-                )
-                .unwrap(),
-            ),
-        ));
-    }
+    // pub fn set_hit_from_strs(&mut self, hit: &[(&str, &str)]) {
+    //     self.hit.lock().unwrap().extend(hit.iter().map(|(ep, ptx)| {
+    //         (
+    //             String::from(*ep),
+    //             Arc::new(
+    //                 Module::create(
+    //                     &self.device,
+    //                     ptx,
+    //                     self.compile_options.lock().unwrap().mco(),
+    //                     self.compile_options.lock().unwrap().pco(),
+    //                 )
+    //                 .unwrap(),
+    //             ),
+    //         )
+    //     }));
+    // }
+    // pub fn set_miss_from_str(&mut self, miss: (&str, &str)) {
+    //     *self.miss.lock().unwrap() = Some((
+    //         String::from(miss.0),
+    //         Arc::new(
+    //             Module::create(
+    //                 &self.device,
+    //                 miss.1,
+    //                 self.compile_options.lock().unwrap().mco(),
+    //                 self.compile_options.lock().unwrap().pco(),
+    //             )
+    //             .unwrap(),
+    //         ),
+    //     ));
+    // }
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(optix_core::Instance::new()?);
         let device = optix_core::Device::create(&instance, 0)?;
@@ -103,16 +106,6 @@ impl Backend {
                                     .entry __miss__dr() { ret; }";
 
         let compile_options = backend::CompileOptions::default();
-
-        let miss = Arc::new(
-            Module::create(
-                &device,
-                &miss_minimal,
-                compile_options.mco(),
-                compile_options.pco(),
-            )
-            .unwrap(),
-        );
 
         let kernels = Arc::new(
             cuda_core::Module::from_ptx(
@@ -131,9 +124,9 @@ impl Backend {
             device,
             instance,
             cuda_backend,
-            hit: Mutex::new(vec![]),
-            miss: Mutex::new(Some(("__miss__dr".into(), miss))),
-            compile_options: Mutex::new(compile_options),
+            // hit: Mutex::new(vec![]),
+            // miss: Mutex::new(Some(("__miss__dr".into(), miss))),
+            // compile_options: Mutex::new(compile_options),
         })))
     }
 }
@@ -177,40 +170,40 @@ impl backend::Backend for Backend {
         Ok(Arc::new(Accel::create(&self.device, desc)?))
     }
 
-    fn set_compile_options(&self, compile_options: &backend::CompileOptions) {
-        let mut hit = self.hit.lock().unwrap();
-        dbg!();
-        hit.clear();
-        dbg!();
-        *self.compile_options.lock().unwrap() = compile_options.clone();
-        dbg!();
-    }
-
-    fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
-        *self.miss.lock().unwrap() = Some((
-            String::from(entry_point),
-            Arc::new(Module::create(
-                &self.device,
-                source,
-                self.compile_options.lock().unwrap().mco(),
-                self.compile_options.lock().unwrap().pco(),
-            )?),
-        ));
-        Ok(())
-    }
-
-    fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
-        self.hit.lock().unwrap().push((
-            String::from(entry_point),
-            Arc::new(Module::create(
-                &self.device,
-                source,
-                self.compile_options.lock().unwrap().mco(),
-                self.compile_options.lock().unwrap().pco(),
-            )?),
-        ));
-        Ok(())
-    }
+    // fn set_compile_options(&self, compile_options: &backend::CompileOptions) {
+    //     let mut hit = self.hit.lock().unwrap();
+    //     dbg!();
+    //     hit.clear();
+    //     dbg!();
+    //     *self.compile_options.lock().unwrap() = compile_options.clone();
+    //     dbg!();
+    // }
+    //
+    // fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
+    //     *self.miss.lock().unwrap() = Some((
+    //         String::from(entry_point),
+    //         Arc::new(Module::create(
+    //             &self.device,
+    //             source,
+    //             self.compile_options.lock().unwrap().mco(),
+    //             self.compile_options.lock().unwrap().pco(),
+    //         )?),
+    //     ));
+    //     Ok(())
+    // }
+    //
+    // fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
+    //     self.hit.lock().unwrap().push((
+    //         String::from(entry_point),
+    //         Arc::new(Module::create(
+    //             &self.device,
+    //             source,
+    //             self.compile_options.lock().unwrap().mco(),
+    //             self.compile_options.lock().unwrap().pco(),
+    //         )?),
+    //     ));
+    //     Ok(())
+    // }
 
     fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Result<Arc<dyn backend::Kernel>> {
         if env.accels().is_empty() {
@@ -220,14 +213,7 @@ impl backend::Backend for Backend {
                 env,
             )?))
         } else {
-            Ok(Arc::new(Kernel::compile(
-                &self.device,
-                &self.compile_options.lock().unwrap(),
-                self.miss.lock().unwrap().as_ref().unwrap(),
-                &self.hit.lock().unwrap(),
-                ir,
-                env,
-            )?))
+            Ok(Arc::new(Kernel::compile(&self.device, ir, env)?))
         }
     }
 
@@ -265,12 +251,14 @@ impl Debug for Kernel {
 impl Kernel {
     pub fn compile(
         device: &Device,
-        compile_options: &CompileOptions,
-        miss: &(String, Arc<Module>),
-        hit: &[(String, Arc<Module>)],
+        // compile_options: &CompileOptions,
+        // miss: &(String, Arc<Module>),
+        // hit: &[(String, Arc<Module>)],
         ir: &ScheduleIr,
         env: &Env,
     ) -> Result<Self> {
+        env.accels().iter();
+
         let entry_point = "__raygen__cujit";
         // Assemble
         let mut asm = String::new();
@@ -284,13 +272,29 @@ impl Kernel {
         // Compile
 
         // let compile_options = self.compile_options.clone();
+        let n_payloads = ir.n_payloads();
 
-        let rgen = Arc::new(optix_core::Module::create(
-            device,
-            &asm,
-            compile_options.mco(),
-            compile_options.pco(),
-        )?);
+        let pco = OptixPipelineCompileOptions {
+            numAttributeValues: 2,
+            numPayloadValues: n_payloads as _,
+            pipelineLaunchParamsVariableName: b"params\0" as *const _ as *const _,
+            exceptionFlags: optix_rs::OptixExceptionFlags::OPTIX_EXCEPTION_FLAG_NONE as _,
+            ..Default::default()
+        };
+        let mco = OptixModuleCompileOptions {
+            optLevel: optix_rs::OptixCompileOptimizationLevel::OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,
+            debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
+            ..Default::default()
+        };
+
+        ensure!(
+            env.accels()
+                .windows(2)
+                .all(|w| w[0].sbt_hash() == w[1].sbt_hash()),
+            "All acceleration structures have to request the same SBT!"
+        );
+
+        let rgen = Arc::new(optix_core::Module::create(device, &asm, &mco, &pco)?);
         let rgen_pg = optix_core::ProgramGroup::create(
             &device,
             optix_core::ProgramGroupDesc::RayGen {
@@ -298,43 +302,68 @@ impl Kernel {
                 entry_point,
             },
         )?;
-        let miss_pg = optix_core::ProgramGroup::create(
-            &device,
-            optix_core::ProgramGroupDesc::Miss {
-                entry_point: &miss.0,
-                module: &miss.1,
-            },
-        )?;
+        let accel = env.accels()[0]
+            .downcast_ref::<Accel>()
+            .ok_or(anyhow!("Could not downcast Acceleration structure!"))?;
 
-        let hit_pgs = hit
+        let miss_groups = accel
+            .sbt_info
+            .miss_groups
             .iter()
-            .map(|(ep, ptx)| {
-                let pg = optix_core::ProgramGroup::create(
+            .map(|g| {
+                let module = Arc::new(Module::create(&device, &g.miss.asm, &mco, &pco)?);
+                Ok(optix_core::ProgramGroup::create(
+                    &device,
+                    optix_core::ProgramGroupDesc::Miss {
+                        entry_point: &g.miss.entry_point,
+                        module: &module,
+                    },
+                )?)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let hit_groups = accel
+            .sbt_info
+            .hit_groups
+            .iter()
+            .map(|g| {
+                let module_ch = Arc::new(Module::create(&device, &g.closest_hit.asm, &mco, &pco)?);
+
+                let module_ah = g
+                    .any_hit
+                    .as_ref()
+                    .map(|m| Ok(Arc::new(Module::create(&device, &m.asm, &mco, &pco)?)))
+                    .map_or(Ok(None), |r: Result<_>| r.map(Some))?;
+
+                let module_is = g
+                    .intersection
+                    .as_ref()
+                    .map(|m| Ok(Arc::new(Module::create(&device, &m.asm, &mco, &pco)?)))
+                    .map_or(Ok(None), |r: Result<_>| r.map(Some))?;
+
+                Ok(optix_core::ProgramGroup::create(
                     &device,
                     optix_core::ProgramGroupDesc::HitGroup {
-                        module_ch: Some(ptx),
-                        entry_point_ch: Some(ep),
-                        module_ah: None,
-                        entry_point_ah: None,
-                        module_is: None,
-                        entry_point_is: None,
+                        module_ch: Some(&module_ch),
+                        entry_point_ch: Some(&g.closest_hit.entry_point),
+                        module_ah: module_ah.as_ref(),
+                        entry_point_ah: g.any_hit.as_ref().map(|m| m.entry_point.as_ref()),
+                        module_is: module_is.as_ref(),
+                        entry_point_is: g.intersection.as_ref().map(|m| m.entry_point.as_ref()),
                     },
-                )
-                .unwrap();
-                pg
+                )?)
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
 
         let pipeline = optix_core::Pipeline::create(
             &device,
-            &compile_options.pco(),
+            &pco,
             &optix_rs::OptixPipelineLinkOptions {
                 maxTraceDepth: 1,
                 debugLevel: optix_rs::OptixCompileDebugLevel::OPTIX_COMPILE_DEBUG_LEVEL_NONE,
             },
             rgen_pg,
-            hit_pgs,
-            [miss_pg],
+            hit_groups,
+            miss_groups,
         )?;
         Ok(Self {
             pipeline,
@@ -375,8 +404,8 @@ impl backend::Kernel for Kernel {
         log::trace!("Optix Kernel Launch with {size} threads.");
 
         let params: &[u8] = bytemuck::cast_slice(&params);
-        let params_buf = self.device.cuda_device().lease_buffer(params.len());
-        params_buf.copy_from_slice(&params);
+        let params_buf = self.device.cuda_device().lease_buffer(params.len())?;
+        params_buf.copy_from_slice(&params)?;
 
         unsafe {
             let mut stream = self
@@ -385,7 +414,7 @@ impl backend::Kernel for Kernel {
                 .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)?;
 
             self.pipeline
-                .launch(&stream, params_buf.ptr(), params_buf.size(), size as u32)?;
+                .launch(&stream, params_buf.ptr(), params.len(), size as u32)?;
 
             let event = Arc::new(Event::create(&self.device.cuda_device())?);
             stream.record_event(&event)?;
@@ -406,6 +435,62 @@ impl backend::Kernel for Kernel {
     }
 }
 
+#[derive(Debug, Hash)]
+pub struct ModuleInfo {
+    pub asm: String,
+    pub entry_point: String,
+}
+#[derive(Debug, Hash)]
+pub struct HitGroupInfo {
+    closest_hit: ModuleInfo,
+    any_hit: Option<ModuleInfo>,
+    intersection: Option<ModuleInfo>,
+}
+#[derive(Debug, Hash)]
+pub struct MissGroupInfo {
+    miss: ModuleInfo,
+}
+#[derive(Debug, Hash)]
+pub struct SBTInfo {
+    hit_groups: Vec<HitGroupInfo>,
+    miss_groups: Vec<MissGroupInfo>,
+}
+
+impl<'a> From<SBTDesc<'a>> for SBTInfo {
+    fn from(value: SBTDesc<'a>) -> Self {
+        Self {
+            hit_groups: value.hit_groups.iter().map(|g| (g).into()).collect(),
+            miss_groups: value.miss_groups.iter().map(|g| (g).into()).collect(),
+        }
+    }
+}
+
+impl<'a> From<&'a ModuleDesc<'a>> for ModuleInfo {
+    fn from(value: &'a ModuleDesc) -> Self {
+        Self {
+            asm: value.asm.into(),
+            entry_point: value.entry_point.into(),
+        }
+    }
+}
+
+impl<'a> From<&'a HitGroupDesc<'a>> for HitGroupInfo {
+    fn from(value: &'a HitGroupDesc<'a>) -> Self {
+        Self {
+            closest_hit: (&value.closest_hit).into(),
+            any_hit: value.any_hit.as_ref().map(|m| m.into()),
+            intersection: value.intersection.as_ref().map(|m| m.into()),
+        }
+    }
+}
+impl<'a> From<&'a MissGroupDesc<'a>> for MissGroupInfo {
+    fn from(value: &'a MissGroupDesc<'a>) -> Self {
+        Self {
+            miss: (&value.miss).into(),
+        }
+    }
+}
+
 unsafe impl Sync for Accel {}
 unsafe impl Send for Accel {}
 
@@ -415,6 +500,9 @@ pub struct Accel {
     tlas: (u64, cuda_core::Buffer),
     blaccels: Vec<(u64, cuda_core::Buffer)>,
     buffers: Vec<Arc<dyn backend::Buffer>>, // Keep buffers arround
+
+    sbt_info: SBTInfo,
+    sbt_hash: u64,
 }
 
 impl Accel {
@@ -422,6 +510,12 @@ impl Accel {
         self.tlas.0
     }
     pub fn create(device: &Device, desc: backend::AccelDesc) -> Result<Self, Error> {
+        let sbt_info: SBTInfo = desc.sbt.into();
+
+        let mut hasher = DefaultHasher::new();
+        sbt_info.hash(&mut hasher);
+        let sbt_hash = hasher.finish();
+
         let stream = Stream::create(
             &device.cuda_device(),
             cuda_rs::CUstream_flags::CU_STREAM_DEFAULT,
@@ -574,11 +668,20 @@ impl Accel {
             blaccels,
             tlas,
             buffers,
+            sbt_info,
+            sbt_hash,
         })
+    }
+    pub fn sbt_info(&self) -> &SBTInfo {
+        &self.sbt_info
     }
 }
 
-impl backend::Accel for Accel {}
+impl backend::Accel for Accel {
+    fn sbt_hash(&self) -> u64 {
+        self.sbt_hash
+    }
+}
 
 impl backend::CompileOptions {
     pub fn pco(&self) -> OptixPipelineCompileOptions {

@@ -3,9 +3,9 @@ source: src/backend/cuda/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 3277981058018724657 with 3 elements
+Launched CUDA Kernel 11647671252944955196 with 3 elements
 ===============================================
-Kernel 3277981058018724657:
+Kernel 11647671252944955196:
 
 .version 8.0
 .target sm_86
@@ -33,12 +33,12 @@ Kernel 3277981058018724657:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 5, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 3 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, param_ty: Input, reg: 5, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.u32 %r5, [%rd0];
 
-	// [1]: ScheduleVar { op: Bitcast, deps: [SVarId(0)], ty: F32, param_ty: Output, reg: 4, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 3 } =>
+	// [1]: ScheduleVar { op: Bitcast, deps: [SVarId(0)], ty: F32, param_ty: Output, reg: 4, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
 	mov.b32 %f4, %r5;
 
 	// Store:

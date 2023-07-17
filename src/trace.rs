@@ -20,6 +20,8 @@ use crate::schedule::Env;
 pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
 use crate::{AsVarType, Jit};
 
+pub use crate::backend::{HitGroupDesc, MissGroupDesc, ModuleDesc, SBTDesc};
+
 pub enum GeometryDesc<'a> {
     Triangles {
         vertices: &'a VarRef,
@@ -27,10 +29,12 @@ pub enum GeometryDesc<'a> {
     },
 }
 pub struct InstanceDesc {
+    pub hit_group: u32,
     pub geometry: usize,
     pub transform: [f32; 12],
 }
 pub struct AccelDesc<'a> {
+    pub sbt: SBTDesc<'a>,
     pub geometries: &'a [GeometryDesc<'a>],
     pub instances: &'a [InstanceDesc],
 }
@@ -270,11 +274,13 @@ impl Trace {
             .instances
             .iter()
             .map(|inst| crate::backend::InstanceDesc {
+                hit_goup: inst.hit_group,
                 geometry: inst.geometry,
                 transform: inst.transform,
             })
             .collect::<Vec<_>>();
         let desc = crate::backend::AccelDesc {
+            sbt: desc.sbt,
             geometries: gds.as_slice(),
             instances: instances.as_slice(),
         };

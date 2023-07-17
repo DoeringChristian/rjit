@@ -136,8 +136,8 @@ impl Module {
     pub fn create(
         device: &Device,
         ptx: &str,
-        module_compile_options: OptixModuleCompileOptions,
-        pipeline_compile_options: OptixPipelineCompileOptions,
+        module_compile_options: &OptixModuleCompileOptions,
+        pipeline_compile_options: &OptixPipelineCompileOptions,
     ) -> Result<Self, Error> {
         unsafe {
             let ptx_cstring = CString::new(ptx).unwrap();
@@ -150,8 +150,8 @@ impl Module {
                 .optix
                 .optixModuleCreateFromPTX(
                     device.ctx,
-                    &module_compile_options,
-                    &pipeline_compile_options,
+                    module_compile_options,
+                    pipeline_compile_options,
                     ptx_cstring.as_ptr() as *const _,
                     ptx.len(),
                     log.as_mut_ptr() as *mut _,

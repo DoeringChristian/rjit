@@ -38,8 +38,6 @@ impl Backend {
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(Instance::new()?);
         let device = Device::create(&instance, 0)?;
-        let stream =
-            Arc::new(device.create_stream(cuda_rs::CUstream_flags_enum::CU_STREAM_DEFAULT)?);
 
         let kernels =
             Arc::new(Module::from_ptx(&device, include_str!("./kernels/kernels_70.ptx")).unwrap());
@@ -82,18 +80,6 @@ impl backend::Backend for Backend {
     //     self
     // }
 
-    fn set_compile_options(&self, compile_options: &backend::CompileOptions) {
-        todo!()
-    }
-
-    fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
-        bail!("Not implemented for CUDA backend!");
-    }
-
-    fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
-        bail!("Not implemented for CUDA backend!");
-    }
-
     fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Result<Arc<dyn backend::Kernel>> {
         Ok(Arc::new(Kernel::compile(&self.device, ir, env)?))
     }
@@ -130,13 +116,13 @@ impl Buffer {
     }
     pub fn uninit(backend: &Backend, size: usize) -> Result<Self> {
         Ok(Self {
-            buf: backend.device.lease_buffer(size),
+            buf: backend.device.lease_buffer(size)?,
             size,
             backend: backend.clone(),
         })
     }
     pub fn from_slice(backend: &Backend, slice: &[u8]) -> Result<Self> {
-        let buf = backend.device.lease_buffer(slice.len());
+        let buf = backend.device.lease_buffer(slice.len())?;
         buf.copy_from_slice(slice)?;
         Ok(Self {
             size: slice.len(),

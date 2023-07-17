@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 3883813227856322906 with 10 elements
+Launched CUDA Kernel 18405953627748651184 with 10 elements
 ===============================================
-Kernel 3883813227856322906:
+Kernel 18405953627748651184:
 
 .version 8.0
 .target sm_86
@@ -33,15 +33,15 @@ Kernel 3883813227856322906:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 10 } =>
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 10, sbt_hash: 0 } =>
 	mov.b32 %f5, 0x0;
 
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
 	mov.b32 %f6, 0x0;
 
 
-	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: F32, param_ty: Output, reg: 4, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 10 } =>
+	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: F32, param_ty: Output, reg: 4, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 10, sbt_hash: 0 } =>
 	add.f32 %f4, %f5, %f6;
 
 	// Store:

@@ -3,10 +3,10 @@ source: src/backend/cuda/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 8367220159092093313 with 3 elements
-Launched CUDA Kernel 13181206111028237730 with 10 elements
+Launched CUDA Kernel 14488565351380736318 with 3 elements
+Launched CUDA Kernel 15732312861312775478 with 10 elements
 ===============================================
-Kernel 8367220159092093313:
+Kernel 14488565351380736318:
 
 .version 8.0
 .target sm_86
@@ -34,7 +34,7 @@ Kernel 8367220159092093313:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 3 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
 	mov.u32 %r4, %r0;
 
 
@@ -55,7 +55,7 @@ done:
 	ret;
 }
 ===============================================
-Kernel 13181206111028237730:
+Kernel 15732312861312775478:
 
 .version 8.0
 .target sm_86
@@ -83,7 +83,7 @@ Kernel 13181206111028237730:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 10 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 10, sbt_hash: 0 } =>
 	mov.u32 %r4, %r0;
 
 

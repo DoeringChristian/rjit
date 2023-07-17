@@ -1,7 +1,7 @@
 use crate::backend::CompileOptions;
 use crate::jit::Jit;
 use crate::trace::{ReduceOp, Trace, VarType};
-use crate::{backend, AccelDesc, GeometryDesc, InstanceDesc};
+use crate::{backend, AccelDesc, GeometryDesc, HitGroupDesc, InstanceDesc, MissGroupDesc};
 use anyhow::Result;
 
 #[test]
@@ -359,28 +359,31 @@ fn trace_ray() -> Result<()> {
 	ret;
 }
 "##;
-
-    {
-        ir.backend().set_compile_options(&CompileOptions {
-            num_payload_values: 5,
-        });
-        dbg!();
-        let mut backend = ir.backend_as::<backend::optix::Backend>();
-        dbg!();
-
-        backend.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
-        dbg!();
-        backend.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
-    }
     let indices = ir.array(&[0u32, 1, 2])?;
     let vertices = ir.array(&[1.0f32, 0., 1., 0., 1., 1., 1., 1., 1.])?;
 
     let desc = AccelDesc {
+        sbt: crate::SBTDesc {
+            hit_groups: &[HitGroupDesc {
+                closest_hit: crate::ModuleDesc {
+                    asm: miss_and_closesthit_ptx,
+                    entry_point: "__closesthit__ch",
+                },
+                ..Default::default()
+            }],
+            miss_groups: &[MissGroupDesc {
+                miss: crate::ModuleDesc {
+                    asm: miss_and_closesthit_ptx,
+                    entry_point: "__miss__ms",
+                },
+            }],
+        },
         geometries: &[GeometryDesc::Triangles {
             vertices: &vertices,
             indices: &indices,
         }],
         instances: &[InstanceDesc {
+            hit_group: 0,
             geometry: 0,
             transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
         }],
@@ -494,24 +497,31 @@ fn trace_ray_scatter() -> Result<()> {
 }
 "##;
 
-    {
-        ir.backend().set_compile_options(&CompileOptions {
-            num_payload_values: 5,
-        });
-        let mut backend = ir.backend_as::<backend::optix::Backend>();
-
-        backend.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
-        backend.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
-    }
     let indices = ir.array(&[0u32, 1, 2])?;
     let vertices = ir.array(&[1.0f32, 0., 1., 0., 1., 1., 1., 1., 1.])?;
 
     let desc = AccelDesc {
+        sbt: crate::SBTDesc {
+            hit_groups: &[HitGroupDesc {
+                closest_hit: crate::ModuleDesc {
+                    asm: miss_and_closesthit_ptx,
+                    entry_point: "__closesthit__ch",
+                },
+                ..Default::default()
+            }],
+            miss_groups: &[MissGroupDesc {
+                miss: crate::ModuleDesc {
+                    asm: miss_and_closesthit_ptx,
+                    entry_point: "__miss__ms",
+                },
+            }],
+        },
         geometries: &[GeometryDesc::Triangles {
             vertices: &vertices,
             indices: &indices,
         }],
         instances: &[InstanceDesc {
+            hit_group: 0,
             geometry: 0,
             transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
         }],
@@ -554,7 +564,7 @@ fn trace_ray_scatter() -> Result<()> {
     let dst = ir.array(&[0f32, 0f32])?;
     u.scatter(&dst, &ir.index(2), Some(&valid))?;
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 

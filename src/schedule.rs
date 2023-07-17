@@ -36,6 +36,7 @@ pub struct ScheduleVar {
     pub opaque: Option<usize>,
     pub literal: u64,
     pub size: usize,
+    pub sbt_hash: u64,
 }
 
 impl ScheduleVar {
@@ -110,7 +111,10 @@ impl Env {
 #[derive(Debug, Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
+
     n_regs: usize,
+    n_payloads: usize,
+
     visited: HashMap<VarId, SVarId>,
 }
 
@@ -135,6 +139,9 @@ impl ScheduleIr {
     // }
     pub fn n_regs(&self) -> usize {
         self.n_regs
+    }
+    pub fn n_payloads(&self) -> usize {
+        self.n_payloads
     }
     fn next_reg(&mut self) -> usize {
         let reg = self.n_regs;
@@ -187,6 +194,7 @@ impl ScheduleIr {
             literal: 0,
             opaque: None,
             size: var.size,
+            sbt_hash: 0,
         };
 
         // Collect dependencies
@@ -229,6 +237,7 @@ impl ScheduleIr {
                 );
             }
             Op::TraceRay { payload_count } => {
+                self.n_payloads = self.n_payloads.max(payload_count);
                 sv.deps = smallvec![self.collect_data(env, ir, var.deps[0])];
                 sv.deps.extend(
                     var.deps[1..(16 + payload_count)]
@@ -283,6 +292,8 @@ impl ScheduleIr {
             let buf = var.data.buffer().map(|buf| env.push_buffer(&buf));
             let tex = var.data.texture().map(|tex| env.push_texture(&tex));
             let accel = var.data.accel().map(|accel| env.push_accel(&accel));
+
+            let sbt_hash = var.data.accel().map(|accel| accel.sbt_hash()).unwrap_or(0);
             let svid = self.push_var(ScheduleVar {
                 op: Op::Data,
                 ty: var.ty.clone(),
@@ -290,6 +301,7 @@ impl ScheduleIr {
                 buf,
                 tex,
                 accel,
+                sbt_hash,
                 ..Default::default()
             });
             self.visited.insert(id, svid);

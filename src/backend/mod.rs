@@ -46,14 +46,16 @@ pub trait Backend: Debug + Sync + Send + DowncastSync {
     fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn Buffer>>;
     fn first_register(&self) -> usize;
     fn create_accel(&self, desc: AccelDesc) -> Result<Arc<dyn Accel>>;
-    fn set_compile_options(&self, compile_options: &CompileOptions);
-    fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()>;
-    fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()>;
+    // fn set_compile_options(&self, compile_options: &CompileOptions);
+    // fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()>;
+    // fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()>;
     fn ident(&self) -> &'static str;
 }
 impl_downcast!(sync Backend);
 
-pub trait Accel: Debug + Sync + Send + DowncastSync {}
+pub trait Accel: Debug + Sync + Send + DowncastSync {
+    fn sbt_hash(&self) -> u64;
+}
 impl_downcast!(sync Accel);
 
 #[derive(Clone, Default)]
@@ -69,9 +71,32 @@ pub enum GeometryDesc {
 }
 pub struct InstanceDesc {
     pub geometry: usize,
+    pub hit_goup: u32,
     pub transform: [f32; 12],
 }
 pub struct AccelDesc<'a> {
+    pub sbt: SBTDesc<'a>,
     pub geometries: &'a [GeometryDesc],
     pub instances: &'a [InstanceDesc],
+}
+
+#[derive(Default)]
+pub struct HitGroupDesc<'a> {
+    closest_hit: ModuleDesc<'a>,
+    any_hit: Option<ModuleDesc<'a>>,
+    intersection: Option<ModuleDesc<'a>>,
+}
+pub struct MissGroupDesc<'a> {
+    miss: ModuleDesc<'a>,
+}
+
+#[derive(Default)]
+pub struct ModuleDesc<'a> {
+    pub asm: &'a str,
+    pub entry_point: &'a str,
+}
+
+pub struct SBTDesc<'a> {
+    pub hit_groups: &'a [HitGroupDesc<'a>],
+    pub miss_groups: &'a [MissGroupDesc<'a>],
 }
