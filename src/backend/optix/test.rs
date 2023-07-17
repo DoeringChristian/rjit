@@ -361,12 +361,15 @@ fn trace_ray() -> Result<()> {
 "##;
 
     {
-        let mut backend = ir.backend_as::<backend::optix::Backend>();
-
-        backend.compile_options = CompileOptions {
+        ir.backend().set_compile_options(&CompileOptions {
             num_payload_values: 5,
-        };
+        });
+        dbg!();
+        let mut backend = ir.backend_as::<backend::optix::Backend>();
+        dbg!();
+
         backend.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
+        dbg!();
         backend.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
     }
     let indices = ir.array(&[0u32, 1, 2])?;
@@ -492,11 +495,11 @@ fn trace_ray_scatter() -> Result<()> {
 "##;
 
     {
+        ir.backend().set_compile_options(&CompileOptions {
+            num_payload_values: 5,
+        });
         let mut backend = ir.backend_as::<backend::optix::Backend>();
 
-        backend.compile_options = CompileOptions {
-            num_payload_values: 5,
-        };
         backend.set_miss_from_str(("__miss__ms", miss_and_closesthit_ptx));
         backend.set_hit_from_strs(&[("__closesthit__ch", miss_and_closesthit_ptx)]);
     }

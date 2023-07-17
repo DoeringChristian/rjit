@@ -887,7 +887,7 @@ impl VarRef {
             .buffer()
             .ok_or(anyhow!("Mask is not data after evaluation!"))?
             .clone();
-        let indices = self.ir.backend().compress(mask.as_ref())?;
+        let indices = mask.compress()?;
         let size = indices.size() / std::mem::size_of::<u32>();
 
         Ok(self.ir.push_var(Var {

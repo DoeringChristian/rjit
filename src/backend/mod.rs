@@ -33,6 +33,8 @@ pub trait Buffer: Debug + Sync + Send + DowncastSync {
     fn copy_to_host(&self, dst: &mut [u8]);
     fn ptr(&self) -> Option<u64>;
     fn size(&self) -> usize;
+
+    fn compress(&self) -> Result<Arc<dyn Buffer>>;
 }
 impl_downcast!(sync Buffer);
 
@@ -43,14 +45,11 @@ pub trait Backend: Debug + Sync + Send + DowncastSync {
     fn buffer_uninit(&self, size: usize) -> Result<Arc<dyn Buffer>>;
     fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn Buffer>>;
     fn first_register(&self) -> usize;
-    fn synchronize(&self) -> Result<()>;
     fn create_accel(&self, desc: AccelDesc) -> Result<Arc<dyn Accel>>;
-    fn set_compile_options(&mut self, compile_options: &CompileOptions);
-    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) -> Result<()>;
-    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) -> Result<()>;
+    fn set_compile_options(&self, compile_options: &CompileOptions);
+    fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()>;
+    fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()>;
     fn ident(&self) -> &'static str;
-
-    fn compress(&self, mask: &dyn Buffer) -> Result<Arc<dyn Buffer>>;
 }
 impl_downcast!(sync Backend);
 

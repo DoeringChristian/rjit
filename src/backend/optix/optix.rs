@@ -1,5 +1,7 @@
+use resource_pool::hashpool::Lease;
 use std::ffi::{CStr, CString};
 use std::fmt::{Debug, Write};
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 use crate::backend::cuda::cuda_core::{Event, Stream};
@@ -28,16 +30,27 @@ pub enum Error {
     OptixError(#[from] optix_core::Error),
     #[error("{}", .0)]
     CudaError(#[from] cuda_core::Error),
+    #[error("{}", .0)]
+    CudaBackendError(#[from] cuda::Error),
 }
 
-pub struct Backend {
+pub struct InternalBackend {
     instance: Arc<optix_core::Instance>,
     device: optix_core::Device,
-    stream: Arc<cuda_core::Stream>,
-    kernels: Arc<cuda_core::Module>,
-    pub compile_options: backend::CompileOptions,
-    pub miss: Option<(String, Arc<Module>)>,
-    pub hit: Vec<(String, Arc<Module>)>,
+    cuda_backend: cuda::Backend,
+    pub compile_options: Mutex<backend::CompileOptions>,
+    pub miss: Mutex<Option<(String, Arc<Module>)>>,
+    pub hit: Mutex<Vec<(String, Arc<Module>)>>,
+}
+
+pub struct Backend(Arc<InternalBackend>);
+
+impl Deref for Backend {
+    type Target = InternalBackend;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 impl Debug for Backend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -47,15 +60,15 @@ impl Debug for Backend {
 
 impl Backend {
     pub fn set_hit_from_strs(&mut self, hit: &[(&str, &str)]) {
-        self.hit.extend(hit.iter().map(|(ep, ptx)| {
+        self.hit.lock().unwrap().extend(hit.iter().map(|(ep, ptx)| {
             (
                 String::from(*ep),
                 Arc::new(
                     Module::create(
                         &self.device,
                         ptx,
-                        self.compile_options.mco(),
-                        self.compile_options.pco(),
+                        self.compile_options.lock().unwrap().mco(),
+                        self.compile_options.lock().unwrap().pco(),
                     )
                     .unwrap(),
                 ),
@@ -63,14 +76,14 @@ impl Backend {
         }));
     }
     pub fn set_miss_from_str(&mut self, miss: (&str, &str)) {
-        self.miss = Some((
+        *self.miss.lock().unwrap() = Some((
             String::from(miss.0),
             Arc::new(
                 Module::create(
                     &self.device,
                     miss.1,
-                    self.compile_options.mco(),
-                    self.compile_options.pco(),
+                    self.compile_options.lock().unwrap().mco(),
+                    self.compile_options.lock().unwrap().pco(),
                 )
                 .unwrap(),
             ),
@@ -109,15 +122,19 @@ impl Backend {
             .unwrap(),
         );
 
-        Ok(Self {
+        let cuda_backend = cuda::Backend(Arc::new(cuda::InternalBackend {
+            device: device.cuda_device().clone(),
+            kernels,
+        }));
+
+        Ok(Self(Arc::new(InternalBackend {
             device,
             instance,
-            stream,
-            kernels,
-            hit: vec![],
-            miss: Some(("__miss__dr".into(), miss)),
-            compile_options,
-        })
+            cuda_backend,
+            hit: Mutex::new(vec![]),
+            miss: Mutex::new(Some(("__miss__dr".into(), miss))),
+            compile_options: Mutex::new(compile_options),
+        })))
     }
 }
 
@@ -145,55 +162,51 @@ impl backend::Backend for Backend {
     }
 
     fn buffer_uninit(&self, size: usize) -> Result<Arc<dyn backend::Buffer>> {
-        Ok(Arc::new(Buffer::uninit(&self.device.cuda_device(), size)?))
+        Ok(Arc::new(Buffer::uninit(&self.cuda_backend, size)?))
     }
 
     fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn backend::Buffer>> {
-        Ok(Arc::new(Buffer::from_slice(
-            &self.device.cuda_device(),
-            slice,
-        )?))
+        Ok(Arc::new(Buffer::from_slice(&self.cuda_backend, slice)?))
     }
 
     fn first_register(&self) -> usize {
         Kernel::FIRST_REGISTER
     }
 
-    fn synchronize(&self) -> Result<()> {
-        self.stream.synchronize()?;
-        Ok(())
-    }
-
     fn create_accel(&self, desc: backend::AccelDesc) -> Result<Arc<dyn backend::Accel>> {
-        Ok(Arc::new(Accel::create(&self.device, &self.stream, desc)?))
+        Ok(Arc::new(Accel::create(&self.device, desc)?))
     }
 
-    fn set_compile_options(&mut self, compile_options: &backend::CompileOptions) {
-        self.hit.clear();
-        self.compile_options = compile_options.clone();
+    fn set_compile_options(&self, compile_options: &backend::CompileOptions) {
+        let mut hit = self.hit.lock().unwrap();
+        dbg!();
+        hit.clear();
+        dbg!();
+        *self.compile_options.lock().unwrap() = compile_options.clone();
+        dbg!();
     }
 
-    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) -> Result<()> {
-        self.miss = Some((
+    fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
+        *self.miss.lock().unwrap() = Some((
             String::from(entry_point),
             Arc::new(Module::create(
                 &self.device,
                 source,
-                self.compile_options.mco(),
-                self.compile_options.pco(),
+                self.compile_options.lock().unwrap().mco(),
+                self.compile_options.lock().unwrap().pco(),
             )?),
         ));
         Ok(())
     }
 
-    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) -> Result<()> {
-        self.hit.push((
+    fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
+        self.hit.lock().unwrap().push((
             String::from(entry_point),
             Arc::new(Module::create(
                 &self.device,
                 source,
-                self.compile_options.mco(),
-                self.compile_options.pco(),
+                self.compile_options.lock().unwrap().mco(),
+                self.compile_options.lock().unwrap().pco(),
             )?),
         ));
         Ok(())
@@ -209,9 +222,9 @@ impl backend::Backend for Backend {
         } else {
             Ok(Arc::new(Kernel::compile(
                 &self.device,
-                &self.compile_options,
-                self.miss.as_ref().unwrap(),
-                &self.hit,
+                &self.compile_options.lock().unwrap(),
+                self.miss.lock().unwrap().as_ref().unwrap(),
+                &self.hit.lock().unwrap(),
                 ir,
                 env,
             )?))
@@ -228,10 +241,6 @@ impl backend::Backend for Backend {
             asm,
             entry_point,
         )?))
-    }
-
-    fn compress(&self, mask: &dyn backend::Buffer) -> Result<Arc<dyn backend::Buffer>> {
-        cuda::compress::compress(mask, &self.kernels)
     }
 }
 
@@ -365,8 +374,9 @@ impl backend::Kernel for Kernel {
 
         log::trace!("Optix Kernel Launch with {size} threads.");
 
-        let params_buf =
-            Buffer::from_slice(&self.device.cuda_device(), bytemuck::cast_slice(&params))?;
+        let params: &[u8] = bytemuck::cast_slice(&params);
+        let params_buf = self.device.cuda_device().lease_buffer(params.len());
+        params_buf.copy_from_slice(&params);
 
         unsafe {
             let mut stream = self
@@ -411,11 +421,11 @@ impl Accel {
     pub fn ptr(&self) -> u64 {
         self.tlas.0
     }
-    pub fn create(
-        device: &Device,
-        stream: &Stream,
-        desc: backend::AccelDesc,
-    ) -> Result<Self, Error> {
+    pub fn create(device: &Device, desc: backend::AccelDesc) -> Result<Self, Error> {
+        let stream = Stream::create(
+            &device.cuda_device(),
+            cuda_rs::CUstream_flags::CU_STREAM_DEFAULT,
+        )?;
         let build_options = OptixAccelBuildOptions {
             // buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_NONE as u32,
             buildFlags: OptixBuildFlags::OPTIX_BUILD_FLAG_PREFER_FAST_TRACE as u32
@@ -594,7 +604,7 @@ unsafe impl Send for DeviceFuture {}
 #[derive(Debug)]
 pub struct DeviceFuture {
     event: Arc<Event>,
-    params: Buffer,
+    params: Lease<cuda_core::Buffer>,
     stream: Stream,
 }
 

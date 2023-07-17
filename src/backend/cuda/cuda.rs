@@ -4,6 +4,7 @@ use resource_pool::prelude::*;
 use std::ffi::c_void;
 use std::fmt::{Debug, Write};
 use std::mem::size_of;
+use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -18,11 +19,21 @@ pub enum Error {
 }
 
 #[derive(Debug)]
-pub struct Backend {
-    device: Device,
-    stream: Arc<Stream>,
-    kernels: Arc<Module>, // Default kernels
+pub struct InternalBackend {
+    pub device: Device,
+    pub kernels: Arc<Module>, // Default kernels
 }
+#[derive(Debug, Clone)]
+pub struct Backend(pub(crate) Arc<InternalBackend>);
+
+impl Deref for Backend {
+    type Target = InternalBackend;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl Backend {
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(Instance::new()?);
@@ -33,11 +44,7 @@ impl Backend {
         let kernels =
             Arc::new(Module::from_ptx(&device, include_str!("./kernels/kernels_70.ptx")).unwrap());
 
-        Ok(Self {
-            stream,
-            kernels,
-            device,
-        })
+        Ok(Self(Arc::new(InternalBackend { kernels, device })))
     }
 }
 
@@ -52,20 +59,20 @@ impl backend::Backend for Backend {
         Ok(Arc::new(Texture::create(&self.device, shape, n_channels)?))
     }
     fn buffer_uninit(&self, size: usize) -> Result<Arc<dyn crate::backend::Buffer>> {
-        Ok(Arc::new(Buffer::uninit(&self.device, size)?))
+        Ok(Arc::new(Buffer::uninit(&self, size)?))
     }
     fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn crate::backend::Buffer>> {
-        Ok(Arc::new(Buffer::from_slice(&self.device, slice)?))
+        Ok(Arc::new(Buffer::from_slice(&self, slice)?))
     }
 
     fn first_register(&self) -> usize {
         Kernel::FIRST_REGISTER
     }
 
-    fn synchronize(&self) -> Result<()> {
-        self.stream.synchronize()?;
-        Ok(())
-    }
+    // fn synchronize(&self) -> Result<()> {
+    //     self.stream.synchronize()?;
+    //     Ok(())
+    // }
 
     fn create_accel(&self, desc: backend::AccelDesc) -> Result<Arc<dyn backend::Accel>> {
         bail!("Not implemented for CUDA backend!");
@@ -75,15 +82,15 @@ impl backend::Backend for Backend {
     //     self
     // }
 
-    fn set_compile_options(&mut self, compile_options: &backend::CompileOptions) {
+    fn set_compile_options(&self, compile_options: &backend::CompileOptions) {
         todo!()
     }
 
-    fn set_miss_from_str(&mut self, entry_point: &str, source: &str) -> Result<()> {
+    fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
         bail!("Not implemented for CUDA backend!");
     }
 
-    fn push_hit_from_str(&mut self, entry_point: &str, source: &str) -> Result<()> {
+    fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
         bail!("Not implemented for CUDA backend!");
     }
 
@@ -99,9 +106,9 @@ impl backend::Backend for Backend {
         Ok(Arc::new(Kernel::assemble(&self.device, asm, entry_point)?))
     }
 
-    fn compress(&self, mask: &dyn backend::Buffer) -> Result<Arc<dyn backend::Buffer>> {
-        Ok(super::compress::compress(mask, &self.kernels)?)
-    }
+    // fn compress(&self, mask: &dyn backend::Buffer) -> Result<Arc<dyn backend::Buffer>> {
+    //     Ok(super::compress::compress(mask, &self.kernels)?)
+    // }
 }
 
 impl Drop for Backend {
@@ -112,7 +119,7 @@ impl Drop for Backend {
 pub struct Buffer {
     buf: Lease<cuda_core::Buffer>,
     pub(super) size: usize,
-    device: Device,
+    backend: Backend,
 }
 impl Buffer {
     pub fn ptr(&self) -> u64 {
@@ -121,24 +128,24 @@ impl Buffer {
     pub fn size(&self) -> usize {
         self.size
     }
-    pub fn uninit(device: &Device, size: usize) -> Result<Self> {
+    pub fn uninit(backend: &Backend, size: usize) -> Result<Self> {
         Ok(Self {
-            buf: device.lease_buffer(size),
+            buf: backend.device.lease_buffer(size),
             size,
-            device: device.clone(),
+            backend: backend.clone(),
         })
     }
-    pub fn from_slice(device: &Device, slice: &[u8]) -> Result<Self> {
-        let buf = device.lease_buffer(slice.len());
-        buf.copy_from_slice(slice);
+    pub fn from_slice(backend: &Backend, slice: &[u8]) -> Result<Self> {
+        let buf = backend.device.lease_buffer(slice.len());
+        buf.copy_from_slice(slice)?;
         Ok(Self {
             size: slice.len(),
             buf,
-            device: device.clone(),
+            backend: backend.clone(),
         })
     }
-    pub fn device(&self) -> &Device {
-        &self.device
+    pub fn backend(&self) -> &Backend {
+        &self.backend
     }
 }
 unsafe impl Sync for Buffer {}
@@ -154,6 +161,10 @@ impl backend::Buffer for Buffer {
 
     fn size(&self) -> usize {
         self.size
+    }
+
+    fn compress(&self) -> Result<Arc<dyn backend::Buffer>> {
+        Ok(super::compress::compress(&self, &self.backend.kernels)?)
     }
 }
 

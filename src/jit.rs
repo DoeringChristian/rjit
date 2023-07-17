@@ -142,7 +142,7 @@ impl Jit {
         for future in futures {
             future?.wait();
         }
-        ir.backend.as_ref().unwrap().synchronize();
+        // ir.backend.as_ref().unwrap().synchronize();
 
         // After executing the kernels, the Ir is cleaned up.
         // To do so, we first decrement the refcount and then set the ParamType to Input and op to

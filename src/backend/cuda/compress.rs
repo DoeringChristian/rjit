@@ -44,16 +44,15 @@ fn launch_config(device: &Device, size: u32) -> (u32, u32) {
 
     (blocks, threads)
 }
-pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Result<Arc<dyn backend::Buffer>> {
-    let mask = mask
-        .downcast_ref::<Buffer>()
-        .ok_or(anyhow!("Could not downcas Buffer!"))?;
-
-    let device = mask.device();
+pub fn compress(mask: &Buffer, kernels: &Module) -> Result<Arc<dyn backend::Buffer>> {
+    let backend = mask.backend();
+    let device = &backend.device;
+    // let device = mask.device();
 
     let size = mask.size();
-    let count_out = Buffer::uninit(device, size_of::<u32>())?;
-    let mut out = Buffer::uninit(device, size as usize * size_of::<u32>())?;
+    let count_out = device.lease_buffer(size_of::<u32>());
+    // let count_out = Buffer::uninit(device, size_of::<u32>())?;
+    let mut out = Buffer::uninit(backend, size as usize * size_of::<u32>())?;
 
     if size <= 4096 {
         let mut in_ptr = mask.ptr();
@@ -100,7 +99,7 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Result<Arc<dyn 
         let mut scratch_items = block_count + 32;
         let trailer = items_per_block * block_count - size;
 
-        let scratch = Buffer::uninit(&device, scratch_items as usize * size_of::<u64>())?;
+        let scratch = device.lease_buffer(scratch_items as usize * size_of::<u64>());
 
         let (block_count_init, thread_count_init) = launch_config(&device, scratch_items);
 
@@ -149,10 +148,7 @@ pub fn compress(mask: &dyn backend::Buffer, kernels: &Module) -> Result<Arc<dyn 
     }
 
     let mut size = 0u32;
-    backend::Buffer::copy_to_host(
-        &count_out,
-        bytemuck::cast_slice_mut(std::slice::from_mut(&mut size)),
-    );
+    count_out.copy_to_host(bytemuck::cast_slice_mut(std::slice::from_mut(&mut size)));
     out.size = size as usize * size_of::<u32>();
     Ok(Arc::new(out))
 }
