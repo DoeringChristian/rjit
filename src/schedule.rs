@@ -36,6 +36,8 @@ pub struct ScheduleVar {
     pub opaque: Option<usize>,
     pub literal: u64,
     pub size: usize,
+
+    // We have to build a new kernel when we get new hit/miss shaders.
     pub sbt_hash: u64,
 }
 

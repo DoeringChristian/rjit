@@ -1,6 +1,8 @@
 pub mod cuda;
 pub mod optix;
 
+pub mod info;
+
 use anyhow::Result;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -8,6 +10,8 @@ use std::sync::Arc;
 use downcast_rs::{impl_downcast, DowncastSync};
 
 use crate::schedule::{Env, ScheduleIr};
+
+pub use self::info::*;
 
 pub trait Texture: Debug + Sync + Send + DowncastSync {
     fn channels(&self) -> usize;
@@ -55,6 +59,7 @@ impl_downcast!(sync Backend);
 
 pub trait Accel: Debug + Sync + Send + DowncastSync {
     fn sbt_hash(&self) -> u64;
+    fn sbt_info(&self) -> &SBTInfo;
 }
 impl_downcast!(sync Accel);
 

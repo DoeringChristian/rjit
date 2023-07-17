@@ -9,7 +9,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::backend::cuda::cuda_core::{Event, Stream};
 use crate::backend::cuda::{self, cuda_core, Buffer, Texture};
-use crate::backend::{self, CompileOptions, HitGroupDesc, MissGroupDesc, ModuleDesc, SBTDesc};
+use crate::backend::{
+    self, CompileOptions, HitGroupDesc, MissGroupDesc, ModuleDesc, SBTDesc, SBTInfo,
+};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
 use crate::var::ParamType;
@@ -294,6 +296,13 @@ impl Kernel {
             "All acceleration structures have to request the same SBT!"
         );
 
+        ensure!(
+            env.accels()
+                .iter()
+                .all(|accel| accel.downcast_ref::<Accel>().is_some()),
+            "Could not downcast Acceleration Structure!"
+        );
+
         let rgen = Arc::new(optix_core::Module::create(device, &asm, &mco, &pco)?);
         let rgen_pg = optix_core::ProgramGroup::create(
             &device,
@@ -302,12 +311,10 @@ impl Kernel {
                 entry_point,
             },
         )?;
-        let accel = env.accels()[0]
-            .downcast_ref::<Accel>()
-            .ok_or(anyhow!("Could not downcast Acceleration structure!"))?;
+        let accel = &env.accels()[0];
 
         let miss_groups = accel
-            .sbt_info
+            .sbt_info()
             .miss_groups
             .iter()
             .map(|g| {
@@ -322,7 +329,7 @@ impl Kernel {
             })
             .collect::<Result<Vec<_>>>()?;
         let hit_groups = accel
-            .sbt_info
+            .sbt_info()
             .hit_groups
             .iter()
             .map(|g| {
@@ -396,7 +403,7 @@ impl backend::Kernel for Kernel {
             }))
             .chain(env.accels().iter().map(|a| {
                 a.downcast_ref::<Accel>()
-                    .ok_or(anyhow!("Could not downcast Acceleratin Structure!"))
+                    .ok_or(anyhow!("Could not downcast Acceleration Structure!"))
                     .map(|a| a.ptr())
             }))
             .collect::<Result<Vec<_>>>()?;
@@ -432,62 +439,6 @@ impl backend::Kernel for Kernel {
 
     fn backend_ident(&self) -> &'static str {
         "OptiX"
-    }
-}
-
-#[derive(Debug, Hash)]
-pub struct ModuleInfo {
-    pub asm: String,
-    pub entry_point: String,
-}
-#[derive(Debug, Hash)]
-pub struct HitGroupInfo {
-    closest_hit: ModuleInfo,
-    any_hit: Option<ModuleInfo>,
-    intersection: Option<ModuleInfo>,
-}
-#[derive(Debug, Hash)]
-pub struct MissGroupInfo {
-    miss: ModuleInfo,
-}
-#[derive(Debug, Hash)]
-pub struct SBTInfo {
-    hit_groups: Vec<HitGroupInfo>,
-    miss_groups: Vec<MissGroupInfo>,
-}
-
-impl<'a> From<SBTDesc<'a>> for SBTInfo {
-    fn from(value: SBTDesc<'a>) -> Self {
-        Self {
-            hit_groups: value.hit_groups.iter().map(|g| (g).into()).collect(),
-            miss_groups: value.miss_groups.iter().map(|g| (g).into()).collect(),
-        }
-    }
-}
-
-impl<'a> From<&'a ModuleDesc<'a>> for ModuleInfo {
-    fn from(value: &'a ModuleDesc) -> Self {
-        Self {
-            asm: value.asm.into(),
-            entry_point: value.entry_point.into(),
-        }
-    }
-}
-
-impl<'a> From<&'a HitGroupDesc<'a>> for HitGroupInfo {
-    fn from(value: &'a HitGroupDesc<'a>) -> Self {
-        Self {
-            closest_hit: (&value.closest_hit).into(),
-            any_hit: value.any_hit.as_ref().map(|m| m.into()),
-            intersection: value.intersection.as_ref().map(|m| m.into()),
-        }
-    }
-}
-impl<'a> From<&'a MissGroupDesc<'a>> for MissGroupInfo {
-    fn from(value: &'a MissGroupDesc<'a>) -> Self {
-        Self {
-            miss: (&value.miss).into(),
-        }
     }
 }
 
@@ -672,14 +623,15 @@ impl Accel {
             sbt_hash,
         })
     }
-    pub fn sbt_info(&self) -> &SBTInfo {
-        &self.sbt_info
-    }
 }
 
 impl backend::Accel for Accel {
     fn sbt_hash(&self) -> u64 {
         self.sbt_hash
+    }
+
+    fn sbt_info(&self) -> &backend::SBTInfo {
+        &self.sbt_info
     }
 }
 
