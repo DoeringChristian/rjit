@@ -7,7 +7,7 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::backend::{Accel, Buffer, Texture};
 use crate::trace::Internal;
-use crate::var::{Data, Op, ParamType, VarId, VarType};
+use crate::var::{Data, Op, VarId, VarType};
 use crate::ReduceOp;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -74,18 +74,7 @@ pub struct ScheduleVar {
     pub ty: VarType,
     pub reg: usize,
 
-    // Replace with scatter/gather operations
-    // pub param_ty: ParamType,
-
-    // TODO: aggregate into one enum
-    // pub buf: Option<usize>, // Index into literal/buffer/texture vec
-    // pub tex: Option<usize>,
-    // pub accel: Option<usize>,
-    // pub opaque: Option<usize>,
-    // pub literal: u64,
     pub data: ScheduledData,
-
-    // TODO: remove
 
     // We have to build a new kernel when we get new hit/miss shaders.
     pub sbt_hash: u64,
@@ -257,7 +246,6 @@ impl ScheduleIr {
             op: var.op,
             ty: var.ty.clone(),
             deps: smallvec![],
-            // param_ty: ParamType::None,
             ..Default::default()
         };
 

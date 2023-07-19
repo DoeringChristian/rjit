@@ -6,17 +6,6 @@ use slotmap::DefaultKey;
 use smallvec::SmallVec;
 
 use crate::backend::{Accel, Buffer, Texture};
-///
-/// TODO: better param enum
-///
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub enum ParamType {
-    #[default]
-    None,
-    // Input,
-    Output,
-    // Literal,
-}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum ReduceOp {

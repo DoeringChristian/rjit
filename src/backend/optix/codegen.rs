@@ -1,7 +1,6 @@
 use crate::backend::cuda::codegen::{tyname, tyname_bin, Reg};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::{Op, VarType};
-use crate::var::ParamType;
 
 pub fn assemble_var_rt(
     asm: &mut impl std::fmt::Write,
@@ -192,59 +191,6 @@ pub fn assemble_entry(
                 + env.textures().len() as u64,
             "const",
         )?;
-
-        // let var = ir.var(id);
-        // match var.param_ty {
-        //     ParamType::None => assemble_var_rt(
-        //         asm,
-        //         ir,
-        //         id,
-        //         1,
-        //         1 + env.opaques().len() as u64,
-        //         1 + env.opaques().len() as u64 + env.buffers().len() as u64,
-        //         1 + env.opaques().len() as u64
-        //             + env.buffers().len() as u64
-        //             + env.textures().len() as u64,
-        //         "const",
-        //     )?,
-        //     ParamType::Output => {
-        //         let param_offset = (var.data.buffer().unwrap() + 1) * 8;
-        //         assemble_var_rt(
-        //             asm,
-        //             ir,
-        //             id,
-        //             1,
-        //             1 + env.opaques().len() as u64,
-        //             1 + env.opaques().len() as u64 + env.buffers().len() as u64,
-        //             1 + env.opaques().len() as u64
-        //                 + env.buffers().len() as u64
-        //                 + env.textures().len() as u64,
-        //             "const",
-        //         )?;
-        //         // let offset = param_idx * 8;
-        //         write!(
-        //             asm,
-        //             "\n\t// Store:\n\
-        //                    \tld.const.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
-        //                    \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
-        //                    params[offset]\n",
-        //             param_offset,
-        //             var.ty.size(),
-        //         )?;
-        //
-        //         if var.ty == VarType::Bool {
-        //             writeln!(asm, "\tselp.u16 %w0, 1, 0, {};", reg(id))?;
-        //             writeln!(asm, "\tst.global.cs.u8 [%rd0], %w0;")?;
-        //         } else {
-        //             writeln!(
-        //                        asm,
-        //                        "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
-        //                        tyname(&var.ty),
-        //                        reg(id),
-        //                    )?;
-        //         }
-        //     }
-        // }
     }
 
     write!(

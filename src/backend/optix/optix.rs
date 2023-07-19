@@ -14,7 +14,6 @@ use crate::backend::{
 };
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::VarType;
-use crate::var::ParamType;
 use anyhow::{anyhow, ensure, Result};
 use optix_rs::{
     OptixAccelBufferSizes, OptixAccelBuildOptions, OptixAccelEmitDesc, OptixApi, OptixBuildFlags,
