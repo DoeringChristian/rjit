@@ -8,6 +8,7 @@ use smallvec::{smallvec, SmallVec};
 use crate::backend::{Accel, Buffer, Texture};
 use crate::trace::Internal;
 use crate::var::{Data, Op, ParamType, VarId, VarType};
+use crate::ReduceOp;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SVarId(pub usize);
@@ -62,7 +63,7 @@ impl ScheduledData {
 
 ///
 /// A Representation of a variable used in the ScheduleIr.
-/// This only holds data that is needed to compile the Kernel.
+/// This only holds data that is necessary to compile the Kernel.
 ///
 /// Variables are densly stored in the ScheduleIr, simplifying the compilation.
 ///
@@ -74,7 +75,7 @@ pub struct ScheduleVar {
     pub reg: usize,
 
     // Replace with scatter/gather operations
-    pub param_ty: ParamType,
+    // pub param_ty: ParamType,
 
     // TODO: aggregate into one enum
     // pub buf: Option<usize>, // Index into literal/buffer/texture vec
@@ -214,12 +215,29 @@ impl ScheduleIr {
                 continue;
             }
 
-            let buffer = env.push_buffer(var.data.buffer().unwrap());
+            // Fake scatter
+            let dst = self.collect_data(env, ir, *id);
+            let idx = self.push_var(ScheduleVar {
+                op: Op::Idx,
+                ty: VarType::U32,
+                ..Default::default()
+            });
+            let mask = self.push_var(ScheduleVar {
+                op: Op::Literal,
+                ty: VarType::Bool,
+                data: ScheduledData::Literal(1),
+                ..Default::default()
+            });
 
-            let mut sv = self.var_mut(sv_id);
-
-            sv.param_ty = ParamType::Output;
-            sv.data = buffer
+            self.push_var(ScheduleVar {
+                op: Op::Scatter { op: ReduceOp::None },
+                deps: smallvec![
+                    sv_id, // src
+                    dst, idx, mask,
+                ],
+                ty: var.ty.clone(),
+                ..Default::default()
+            });
         }
     }
     ///
@@ -239,7 +257,7 @@ impl ScheduleIr {
             op: var.op,
             ty: var.ty.clone(),
             deps: smallvec![],
-            param_ty: ParamType::None,
+            // param_ty: ParamType::None,
             ..Default::default()
         };
 
@@ -248,12 +266,12 @@ impl ScheduleIr {
         match var.op {
             Op::Data => {
                 let bv = self.collect_data(env, ir, id);
+                // Fake gather
                 sv.op = Op::Gather;
                 let idx = if var.size > 1 {
                     self.push_var(ScheduleVar {
                         op: Op::Idx,
                         ty: VarType::U32,
-                        param_ty: ParamType::None,
                         ..Default::default()
                     })
                 } else {
@@ -267,7 +285,6 @@ impl ScheduleIr {
                 let mask = self.push_var(ScheduleVar {
                     op: Op::Literal,
                     ty: VarType::Bool,
-                    param_ty: ParamType::None,
                     data: ScheduledData::Literal(1),
                     ..Default::default()
                 });
@@ -276,7 +293,6 @@ impl ScheduleIr {
                     mask, // mask
                 ];
                 sv.data = env.push_buffer(var.data.buffer().unwrap());
-                sv.param_ty = ParamType::None;
             }
             Op::Literal => {
                 // TODO: cannot evaluate a literal (maybe neccesarry for tensors)

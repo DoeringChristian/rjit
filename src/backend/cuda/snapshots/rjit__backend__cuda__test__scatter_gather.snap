@@ -3,70 +3,10 @@ source: src/backend/cuda/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 18159578827838059669 with 3 elements
-Launched CUDA Kernel 5977742769282181807 with 3 elements
+Launched CUDA Kernel 7829316606980987519 with 3 elements
+Launched CUDA Kernel 15708867340371463027 with 3 elements
 ===============================================
-Kernel 5977742769282181807:
-
-.version 8.0
-.target sm_86
-.address_size 64
-
-.entry cujit(
-	.param .align 8 .b8 params[32]) {
-
-	.reg.b8   %b <9>; .reg.b16 %w<9>; .reg.b32 %r<9>;
-	.reg.b64  %rd<9>; .reg.f32 %f<9>; .reg.f64 %d<9>;
-	.reg.pred %p <9>;
-
-	mov.u32 %r0, %ctaid.x;
-	mov.u32 %r1, %ntid.x;
-	mov.u32 %r2, %tid.x;
-	mad.lo.u32 %r0, %r0, %r1, %r2; // r0 <- Index
-
-	// Index Conditional (jump to done if Index >= Size).
-	ld.param.u32 %r2, [params]; // r2 <- params[0] (Size)
-	setp.ge.u32 %p0, %r0, %r2; // p0 <- r0 >= r2
-	@%p0 bra done; // if p0 => done
-	
-	mov.u32 %r3, %nctaid.x; // r3 <- nctaid.x
-	mul.lo.u32 %r1, %r3, %r1; // r1 <- r3 * r1
-	
-body: // sm_86
-
-	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 5, param_ty: None, data: Buffer(0), sbt_hash: 0 } =>
-
-	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 6, param_ty: None, data: None, sbt_hash: 0 } =>
-	mov.u32 %r6, %r0;
-
-
-	// [2]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 7, param_ty: None, data: Literal(1), sbt_hash: 0 } =>
-	mov.pred %p7, 0x1;
-
-
-	// [3]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: U32, reg: 8, param_ty: Output, data: Buffer(1), sbt_hash: 0 } =>
-	ld.param.u64 %rd0, [params+8];
-	mad.wide.u32 %rd3, %r6, 4, %rd0;
-	ld.global.nc.u32 %r8, [%rd3];
-
-	// Store:
-	ld.param.u64 %rd0, [params + 16]; // rd0 <- params[offset]
-	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
-	st.global.cs.u32 [%rd0], %r8; // (Index * ty.size() + params[offset])[Index] <- var
-
-	//End of Kernel:
-
-	add.u32 %r0, %r0, %r1; // r0 <- r0 + r1
-	setp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2
-	@!%p0 bra body; // if p0 => body
-
-
-done:
-
-	ret;
-}
-===============================================
-Kernel 18159578827838059669:
+Kernel 7829316606980987519:
 
 .version 8.0
 .target sm_86
@@ -94,34 +34,102 @@ Kernel 18159578827838059669:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 5, param_ty: None, data: Buffer(0), sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 5, data: Buffer(0), sbt_hash: 0 } =>
 
-	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 6, param_ty: None, data: None, sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 6, data: None, sbt_hash: 0 } =>
 	mov.u32 %r6, %r0;
 
 
-	// [2]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 7, param_ty: None, data: Literal(1), sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 7, data: Literal(1), sbt_hash: 0 } =>
 	mov.pred %p7, 0x1;
 
 
-	// [3]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: U32, reg: 8, param_ty: None, data: Buffer(1), sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: U32, reg: 8, data: Buffer(1), sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r6, 4, %rd0;
 	ld.global.nc.u32 %r8, [%rd3];
 
-	// [4]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 10, param_ty: None, data: Buffer(2), sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 10, data: Buffer(2), sbt_hash: 0 } =>
 
-	// [5]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 11, param_ty: None, data: None, sbt_hash: 0 } =>
+	// [5]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 11, data: None, sbt_hash: 0 } =>
 	mov.u32 %r11, %r0;
 
 
-	// [6]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 12, param_ty: None, data: Literal(1), sbt_hash: 0 } =>
+	// [6]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 12, data: Literal(1), sbt_hash: 0 } =>
 	mov.pred %p12, 0x1;
 
 
-	// [7]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(3), SVarId(4), SVarId(5), SVarId(6)], ty: Void, reg: 13, param_ty: None, data: None, sbt_hash: 0 } =>
+	// [7]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(3), SVarId(4), SVarId(5), SVarId(6)], ty: Void, reg: 13, data: None, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+24];
 	mad.wide.u32 %rd3, %r11, 4, %rd0;
+	st.global.u32 [%rd3], %r8;
+
+	//End of Kernel:
+
+	add.u32 %r0, %r0, %r1; // r0 <- r0 + r1
+	setp.ge.u32 %p0, %r0, %r2; // p0 <- r1 >= r2
+	@!%p0 bra body; // if p0 => body
+
+
+done:
+
+	ret;
+}
+===============================================
+Kernel 15708867340371463027:
+
+.version 8.0
+.target sm_86
+.address_size 64
+
+.entry cujit(
+	.param .align 8 .b8 params[32]) {
+
+	.reg.b8   %b <12>; .reg.b16 %w<12>; .reg.b32 %r<12>;
+	.reg.b64  %rd<12>; .reg.f32 %f<12>; .reg.f64 %d<12>;
+	.reg.pred %p <12>;
+
+	mov.u32 %r0, %ctaid.x;
+	mov.u32 %r1, %ntid.x;
+	mov.u32 %r2, %tid.x;
+	mad.lo.u32 %r0, %r0, %r1, %r2; // r0 <- Index
+
+	// Index Conditional (jump to done if Index >= Size).
+	ld.param.u32 %r2, [params]; // r2 <- params[0] (Size)
+	setp.ge.u32 %p0, %r0, %r2; // p0 <- r0 >= r2
+	@%p0 bra done; // if p0 => done
+	
+	mov.u32 %r3, %nctaid.x; // r3 <- nctaid.x
+	mul.lo.u32 %r1, %r3, %r1; // r1 <- r3 * r1
+	
+body: // sm_86
+
+	// [0]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 5, data: Buffer(0), sbt_hash: 0 } =>
+
+	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 6, data: None, sbt_hash: 0 } =>
+	mov.u32 %r6, %r0;
+
+
+	// [2]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 7, data: Literal(1), sbt_hash: 0 } =>
+	mov.pred %p7, 0x1;
+
+
+	// [3]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: U32, reg: 8, data: Buffer(1), sbt_hash: 0 } =>
+	ld.param.u64 %rd0, [params+8];
+	mad.wide.u32 %rd3, %r6, 4, %rd0;
+	ld.global.nc.u32 %r8, [%rd3];
+
+	// [4]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 9, data: None, sbt_hash: 0 } =>
+	mov.u32 %r9, %r0;
+
+
+	// [5]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 10, data: Literal(1), sbt_hash: 0 } =>
+	mov.pred %p10, 0x1;
+
+
+	// [6]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(3), SVarId(3), SVarId(4), SVarId(5)], ty: U32, reg: 11, data: None, sbt_hash: 0 } =>
+	ld.param.u64 %rd0, [params+16];
+	mad.wide.u32 %rd3, %r9, 4, %rd0;
 	st.global.u32 [%rd3], %r8;
 
 	//End of Kernel:

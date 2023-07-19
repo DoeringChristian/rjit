@@ -154,53 +154,63 @@ pub fn assemble_entry(
     write!(asm, "body: // sm_{}\n", 86)?; // TODO: compute capability from device
 
     for id in ir.ids() {
-        let var = ir.var(id);
-        match var.param_ty {
-            ParamType::None => assemble_var(
-                asm,
-                ir,
-                id,
-                1,
-                1 + env.opaques().len() as u64,
-                1 + env.opaques().len() as u64 + env.buffers().len() as u64,
-                "param",
-            )?,
-            ParamType::Output => {
-                let param_offst = (var.data.buffer().unwrap() + 1 + env.opaques().len() as u64) * 8;
-                assemble_var(
-                    asm,
-                    ir,
-                    id,
-                    1,
-                    1 + env.opaques().len() as u64,
-                    1 + env.opaques().len() as u64 + env.buffers().len() as u64,
-                    "param",
-                )?;
+        // let var = ir.var(id);
+        assemble_var(
+            asm,
+            ir,
+            id,
+            1,
+            1 + env.opaques().len() as u64,
+            1 + env.opaques().len() as u64 + env.buffers().len() as u64,
+            "param",
+        )?;
 
-                // let offset = param_idx * 8;
-                write!(
-                    asm,
-                    "\n\t// Store:\n\
-                       \tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
-                           \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
-                           params[offset]\n",
-                    param_offst,
-                    var.ty.size(),
-                )?;
-
-                if var.ty == VarType::Bool {
-                    writeln!(asm, "\tselp.u16 %w0, 1, 0, {};", reg(id))?;
-                    writeln!(asm, "\tst.global.cs.u8 [%rd0], %w0;")?;
-                } else {
-                    writeln!(
-                               asm,
-                               "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
-                               tyname(&var.ty),
-                               reg(id),
-                           )?;
-                }
-            }
-        }
+        // match var.param_ty {
+        //     // ParamType::None => assemble_var(
+        //     //     asm,
+        //     //     ir,
+        //     //     id,
+        //     //     1,
+        //     //     1 + env.opaques().len() as u64,
+        //     //     1 + env.opaques().len() as u64 + env.buffers().len() as u64,
+        //     //     "param",
+        //     // )?,
+        //     // ParamType::Output => {
+        //     //     let param_offst = (var.data.buffer().unwrap() + 1 + env.opaques().len() as u64) * 8;
+        //     //     assemble_var(
+        //     //         asm,
+        //     //         ir,
+        //     //         id,
+        //     //         1,
+        //     //         1 + env.opaques().len() as u64,
+        //     //         1 + env.opaques().len() as u64 + env.buffers().len() as u64,
+        //     //         "param",
+        //     //     )?;
+        //     //
+        //     //     // let offset = param_idx * 8;
+        //     //     write!(
+        //     //         asm,
+        //     //         "\n\t// Store:\n\
+        //     //            \tld.param.u64 %rd0, [params + {}]; // rd0 <- params[offset]\n\
+        //     //                \tmad.wide.u32 %rd0, %r0, {}, %rd0; // rd0 <- Index * ty.size() + \
+        //     //                params[offset]\n",
+        //     //         param_offst,
+        //     //         var.ty.size(),
+        //     //     )?;
+        //     //
+        //     //     if var.ty == VarType::Bool {
+        //     //         writeln!(asm, "\tselp.u16 %w0, 1, 0, {};", reg(id))?;
+        //     //         writeln!(asm, "\tst.global.cs.u8 [%rd0], %w0;")?;
+        //     //     } else {
+        //     //         writeln!(
+        //     //                    asm,
+        //     //                    "\tst.global.cs.{} [%rd0], {}; // (Index * ty.size() + params[offset])[Index] <- var",
+        //     //                    tyname(&var.ty),
+        //     //                    reg(id),
+        //     //                )?;
+        //     //     }
+        //     // }
+        // }
     }
 
     // End of kernel:
@@ -1113,7 +1123,7 @@ pub fn assemble_var(
                 param_offset,
             )?;
 
-            if ir.var(src).ty.size() == 1 {
+            if ir.var(src).ty.size() == 1 && ir.var(src).ty != VarType::Bool {
                 write!(
                     asm,
                     "\tcvt.u64.{} %rd3, {};\n\

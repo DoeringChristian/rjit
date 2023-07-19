@@ -315,7 +315,7 @@ fn tex_lookup() -> Result<()> {
 #[test]
 fn trace_ray() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let miss_and_closesthit_ptx = r##"
 .version 8.0
@@ -428,13 +428,13 @@ fn trace_ray() -> Result<()> {
     let v = payload[4].bitcast(&VarType::F32)?;
 
     let dst = ir.array(&[0f32, 1f32])?;
-    u.scatter(&dst, &ir.index(2), None);
+    u.scatter(&dst, &ir.index(2), None)?;
 
     valid.schedule();
     v.schedule();
     u.schedule();
 
-    ir.eval();
+    ir.eval()?;
 
     dbg!(&dst.to_host::<f32>());
 
@@ -452,7 +452,7 @@ fn trace_ray() -> Result<()> {
 #[test]
 fn trace_ray_scatter() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let miss_and_closesthit_ptx = r##"
 .version 8.0
@@ -583,7 +583,7 @@ fn sized_literal() -> Result<()> {
     let x = x.add(&ir.literal(0f32)?)?;
     x.schedule();
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
