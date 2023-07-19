@@ -85,7 +85,6 @@ pub struct ScheduleVar {
     pub data: ScheduledData,
 
     // TODO: remove
-    pub size: usize,
 
     // We have to build a new kernel when we get new hit/miss shaders.
     pub sbt_hash: u64,
@@ -241,7 +240,6 @@ impl ScheduleIr {
             ty: var.ty.clone(),
             deps: smallvec![],
             param_ty: ParamType::None,
-            size: var.size,
             ..Default::default()
         };
 
@@ -256,7 +254,6 @@ impl ScheduleIr {
                         op: Op::Idx,
                         ty: VarType::U32,
                         param_ty: ParamType::None,
-                        size: 1,
                         ..Default::default()
                     })
                 } else {
@@ -264,7 +261,6 @@ impl ScheduleIr {
                         op: Op::Literal,
                         ty: VarType::U32,
                         data: ScheduledData::Literal(0),
-                        size: 1,
                         ..Default::default()
                     })
                 };
@@ -273,7 +269,6 @@ impl ScheduleIr {
                     ty: VarType::Bool,
                     param_ty: ParamType::None,
                     data: ScheduledData::Literal(1),
-                    size: 1,
                     ..Default::default()
                 });
                 sv.deps = smallvec![
@@ -382,7 +377,6 @@ impl ScheduleIr {
                 data,
                 reg,
                 sbt_hash,
-                size: var.size,
                 ..Default::default()
             });
             self.visited.insert(id, svid);

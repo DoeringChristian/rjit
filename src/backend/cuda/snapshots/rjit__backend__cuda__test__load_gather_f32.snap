@@ -3,9 +3,9 @@ source: src/backend/cuda/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 5091455520825609851 with 3 elements
+Launched CUDA Kernel 10610546149531563284 with 3 elements
 ===============================================
-Kernel 5091455520825609851:
+Kernel 10610546149531563284:
 
 .version 8.0
 .target sm_86
@@ -33,28 +33,28 @@ Kernel 5091455520825609851:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 5, param_ty: None, data: Buffer(0), size: 5, sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 5, param_ty: None, data: Buffer(0), sbt_hash: 0 } =>
 
-	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 7, param_ty: None, data: Buffer(1), size: 3, sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 7, param_ty: None, data: Buffer(1), sbt_hash: 0 } =>
 
-	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 8, param_ty: None, data: None, size: 1, sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 8, param_ty: None, data: None, sbt_hash: 0 } =>
 	mov.u32 %r8, %r0;
 
 
-	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 9, param_ty: None, data: Literal(1), size: 1, sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 9, param_ty: None, data: Literal(1), sbt_hash: 0 } =>
 	mov.pred %p9, 0x1;
 
 
-	// [4]: ScheduleVar { op: Gather, deps: [SVarId(1), SVarId(2), SVarId(3)], ty: U32, reg: 10, param_ty: None, data: Buffer(2), size: 3, sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Gather, deps: [SVarId(1), SVarId(2), SVarId(3)], ty: U32, reg: 10, param_ty: None, data: Buffer(2), sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+16];
 	mad.wide.u32 %rd3, %r8, 4, %rd0;
 	ld.global.nc.u32 %r10, [%rd3];
 
-	// [5]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 11, param_ty: None, data: Literal(1), size: 1, sbt_hash: 0 } =>
+	// [5]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 11, param_ty: None, data: Literal(1), sbt_hash: 0 } =>
 	mov.pred %p11, 0x1;
 
 
-	// [6]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(4), SVarId(5)], ty: F32, reg: 12, param_ty: Output, data: Buffer(3), size: 3, sbt_hash: 0 } =>
+	// [6]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(4), SVarId(5)], ty: F32, reg: 12, param_ty: Output, data: Buffer(3), sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r10, 4, %rd0;
 	ld.global.nc.f32 %f12, [%rd3];
