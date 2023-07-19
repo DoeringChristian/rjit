@@ -7,7 +7,7 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::backend::{Accel, Buffer, Texture};
 use crate::trace::Internal;
-use crate::var::{Data, Op, VarId, VarType};
+use crate::var::{self, Op, VarId, VarType};
 use crate::ReduceOp;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -353,25 +353,21 @@ impl ScheduleIr {
             // In case this variable has already been traversed, just ensure that the buffer is
             // added as a parameter.
             // let sv = self.var(id);
-            match &var.data {
-                Data::Buffer(buf) => {
-                    self.var_mut(id).data = env.push_buffer(buf);
-                }
-                Data::Texture(tex) => {
-                    self.var_mut(id).data = env.push_texture(tex);
-                }
-                _ => {}
-            }
+            self.var_mut(id).data = match &var.data {
+                var::Data::None => ScheduledData::None,
+                var::Data::Literal(_) => ScheduledData::None,
+                var::Data::Buffer(buf) => env.push_buffer(&buf),
+                var::Data::Texture(tex) => env.push_texture(&tex),
+                var::Data::Accel(accel) => env.push_accel(&accel),
+            };
             id
         } else {
-            let reg = self.next_reg();
-
             let data = match &var.data {
-                Data::None => ScheduledData::None,
-                Data::Literal(_) => ScheduledData::None,
-                Data::Buffer(buf) => env.push_buffer(&buf),
-                Data::Texture(tex) => env.push_texture(&tex),
-                Data::Accel(accel) => env.push_accel(&accel),
+                var::Data::None => ScheduledData::None,
+                var::Data::Literal(_) => ScheduledData::None,
+                var::Data::Buffer(buf) => env.push_buffer(&buf),
+                var::Data::Texture(tex) => env.push_texture(&tex),
+                var::Data::Accel(accel) => env.push_accel(&accel),
             };
 
             let sbt_hash = var.data.accel().map(|accel| accel.sbt_hash()).unwrap_or(0);
@@ -379,7 +375,6 @@ impl ScheduleIr {
                 op: Op::Data,
                 ty: var.ty.clone(),
                 data,
-                reg,
                 sbt_hash,
                 ..Default::default()
             });
