@@ -9,6 +9,7 @@ macro_rules! test_uop {
             paste::paste! {
                 #[test]
                 fn [<$jop _$ty $(__$mod)?>]() -> Result<()> {
+                    // pretty_env_logger::init();
 
                     let initial: &[$ty] = &$init;
 

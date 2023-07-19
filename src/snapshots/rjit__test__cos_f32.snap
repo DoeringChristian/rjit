@@ -3,20 +3,20 @@ source: src/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 8295296524612115631 with 4 elements
+Launched CUDA Kernel 17001104814766317842 with 4 elements
 ===============================================
-Kernel 8295296524612115631:
+Kernel 17001104814766317842:
 
 .version 8.0
 .target sm_86
 .address_size 64
 
 .entry cujit(
-	.param .align 8 .b8 params[32]) {
+	.param .align 8 .b8 params[40]) {
 
-	.reg.b8   %b <6>; .reg.b16 %w<6>; .reg.b32 %r<6>;
-	.reg.b64  %rd<6>; .reg.f32 %f<6>; .reg.f64 %d<6>;
-	.reg.pred %p <6>;
+	.reg.b8   %b <10>; .reg.b16 %w<10>; .reg.b32 %r<10>;
+	.reg.b64  %rd<10>; .reg.f32 %f<10>; .reg.f64 %d<10>;
+	.reg.pred %p <10>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -33,18 +33,28 @@ Kernel 8295296524612115631:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 5, param_ty: Input, data: Buffer(0), size: 4, sbt_hash: 0 } =>
-	ld.param.u64 %rd0, [params+8];
-	mad.wide.u32 %rd0, %r0, 4, %rd0;
-	ld.global.cs.f32 %f5, [%rd0];
+	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 5, param_ty: None, data: Buffer(0), size: 4, sbt_hash: 0 } =>
 
-	// [1]: ScheduleVar { op: Cos, deps: [SVarId(0)], ty: F32, reg: 4, param_ty: Output, data: Buffer(1), size: 4, sbt_hash: 0 } =>
-	cos.approx.ftz.f32 %f4, %f5;
+	// [1]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 6, param_ty: None, data: None, size: 1, sbt_hash: 0 } =>
+	mov.u32 %r6, %r0;
+
+
+	// [2]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 7, param_ty: None, data: Literal(1), size: 1, sbt_hash: 0 } =>
+	mov.pred %p7, 0x1;
+
+
+	// [3]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(1), SVarId(2)], ty: F32, reg: 8, param_ty: None, data: Buffer(1), size: 4, sbt_hash: 0 } =>
+	ld.param.u64 %rd0, [params+8];
+	mad.wide.u32 %rd3, %r6, 4, %rd0;
+	ld.global.nc.f32 %f8, [%rd3];
+
+	// [4]: ScheduleVar { op: Cos, deps: [SVarId(3)], ty: F32, reg: 9, param_ty: Output, data: Buffer(2), size: 4, sbt_hash: 0 } =>
+	cos.approx.ftz.f32 %f9, %f8;
 
 	// Store:
-	ld.param.u64 %rd0, [params + 16]; // rd0 <- params[offset]
+	ld.param.u64 %rd0, [params + 24]; // rd0 <- params[offset]
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
-	st.global.cs.f32 [%rd0], %f4; // (Index * ty.size() + params[offset])[Index] <- var
+	st.global.cs.f32 [%rd0], %f9; // (Index * ty.size() + params[offset])[Index] <- var
 
 	//End of Kernel:
 

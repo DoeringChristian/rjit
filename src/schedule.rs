@@ -200,8 +200,9 @@ impl ScheduleIr {
         self.n_regs += 1;
         reg
     }
-    fn push_var(&mut self, var: ScheduleVar) -> SVarId {
+    fn push_var(&mut self, mut var: ScheduleVar) -> SVarId {
         let id = SVarId(self.vars.len());
+        var.reg = self.next_reg();
         self.vars.push(var);
         id
     }
@@ -239,7 +240,6 @@ impl ScheduleIr {
             op: var.op,
             ty: var.ty.clone(),
             deps: smallvec![],
-            reg: self.next_reg(),
             param_ty: ParamType::None,
             size: var.size,
             ..Default::default()
@@ -249,8 +249,39 @@ impl ScheduleIr {
 
         match var.op {
             Op::Data => {
+                let bv = self.collect_data(env, ir, id);
+                sv.op = Op::Gather;
+                let idx = if var.size > 1 {
+                    self.push_var(ScheduleVar {
+                        op: Op::Idx,
+                        ty: VarType::U32,
+                        param_ty: ParamType::None,
+                        size: 1,
+                        ..Default::default()
+                    })
+                } else {
+                    self.push_var(ScheduleVar {
+                        op: Op::Literal,
+                        ty: VarType::U32,
+                        data: ScheduledData::Literal(0),
+                        size: 1,
+                        ..Default::default()
+                    })
+                };
+                let mask = self.push_var(ScheduleVar {
+                    op: Op::Literal,
+                    ty: VarType::Bool,
+                    param_ty: ParamType::None,
+                    data: ScheduledData::Literal(1),
+                    size: 1,
+                    ..Default::default()
+                });
+                sv.deps = smallvec![
+                    bv, idx,  // index
+                    mask, // mask
+                ];
                 sv.data = env.push_buffer(var.data.buffer().unwrap());
-                sv.param_ty = ParamType::Input;
+                sv.param_ty = ParamType::None;
             }
             Op::Literal => {
                 // TODO: cannot evaluate a literal (maybe neccesarry for tensors)
