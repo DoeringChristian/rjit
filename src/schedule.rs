@@ -19,7 +19,7 @@ impl std::fmt::Display for SVarId {
 }
 
 #[derive(Debug, Default, Hash, Clone, Copy)]
-pub enum ScheduledData {
+pub enum DataIdx {
     #[default]
     None,
     Buffer(u64),
@@ -28,40 +28,40 @@ pub enum ScheduledData {
     Literal(u64),
     Opaque(u64),
 }
-impl ScheduledData {
+impl DataIdx {
     pub fn is_none(&self) -> bool {
         return match self {
-            ScheduledData::None => true,
+            DataIdx::None => true,
             _ => false,
         };
     }
     pub fn buffer(&self) -> Option<u64> {
         match self {
-            ScheduledData::Buffer(id) => Some(*id),
+            DataIdx::Buffer(id) => Some(*id),
             _ => None,
         }
     }
     pub fn accel(&self) -> Option<u64> {
         match self {
-            ScheduledData::Accel(id) => Some(*id),
+            DataIdx::Accel(id) => Some(*id),
             _ => None,
         }
     }
     pub fn texture(&self) -> Option<u64> {
         match self {
-            ScheduledData::Texture(id) => Some(*id),
+            DataIdx::Texture(id) => Some(*id),
             _ => None,
         }
     }
     pub fn literal(&self) -> Option<u64> {
         match self {
-            ScheduledData::Literal(lit) => Some(*lit),
+            DataIdx::Literal(lit) => Some(*lit),
             _ => None,
         }
     }
     pub fn opaque(&self) -> Option<u64> {
         match self {
-            ScheduledData::Opaque(id) => Some(*id),
+            DataIdx::Opaque(id) => Some(*id),
             _ => None,
         }
     }
@@ -80,7 +80,7 @@ pub struct ScheduleVar {
     pub ty: VarType,
     pub reg: usize,
 
-    pub data: ScheduledData,
+    pub data: DataIdx,
 
     // We have to build a new kernel when we get new hit/miss shaders.
     pub sbt_hash: u64,
@@ -101,25 +101,25 @@ pub struct Env {
 }
 
 impl Env {
-    fn push_opaque(&mut self, literal: u64) -> ScheduledData {
+    fn push_opaque(&mut self, literal: u64) -> DataIdx {
         let idx = self.opaques.len();
         self.opaques.push(literal);
-        ScheduledData::Opaque(idx as _)
+        DataIdx::Opaque(idx as _)
     }
-    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> ScheduledData {
+    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> DataIdx {
         let idx = self.buffers.len();
         self.buffers.push(buf.clone());
-        ScheduledData::Buffer(idx as _)
+        DataIdx::Buffer(idx as _)
     }
-    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> ScheduledData {
+    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> DataIdx {
         let idx = self.textures.len();
         self.textures.push(tex.clone());
-        ScheduledData::Texture(idx as _)
+        DataIdx::Texture(idx as _)
     }
-    fn push_accel(&mut self, accel: &Arc<dyn Accel>) -> ScheduledData {
+    fn push_accel(&mut self, accel: &Arc<dyn Accel>) -> DataIdx {
         let idx = self.accels.len();
         self.accels.push(accel.clone());
-        ScheduledData::Accel(idx as _)
+        DataIdx::Accel(idx as _)
     }
     pub fn buffers(&self) -> &[Arc<dyn Buffer>] {
         &self.buffers
@@ -204,7 +204,7 @@ impl ScheduleIr {
             let mask = self.push_var(ScheduleVar {
                 op: Op::Literal,
                 ty: VarType::Bool,
-                data: ScheduledData::Literal(1),
+                data: DataIdx::Literal(1),
                 ..Default::default()
             });
 
@@ -256,14 +256,14 @@ impl ScheduleIr {
                     self.push_var(ScheduleVar {
                         op: Op::Literal,
                         ty: VarType::U32,
-                        data: ScheduledData::Literal(0),
+                        data: DataIdx::Literal(0),
                         ..Default::default()
                     })
                 };
                 let mask = self.push_var(ScheduleVar {
                     op: Op::Literal,
                     ty: VarType::Bool,
-                    data: ScheduledData::Literal(1),
+                    data: DataIdx::Literal(1),
                     ..Default::default()
                 });
                 sv.deps = smallvec![
@@ -278,7 +278,7 @@ impl ScheduleIr {
                 if var.opaque {
                     sv.data = env.push_opaque(var.data.literal().unwrap());
                 } else {
-                    sv.data = ScheduledData::Literal(var.data.literal().unwrap());
+                    sv.data = DataIdx::Literal(var.data.literal().unwrap());
                 }
             }
             Op::Gather => {
@@ -345,8 +345,8 @@ impl ScheduleIr {
             // let sv = self.var(id);
             if self.var(id).data.is_none() {
                 self.var_mut(id).data = match &var.data {
-                    var::Data::None => ScheduledData::None,
-                    var::Data::Literal(_) => ScheduledData::None,
+                    var::Data::None => DataIdx::None,
+                    var::Data::Literal(_) => DataIdx::None,
                     var::Data::Buffer(buf) => env.push_buffer(&buf),
                     var::Data::Texture(tex) => env.push_texture(&tex),
                     var::Data::Accel(accel) => env.push_accel(&accel),
@@ -355,8 +355,8 @@ impl ScheduleIr {
             id
         } else {
             let data = match &var.data {
-                var::Data::None => ScheduledData::None,
-                var::Data::Literal(_) => ScheduledData::None,
+                var::Data::None => DataIdx::None,
+                var::Data::Literal(_) => DataIdx::None,
                 var::Data::Buffer(buf) => env.push_buffer(&buf),
                 var::Data::Texture(tex) => env.push_texture(&tex),
                 var::Data::Accel(accel) => env.push_accel(&accel),
