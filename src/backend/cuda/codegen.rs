@@ -161,12 +161,13 @@ pub fn assemble_entry(
                 ir,
                 id,
                 1,
-                1 + env.opaques().len(),
-                1 + env.opaques().len() + env.buffers().len(),
+                1 + env.opaques().len() as u64,
+                1 + env.opaques().len() as u64 + env.buffers().len() as u64,
                 "param",
             )?,
             ParamType::Input => {
-                let param_offset = (var.buf.unwrap() + 1 + env.opaques().len()) * 8;
+                let param_offset =
+                    (var.data.buffer().unwrap() + 1 + env.opaques().len() as u64) * 8;
                 // Load from params
                 writeln!(asm, "")?;
                 writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
@@ -199,14 +200,14 @@ pub fn assemble_entry(
                 }
             }
             ParamType::Output => {
-                let param_offst = (var.buf.unwrap() + 1 + env.opaques().len()) * 8;
+                let param_offst = (var.data.buffer().unwrap() + 1 + env.opaques().len() as u64) * 8;
                 assemble_var(
                     asm,
                     ir,
                     id,
                     1,
-                    1 + env.opaques().len(),
-                    1 + env.opaques().len() + env.buffers().len(),
+                    1 + env.opaques().len() as u64,
+                    1 + env.opaques().len() as u64 + env.buffers().len() as u64,
                     "param",
                 )?;
 
@@ -260,9 +261,9 @@ pub fn assemble_var(
     asm: &mut impl std::fmt::Write,
     ir: &ScheduleIr,
     vid: SVarId,
-    opaque_offset: usize,
-    buf_offset: usize,
-    tex_offset: usize,
+    opaque_offset: u64,
+    buf_offset: u64,
+    tex_offset: u64,
     params_type: &'static str,
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
@@ -274,7 +275,7 @@ pub fn assemble_var(
 
     match var.op {
         Op::Literal => {
-            if let Some(opaque) = var.opaque {
+            if let Some(opaque) = var.data.opaque() {
                 writeln!(
                     asm,
                     "\tld.{params_type}.{} {}, [{}+{}];",
@@ -290,7 +291,7 @@ pub fn assemble_var(
                     "\tmov.{} {}, 0x{:x};\n",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    var.literal
+                    var.data.literal().unwrap()
                 )?;
             }
         }
@@ -1055,7 +1056,9 @@ pub fn assemble_var(
             let src = ir.var(var.deps[0]);
             let index = var.deps[1];
             let mask = var.deps[2];
-            let unmasked = ir.var(mask).is_literal() && ir.var(mask).literal != 0;
+            let unmasked = ir.var(mask).is_literal()
+                && ir.var(mask).data.literal().is_some()
+                && ir.var(mask).data.literal().unwrap() != 0;
             let is_bool = var.ty.is_bool();
 
             // TODO: better buffer loading ( dont use as_ptr and get ptr from src in here).
@@ -1064,7 +1067,7 @@ pub fn assemble_var(
             }
 
             // Load buffer ptr:
-            let param_offset = (src.buf.unwrap() + buf_offset) * 8;
+            let param_offset = (src.data.buffer().unwrap() + buf_offset) * 8;
 
             writeln!(
                 asm,
@@ -1127,14 +1130,16 @@ pub fn assemble_var(
             let index = var.deps[2];
             let mask = var.deps[3];
 
-            let unmasked = ir.var(index).is_literal() && ir.var(index).literal != 0;
+            let unmasked = ir.var(mask).is_literal()
+                && ir.var(mask).data.literal().is_some()
+                && ir.var(mask).data.literal().unwrap() != 0;
             let is_bool = ir.var(src).ty.is_bool();
 
             if !unmasked {
                 writeln!(asm, "\t@!{} bra l_{}_done;\n", reg(mask), ridx(vid))?;
             }
 
-            let param_offset = (dst.buf.unwrap() + buf_offset) * 8;
+            let param_offset = (dst.data.buffer().unwrap() + buf_offset) * 8;
 
             writeln!(
                 asm,
@@ -1187,7 +1192,7 @@ pub fn assemble_var(
             let src = ir.var(var.deps[0]);
 
             // Load texture ptr:
-            let param_offset = (src.tex.unwrap() + tex_offset) * 8;
+            let param_offset = (src.data.texture().unwrap() + tex_offset) * 8;
 
             writeln!(
                 asm,

@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched OptiX Kernel 407632048667718453 with 2 elements
+Launched OptiX Kernel 12463059196594815288 with 2 elements
 ===============================================
-Kernel 407632048667718453:
+Kernel 12463059196594815288:
 
 .version 8.0
 .target sm_86
@@ -24,81 +24,82 @@ Kernel 407632048667718453:
 
 body:
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: Void, param_ty: None, reg: 8, buf: None, tex: None, accel: Some(0), opaque: None, literal: 0, size: 0, sbt_hash: 6797626042257772553 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: Void, reg: 8, param_ty: None, data: Accel(0), size: 0, sbt_hash: 6797626042257772553 } =>
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 9, buf: None, tex: None, accel: None, opaque: None, literal: 1, size: 1, sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 9, param_ty: None, data: Literal(1), size: 1, sbt_hash: 0 } =>
 	mov.pred %p9, 0x1;
 
 
-	// [2]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 10, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 10, param_ty: Input, data: Buffer(0), size: 2, sbt_hash: 0 } =>
 	ld.const.u64 %rd0, [params+8];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.f32 %f10, [%rd0];
 
-	// [3]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 11, buf: None, tex: None, accel: None, opaque: None, literal: 1058642330, size: 1, sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 11, param_ty: None, data: Literal(1058642330), size: 1, sbt_hash: 0 } =>
 	mov.b32 %f11, 0x3f19999a;
 
 
-	// [4]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 12, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 12, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %f12, 0x0;
 
 
-	// [5]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 13, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [5]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 13, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %f13, 0x0;
 
 
-	// [6]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 14, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [6]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 14, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %f14, 0x0;
 
 
-	// [7]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 15, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [7]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 15, param_ty: Input, data: Buffer(1), size: 2, sbt_hash: 0 } =>
 	ld.const.u64 %rd0, [params+16];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.f32 %f15, [%rd0];
 
-	// [8]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 16, buf: None, tex: None, accel: None, opaque: None, literal: 981668463, size: 1, sbt_hash: 0 } =>
+	// [8]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 16, param_ty: None, data: Literal(981668463), size: 1, sbt_hash: 0 } =>
 	mov.b32 %f16, 0x3a83126f;
 
 
-	// [9]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 17, buf: None, tex: None, accel: None, opaque: None, literal: 1148846080, size: 1, sbt_hash: 0 } =>
+	// [9]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 17, param_ty: None, data: Literal(1148846080), size: 1, sbt_hash: 0 } =>
 	mov.b32 %f17, 0x447a0000;
 
 
-	// [10]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 18, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [10]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 18, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %f18, 0x0;
 
 
-	// [11]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 19, buf: None, tex: None, accel: None, opaque: None, literal: 255, size: 1, sbt_hash: 0 } =>
+	// [11]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 19, param_ty: None, data: Literal(255), size: 1, sbt_hash: 0 } =>
 	mov.b32 %r19, 0xff;
 
 
-	// [12]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 20, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [12]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 20, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %r20, 0x0;
 
 
-	// [13]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 21, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [13]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 21, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %r21, 0x0;
 
 
-	// [14]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 22, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [14]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 22, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %r22, 0x0;
 
 
-	// [15]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 23, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [15]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 23, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %r23, 0x0;
 
 
-	// [16]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 24, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [16]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 24, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %r24, 0x0;
 
 
-	// [17]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 25, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 1, sbt_hash: 0 } =>
+	// [17]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 25, param_ty: None, data: Literal(0), size: 1, sbt_hash: 0 } =>
 	mov.b32 %r25, 0x0;
 
 
-	// [18]: ScheduleVar { op: TraceRay { payload_count: 5 }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3), SVarId(4), SVarId(5), SVarId(6), SVarId(7), SVarId(8), SVarId(9), SVarId(10), SVarId(11), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(13), SVarId(14), SVarId(15), SVarId(16), SVarId(17)], ty: Void, param_ty: None, reg: 7, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [18]: ScheduleVar { op: TraceRay { payload_count: 5 }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3), SVarId(4), SVarId(5), SVarId(6), SVarId(7), SVarId(8), SVarId(9), SVarId(10), SVarId(11), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(13), SVarId(14), SVarId(15), SVarId(16), SVarId(17)], ty: Void, reg: 7, param_ty: None, data: None, size: 2, sbt_hash: 0 } =>
 	ld.const.u64 %rd0, [params+56];
 	.reg.u32 %u7_out_<32>;
+	@!%p9 bra l_masked_7;
 	.reg.u32 %u7_payload_type, %u7_payload_count;
 	mov.u32 %u7_payload_type, 0;
 	mov.u32 %u7_payload_count, 5;
@@ -187,10 +188,12 @@ call (
 %u7_out_31
 );
 
-	// [19]: ScheduleVar { op: Extract { offset: 3 }, deps: [SVarId(18)], ty: U32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+l_masked_7:
+
+	// [19]: ScheduleVar { op: Extract { offset: 3 }, deps: [SVarId(18)], ty: U32, reg: 6, param_ty: None, data: None, size: 2, sbt_hash: 0 } =>
 	mov.b32 %r6, %u7_out_3;
 
-	// [20]: ScheduleVar { op: Bitcast, deps: [SVarId(19)], ty: F32, param_ty: Output, reg: 5, buf: Some(5), tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [20]: ScheduleVar { op: Bitcast, deps: [SVarId(19)], ty: F32, reg: 5, param_ty: Output, data: Buffer(5), size: 2, sbt_hash: 0 } =>
 	mov.b32 %f5, %r6;
 
 	// Store:
@@ -198,28 +201,25 @@ call (
 	mad.wide.u32 %rd0, %r0, 4, %rd0; // rd0 <- Index * ty.size() + params[offset]
 	st.global.cs.f32 [%rd0], %f5; // (Index * ty.size() + params[offset])[Index] <- var
 
-	// [21]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: None, reg: 26, buf: Some(2), tex: None, accel: None, opaque: None, literal: 0, size: 0, sbt_hash: 0 } =>
+	// [21]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 26, param_ty: None, data: Buffer(2), size: 2, sbt_hash: 0 } =>
 
-	// [22]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 27, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [22]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 27, param_ty: None, data: None, size: 2, sbt_hash: 0 } =>
 	mov.u32 %r27, %r0;
 
 
-	// [23]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 28, buf: None, tex: None, accel: None, opaque: None, literal: 1, size: 1, sbt_hash: 0 } =>
+	// [23]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 28, param_ty: None, data: Literal(1), size: 1, sbt_hash: 0 } =>
 	mov.pred %p28, 0x1;
 
 
-	// [24]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(20), SVarId(21), SVarId(22), SVarId(23)], ty: Void, param_ty: None, reg: 4, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
-	@!%p28 bra l_4_done;
-
+	// [24]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(20), SVarId(21), SVarId(22), SVarId(23)], ty: Void, reg: 4, param_ty: None, data: None, size: 2, sbt_hash: 0 } =>
 	ld.const.u64 %rd0, [params+24];
 	mad.wide.u32 %rd3, %r27, 4, %rd0;
 	st.global.f32 [%rd3], %f5;
-	l_4_done:
 
-	// [25]: ScheduleVar { op: Extract { offset: 0 }, deps: [SVarId(18)], ty: U32, param_ty: None, reg: 30, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [25]: ScheduleVar { op: Extract { offset: 0 }, deps: [SVarId(18)], ty: U32, reg: 30, param_ty: None, data: None, size: 2, sbt_hash: 0 } =>
 	mov.b32 %r30, %u7_out_0;
 
-	// [26]: ScheduleVar { op: Cast, deps: [SVarId(25)], ty: Bool, param_ty: Output, reg: 29, buf: Some(3), tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [26]: ScheduleVar { op: Cast, deps: [SVarId(25)], ty: Bool, reg: 29, param_ty: Output, data: Buffer(3), size: 2, sbt_hash: 0 } =>
 	setp.ne.u32 %p29, %r30, 0;
 
 	// Store:
@@ -228,10 +228,10 @@ call (
 	selp.u16 %w0, 1, 0, %p29;
 	st.global.cs.u8 [%rd0], %w0;
 
-	// [27]: ScheduleVar { op: Extract { offset: 4 }, deps: [SVarId(18)], ty: U32, param_ty: None, reg: 32, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [27]: ScheduleVar { op: Extract { offset: 4 }, deps: [SVarId(18)], ty: U32, reg: 32, param_ty: None, data: None, size: 2, sbt_hash: 0 } =>
 	mov.b32 %r32, %u7_out_4;
 
-	// [28]: ScheduleVar { op: Bitcast, deps: [SVarId(27)], ty: F32, param_ty: Output, reg: 31, buf: Some(4), tex: None, accel: None, opaque: None, literal: 0, size: 2, sbt_hash: 0 } =>
+	// [28]: ScheduleVar { op: Bitcast, deps: [SVarId(27)], ty: F32, reg: 31, param_ty: Output, data: Buffer(4), size: 2, sbt_hash: 0 } =>
 	mov.b32 %f31, %r32;
 
 	// Store:

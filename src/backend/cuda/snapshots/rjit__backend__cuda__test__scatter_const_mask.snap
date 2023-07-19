@@ -3,9 +3,9 @@ source: src/backend/cuda/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 13232221602849254666 with 3 elements
+Launched CUDA Kernel 10620466169122103612 with 3 elements
 ===============================================
-Kernel 13232221602849254666:
+Kernel 10620466169122103612:
 
 .version 8.0
 .target sm_86
@@ -33,23 +33,23 @@ Kernel 13232221602849254666:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: F32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, opaque: None, literal: 1065353216, size: 1, sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 5, param_ty: None, data: Literal(1065353216), size: 1, sbt_hash: 0 } =>
 	mov.b32 %f5, 0x3f800000;
 
 
-	// [1]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: None, reg: 6, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 0, sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 6, param_ty: None, data: Buffer(0), size: 3, sbt_hash: 0 } =>
 
-	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 7, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 7, param_ty: None, data: None, size: 3, sbt_hash: 0 } =>
 	mov.u32 %r7, %r0;
 
 
-	// [3]: ScheduleVar { op: Data, deps: [], ty: Bool, param_ty: Input, reg: 8, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Data, deps: [], ty: Bool, reg: 8, param_ty: Input, data: Buffer(1), size: 3, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+16];
 	mad.wide.u32 %rd0, %r0, 1, %rd0;
 	ld.global.cs.u8 %w0, [%rd0];
 	setp.ne.u16 %p8, %w0, 0;
 
-	// [4]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3)], ty: Void, param_ty: None, reg: 4, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(0), SVarId(1), SVarId(2), SVarId(3)], ty: Void, reg: 4, param_ty: None, data: None, size: 3, sbt_hash: 0 } =>
 	@!%p8 bra l_4_done;
 
 	ld.param.u64 %rd0, [params+8];

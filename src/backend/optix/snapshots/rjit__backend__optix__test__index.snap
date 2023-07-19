@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 15732312861312775478 with 10 elements
+Launched CUDA Kernel 780957312364366549 with 10 elements
 ===============================================
-Kernel 15732312861312775478:
+Kernel 780957312364366549:
 
 .version 8.0
 .target sm_86
@@ -33,7 +33,7 @@ Kernel 15732312861312775478:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: Output, reg: 4, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 10, sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 4, param_ty: Output, data: Buffer(0), size: 10, sbt_hash: 0 } =>
 	mov.u32 %r4, %r0;
 
 

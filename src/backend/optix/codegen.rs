@@ -7,10 +7,10 @@ pub fn assemble_var_rt(
     asm: &mut impl std::fmt::Write,
     ir: &ScheduleIr,
     vid: SVarId,
-    opaque_offset: usize,
-    buf_offset: usize,
-    tex_offset: usize,
-    accel_offset: usize,
+    opaque_offset: u64,
+    buf_offset: u64,
+    tex_offset: u64,
+    accel_offset: u64,
     params_type: &'static str,
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
@@ -21,7 +21,7 @@ pub fn assemble_var_rt(
         Op::TraceRay { payload_count } => {
             writeln!(asm, "")?;
             writeln!(asm, "\t// [{}]: {:?} =>", vid, var)?;
-            let handle_offset = (ir.var(var.deps[0]).accel.unwrap() + accel_offset) * 8;
+            let handle_offset = (ir.var(var.deps[0]).data.accel().unwrap() + accel_offset) * 8;
 
             writeln!(
                 asm,
@@ -35,7 +35,9 @@ pub fn assemble_var_rt(
 
             writeln!(asm, "\t.reg.u32 {}_out_<32>;", reg(vid))?;
 
-            let masked = !ir.var(mask).is_literal() || ir.var(mask).literal == 0;
+            let masked = !ir.var(mask).is_literal()
+                || ir.var(mask).data.literal().is_some()
+                || ir.var(mask).data.literal().unwrap() == 0;
             if masked {
                 writeln!(asm, "\t@!{} bra l_masked_{};", reg(mask), ridx(vid))?;
             }
@@ -185,13 +187,15 @@ pub fn assemble_entry(
                 ir,
                 id,
                 1,
-                1 + env.opaques().len(),
-                1 + env.opaques().len() + env.buffers().len(),
-                1 + env.opaques().len() + env.buffers().len() + env.textures().len(),
+                1 + env.opaques().len() as u64,
+                1 + env.opaques().len() as u64 + env.buffers().len() as u64,
+                1 + env.opaques().len() as u64
+                    + env.buffers().len() as u64
+                    + env.textures().len() as u64,
                 "const",
             )?,
             ParamType::Input => {
-                let param_offset = (var.buf.unwrap() + 1) * 8;
+                let param_offset = (var.data.buffer().unwrap() + 1) * 8;
                 // Load from params
                 writeln!(asm, "")?;
                 writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
@@ -224,15 +228,17 @@ pub fn assemble_entry(
                 }
             }
             ParamType::Output => {
-                let param_offset = (var.buf.unwrap() + 1) * 8;
+                let param_offset = (var.data.buffer().unwrap() + 1) * 8;
                 assemble_var_rt(
                     asm,
                     ir,
                     id,
                     1,
-                    1 + env.opaques().len(),
-                    1 + env.opaques().len() + env.buffers().len(),
-                    1 + env.opaques().len() + env.buffers().len() + env.textures().len(),
+                    1 + env.opaques().len() as u64,
+                    1 + env.opaques().len() as u64 + env.buffers().len() as u64,
+                    1 + env.opaques().len() as u64
+                        + env.buffers().len() as u64
+                        + env.textures().len() as u64,
                     "const",
                 )?;
                 // let offset = param_idx * 8;

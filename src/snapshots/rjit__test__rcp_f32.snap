@@ -3,9 +3,9 @@ source: src/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 11630973712555594106 with 4 elements
+Launched CUDA Kernel 5136260371719138145 with 4 elements
 ===============================================
-Kernel 11630973712555594106:
+Kernel 5136260371719138145:
 
 .version 8.0
 .target sm_86
@@ -33,12 +33,12 @@ Kernel 11630973712555594106:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, param_ty: Input, reg: 5, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 4, sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 5, param_ty: Input, data: Buffer(0), size: 4, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd0, %r0, 4, %rd0;
 	ld.global.cs.f32 %f5, [%rd0];
 
-	// [1]: ScheduleVar { op: Rcp, deps: [SVarId(0)], ty: F32, param_ty: Output, reg: 4, buf: Some(1), tex: None, accel: None, opaque: None, literal: 0, size: 4, sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Rcp, deps: [SVarId(0)], ty: F32, reg: 4, param_ty: Output, data: Buffer(1), size: 4, sbt_hash: 0 } =>
 	rcp.approx.ftz.f32 %f4, %f5;
 
 	// Store:

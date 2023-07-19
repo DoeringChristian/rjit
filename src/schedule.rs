@@ -17,6 +17,49 @@ impl std::fmt::Display for SVarId {
     }
 }
 
+#[derive(Debug, Default, Hash)]
+pub enum ScheduledData {
+    #[default]
+    None,
+    Buffer(u64),
+    Texture(u64),
+    Accel(u64),
+    Literal(u64),
+    Opaque(u64),
+}
+impl ScheduledData {
+    pub fn buffer(&self) -> Option<u64> {
+        match self {
+            ScheduledData::Buffer(id) => Some(*id),
+            _ => None,
+        }
+    }
+    pub fn accel(&self) -> Option<u64> {
+        match self {
+            ScheduledData::Accel(id) => Some(*id),
+            _ => None,
+        }
+    }
+    pub fn texture(&self) -> Option<u64> {
+        match self {
+            ScheduledData::Texture(id) => Some(*id),
+            _ => None,
+        }
+    }
+    pub fn literal(&self) -> Option<u64> {
+        match self {
+            ScheduledData::Literal(lit) => Some(*lit),
+            _ => None,
+        }
+    }
+    pub fn opaque(&self) -> Option<u64> {
+        match self {
+            ScheduledData::Opaque(id) => Some(*id),
+            _ => None,
+        }
+    }
+}
+
 ///
 /// A Representation of a variable used in the ScheduleIr.
 /// This only holds data that is needed to compile the Kernel.
@@ -28,13 +71,20 @@ pub struct ScheduleVar {
     pub op: Op,
     pub deps: SmallVec<[SVarId; 4]>,
     pub ty: VarType,
-    pub param_ty: ParamType,
     pub reg: usize,
-    pub buf: Option<usize>, // Index into literal/buffer/texture vec
-    pub tex: Option<usize>,
-    pub accel: Option<usize>,
-    pub opaque: Option<usize>,
-    pub literal: u64,
+
+    // Replace with scatter/gather operations
+    pub param_ty: ParamType,
+
+    // TODO: aggregate into one enum
+    // pub buf: Option<usize>, // Index into literal/buffer/texture vec
+    // pub tex: Option<usize>,
+    // pub accel: Option<usize>,
+    // pub opaque: Option<usize>,
+    // pub literal: u64,
+    pub data: ScheduledData,
+
+    // TODO: remove
     pub size: usize,
 
     // We have to build a new kernel when we get new hit/miss shaders.
@@ -72,25 +122,25 @@ pub struct Env {
 }
 
 impl Env {
-    fn push_opaque(&mut self, literal: u64) -> usize {
+    fn push_opaque(&mut self, literal: u64) -> ScheduledData {
         let idx = self.opaques.len();
         self.opaques.push(literal);
-        idx
+        ScheduledData::Opaque(idx as _)
     }
-    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> usize {
+    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> ScheduledData {
         let idx = self.buffers.len();
         self.buffers.push(buf.clone());
-        idx
+        ScheduledData::Buffer(idx as _)
     }
-    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> usize {
-        let idx = self.buffers.len();
+    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> ScheduledData {
+        let idx = self.textures.len();
         self.textures.push(tex.clone());
-        idx
+        ScheduledData::Texture(idx as _)
     }
-    fn push_accel(&mut self, accel: &Arc<dyn Accel>) -> usize {
-        let idx = self.buffers.len();
+    fn push_accel(&mut self, accel: &Arc<dyn Accel>) -> ScheduledData {
+        let idx = self.accels.len();
         self.accels.push(accel.clone());
-        idx
+        ScheduledData::Accel(idx as _)
     }
     pub fn buffers(&self) -> &[Arc<dyn Buffer>] {
         &self.buffers
@@ -163,12 +213,13 @@ impl ScheduleIr {
             if var.ty.size() == 0 {
                 continue;
             }
-            let param = env.push_buffer(var.data.buffer().unwrap());
+
+            let buffer = env.push_buffer(var.data.buffer().unwrap());
 
             let mut sv = self.var_mut(sv_id);
 
             sv.param_ty = ParamType::Output;
-            sv.buf = Some(param);
+            sv.data = buffer
         }
     }
     ///
@@ -190,29 +241,24 @@ impl ScheduleIr {
             deps: smallvec![],
             reg: self.next_reg(),
             param_ty: ParamType::None,
-            buf: None,
-            tex: None,
-            accel: None,
-            literal: 0,
-            opaque: None,
             size: var.size,
-            sbt_hash: 0,
+            ..Default::default()
         };
 
         // Collect dependencies
 
         match var.op {
             Op::Data => {
-                sv.buf = Some(env.push_buffer(var.data.buffer().unwrap()));
+                sv.data = env.push_buffer(var.data.buffer().unwrap());
                 sv.param_ty = ParamType::Input;
             }
             Op::Literal => {
                 // TODO: cannot evaluate a literal (maybe neccesarry for tensors)
                 // sv.param_offset = self.push_param(var.literal);
                 if var.opaque {
-                    sv.opaque = Some(env.push_opaque(var.data.literal().unwrap()));
+                    sv.data = env.push_opaque(var.data.literal().unwrap());
                 } else {
-                    sv.literal = var.data.literal().unwrap();
+                    sv.data = ScheduledData::Literal(var.data.literal().unwrap());
                 }
             }
             Op::Gather => {
@@ -279,31 +325,33 @@ impl ScheduleIr {
             // let sv = self.var(id);
             match &var.data {
                 Data::Buffer(buf) => {
-                    let buf = Some(env.push_buffer(buf));
-                    self.var_mut(id).buf = buf;
+                    self.var_mut(id).data = env.push_buffer(buf);
                 }
                 Data::Texture(tex) => {
-                    let tex = Some(env.push_texture(tex));
-                    self.var_mut(id).tex = tex;
+                    self.var_mut(id).data = env.push_texture(tex);
                 }
                 _ => {}
             }
             id
         } else {
             let reg = self.next_reg();
-            let buf = var.data.buffer().map(|buf| env.push_buffer(&buf));
-            let tex = var.data.texture().map(|tex| env.push_texture(&tex));
-            let accel = var.data.accel().map(|accel| env.push_accel(&accel));
+
+            let data = match &var.data {
+                Data::None => ScheduledData::None,
+                Data::Literal(_) => ScheduledData::None,
+                Data::Buffer(buf) => env.push_buffer(&buf),
+                Data::Texture(tex) => env.push_texture(&tex),
+                Data::Accel(accel) => env.push_accel(&accel),
+            };
 
             let sbt_hash = var.data.accel().map(|accel| accel.sbt_hash()).unwrap_or(0);
             let svid = self.push_var(ScheduleVar {
                 op: Op::Data,
                 ty: var.ty.clone(),
+                data,
                 reg,
-                buf,
-                tex,
-                accel,
                 sbt_hash,
+                size: var.size,
                 ..Default::default()
             });
             self.visited.insert(id, svid);

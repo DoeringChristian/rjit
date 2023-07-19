@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 4502095132583409033 with 3 elements
+Launched CUDA Kernel 13942428009505877927 with 3 elements
 ===============================================
-Kernel 4502095132583409033:
+Kernel 13942428009505877927:
 
 .version 8.0
 .target sm_86
@@ -33,22 +33,22 @@ Kernel 4502095132583409033:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, param_ty: None, reg: 6, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 6, param_ty: None, data: None, size: 3, sbt_hash: 0 } =>
 	mov.u32 %r6, %r0;
 
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, param_ty: None, reg: 7, buf: None, tex: None, accel: None, opaque: None, literal: 2, size: 1, sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 7, param_ty: None, data: Literal(2), size: 1, sbt_hash: 0 } =>
 	mov.b32 %r7, 0x2;
 
 
-	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: U32, param_ty: None, reg: 5, buf: None, tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(1)], ty: U32, reg: 5, param_ty: None, data: None, size: 3, sbt_hash: 0 } =>
 	add.u32 %r5, %r6, %r7;
 
-	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, param_ty: None, reg: 8, buf: None, tex: None, accel: None, opaque: None, literal: 1, size: 1, sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 8, param_ty: None, data: Literal(1), size: 1, sbt_hash: 0 } =>
 	mov.pred %p8, 0x1;
 
 
-	// [4]: ScheduleVar { op: And, deps: [SVarId(2), SVarId(3)], ty: U32, param_ty: Output, reg: 4, buf: Some(0), tex: None, accel: None, opaque: None, literal: 0, size: 3, sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: And, deps: [SVarId(2), SVarId(3)], ty: U32, reg: 4, param_ty: Output, data: Buffer(0), size: 3, sbt_hash: 0 } =>
 	selp.b32 %r4, %r5, 0, %p8;
 
 	// Store:
