@@ -209,6 +209,9 @@ pub struct VarInfo {
     pub size: usize,
 }
 
+///
+/// A variable can hold data directly i.e. literals, buffers, textures or acceleration structures.
+///
 #[derive(Debug, Default, Clone)]
 pub enum Data {
     #[default]
