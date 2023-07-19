@@ -247,7 +247,8 @@ l_masked_28:
 
 	// [35]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(32), SVarId(32), SVarId(33), SVarId(34)], ty: Bool, reg: 39, data: None, sbt_hash: 0 } =>
 	ld.const.u64 %rd0, [params+48];
-	mad.wide.u32 %rd3, %r37, 1, %rd0;
+	cvt.u64.u32 %rd3, %r37;
+	add.u64 %rd3, %rd3, %rd0;
 	selp.u16 %w0, 1, 0, %p36;
 	st.global.u8 [%rd3], %w0;
 

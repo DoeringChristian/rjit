@@ -1062,6 +1062,7 @@ pub fn assemble_var(
             let unmasked = ir.var(mask).is_literal()
                 && ir.var(mask).data.literal().is_some()
                 && ir.var(mask).data.literal().unwrap() != 0;
+            let index_zero = ir.var(index).data.literal().is_some_and(|data| data == 0);
             let is_bool = ir.var(src).ty.is_bool();
 
             if !unmasked {
@@ -1076,12 +1077,15 @@ pub fn assemble_var(
                 param_offset,
             )?;
 
-            if ir.var(src).ty.size() == 1 && ir.var(src).ty != VarType::Bool {
+            if index_zero {
+                writeln!(asm, "\tmov.u64 %rd3, %rd0;")?;
+            } else if ir.var(src).ty.size() == 1 {
+                // Cast index to u64 if type size == 1
                 write!(
                     asm,
                     "\tcvt.u64.{} %rd3, {};\n\
                         \tadd.u64 %rd3, %rd3, %rd0;\n",
-                    tyname(&ir.var(src).ty),
+                    tyname(&ir.var(index).ty),
                     reg(index),
                 )?;
             } else {
