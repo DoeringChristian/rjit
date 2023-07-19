@@ -29,6 +29,12 @@ pub enum ScheduledData {
     Opaque(u64),
 }
 impl ScheduledData {
+    pub fn is_none(&self) -> bool {
+        return match self {
+            ScheduledData::None => true,
+            _ => false,
+        };
+    }
     pub fn buffer(&self) -> Option<u64> {
         match self {
             ScheduledData::Buffer(id) => Some(*id),
@@ -337,13 +343,15 @@ impl ScheduleIr {
             // In case this variable has already been traversed, just ensure that the buffer is
             // added as a parameter.
             // let sv = self.var(id);
-            self.var_mut(id).data = match &var.data {
-                var::Data::None => ScheduledData::None,
-                var::Data::Literal(_) => ScheduledData::None,
-                var::Data::Buffer(buf) => env.push_buffer(&buf),
-                var::Data::Texture(tex) => env.push_texture(&tex),
-                var::Data::Accel(accel) => env.push_accel(&accel),
-            };
+            if self.var(id).data.is_none() {
+                self.var_mut(id).data = match &var.data {
+                    var::Data::None => ScheduledData::None,
+                    var::Data::Literal(_) => ScheduledData::None,
+                    var::Data::Buffer(buf) => env.push_buffer(&buf),
+                    var::Data::Texture(tex) => env.push_texture(&tex),
+                    var::Data::Accel(accel) => env.push_accel(&accel),
+                };
+            }
             id
         } else {
             let data = match &var.data {
