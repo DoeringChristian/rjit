@@ -165,40 +165,6 @@ pub fn assemble_entry(
                 1 + env.opaques().len() as u64 + env.buffers().len() as u64,
                 "param",
             )?,
-            ParamType::Input => {
-                let param_offset =
-                    (var.data.buffer().unwrap() + 1 + env.opaques().len() as u64) * 8;
-                // Load from params
-                writeln!(asm, "")?;
-                writeln!(asm, "\t// [{}]: {:?} =>", id, var)?;
-                if var.is_literal() {
-                    writeln!(
-                        asm,
-                        "\tld.param.{} {}, [params+{}];",
-                        tyname(&var.ty),
-                        reg(id),
-                        param_offset
-                    )?;
-                    continue;
-                } else {
-                    writeln!(asm, "\tld.param.u64 %rd0, [params+{}];", param_offset)?;
-                }
-                if var.size > 1 {
-                    writeln!(asm, "\tmad.wide.u32 %rd0, %r0, {}, %rd0;", var.ty.size())?;
-                }
-
-                if var.ty == VarType::Bool {
-                    writeln!(asm, "\tld.global.cs.u8 %w0, [%rd0];")?;
-                    writeln!(asm, "\tsetp.ne.u16 {}, %w0, 0;", reg(id))?;
-                } else {
-                    writeln!(
-                        asm,
-                        "\tld.global.cs.{} {}, [%rd0];",
-                        tyname(&var.ty),
-                        reg(id),
-                    )?;
-                }
-            }
             ParamType::Output => {
                 let param_offst = (var.data.buffer().unwrap() + 1 + env.opaques().len() as u64) * 8;
                 assemble_var(

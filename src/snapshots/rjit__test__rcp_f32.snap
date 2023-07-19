@@ -3,9 +3,9 @@ source: src/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 7572209522866318715 with 4 elements
+Launched CUDA Kernel 7248122617685669792 with 4 elements
 ===============================================
-Kernel 7572209522866318715:
+Kernel 7248122617685669792:
 
 .version 8.0
 .target sm_86

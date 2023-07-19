@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched OptiX Kernel 14108214741653569021 with 2 elements
+Launched OptiX Kernel 1123467213330128801 with 2 elements
 ===============================================
-Kernel 14108214741653569021:
+Kernel 1123467213330128801:
 
 .version 8.0
 .target sm_86

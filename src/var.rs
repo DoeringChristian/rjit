@@ -13,7 +13,7 @@ use crate::backend::{Accel, Buffer, Texture};
 pub enum ParamType {
     #[default]
     None,
-    Input,
+    // Input,
     Output,
     // Literal,
 }

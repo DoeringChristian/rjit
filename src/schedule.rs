@@ -17,7 +17,7 @@ impl std::fmt::Display for SVarId {
     }
 }
 
-#[derive(Debug, Default, Hash)]
+#[derive(Debug, Default, Hash, Clone, Copy)]
 pub enum ScheduledData {
     #[default]
     None,
@@ -66,7 +66,7 @@ impl ScheduledData {
 ///
 /// Variables are densly stored in the ScheduleIr, simplifying the compilation.
 ///
-#[derive(Debug, Default, Hash)]
+#[derive(Debug, Default, Hash, Clone)]
 pub struct ScheduleVar {
     pub op: Op,
     pub deps: SmallVec<[SVarId; 4]>,
