@@ -63,36 +63,6 @@ impl Debug for Backend {
 }
 
 impl Backend {
-    // pub fn set_hit_from_strs(&mut self, hit: &[(&str, &str)]) {
-    //     self.hit.lock().unwrap().extend(hit.iter().map(|(ep, ptx)| {
-    //         (
-    //             String::from(*ep),
-    //             Arc::new(
-    //                 Module::create(
-    //                     &self.device,
-    //                     ptx,
-    //                     self.compile_options.lock().unwrap().mco(),
-    //                     self.compile_options.lock().unwrap().pco(),
-    //                 )
-    //                 .unwrap(),
-    //             ),
-    //         )
-    //     }));
-    // }
-    // pub fn set_miss_from_str(&mut self, miss: (&str, &str)) {
-    //     *self.miss.lock().unwrap() = Some((
-    //         String::from(miss.0),
-    //         Arc::new(
-    //             Module::create(
-    //                 &self.device,
-    //                 miss.1,
-    //                 self.compile_options.lock().unwrap().mco(),
-    //                 self.compile_options.lock().unwrap().pco(),
-    //             )
-    //             .unwrap(),
-    //         ),
-    //     ));
-    // }
     pub fn new() -> Result<Self, Error> {
         let instance = Arc::new(optix_core::Instance::new()?);
         let device = optix_core::Device::create(&instance, 0)?;
@@ -135,14 +105,6 @@ impl Backend {
 unsafe impl Sync for Backend {}
 unsafe impl Send for Backend {}
 impl backend::Backend for Backend {
-    // fn as_any(&self) -> &dyn std::any::Any {
-    //     self
-    // }
-    //
-    // fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-    //     self
-    // }
-
     fn create_texture(
         &self,
         shape: &[usize],
@@ -170,41 +132,6 @@ impl backend::Backend for Backend {
     fn create_accel(&self, desc: backend::AccelDesc) -> Result<Arc<dyn backend::Accel>> {
         Ok(Arc::new(Accel::create(&self.device, desc)?))
     }
-
-    // fn set_compile_options(&self, compile_options: &backend::CompileOptions) {
-    //     let mut hit = self.hit.lock().unwrap();
-    //     dbg!();
-    //     hit.clear();
-    //     dbg!();
-    //     *self.compile_options.lock().unwrap() = compile_options.clone();
-    //     dbg!();
-    // }
-    //
-    // fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
-    //     *self.miss.lock().unwrap() = Some((
-    //         String::from(entry_point),
-    //         Arc::new(Module::create(
-    //             &self.device,
-    //             source,
-    //             self.compile_options.lock().unwrap().mco(),
-    //             self.compile_options.lock().unwrap().pco(),
-    //         )?),
-    //     ));
-    //     Ok(())
-    // }
-    //
-    // fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()> {
-    //     self.hit.lock().unwrap().push((
-    //         String::from(entry_point),
-    //         Arc::new(Module::create(
-    //             &self.device,
-    //             source,
-    //             self.compile_options.lock().unwrap().mco(),
-    //             self.compile_options.lock().unwrap().pco(),
-    //         )?),
-    //     ));
-    //     Ok(())
-    // }
 
     fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Result<Arc<dyn backend::Kernel>> {
         if env.accels().is_empty() {
@@ -591,13 +518,6 @@ impl Accel {
                     instances.as_ptr() as *const _,
                     std::mem::size_of::<OptixInstance>() * instances.len(),
                 ))
-            // Buffer::from_slice(
-            //     device.cuda_device(),
-            //     std::slice::from_raw_parts(
-            //         instances.as_ptr() as *const _,
-            //         std::mem::size_of::<OptixInstance>() * instances.len(),
-            //     ),
-            // )
         }?;
 
         let mut build_input = OptixBuildInput {
