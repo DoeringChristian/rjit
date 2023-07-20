@@ -44,15 +44,12 @@ impl_downcast!(sync Buffer);
 
 pub trait Backend: Debug + Sync + Send + DowncastSync {
     fn compile_kernel(&self, ir: &ScheduleIr, env: &Env) -> Result<Arc<dyn Kernel>>;
-    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn Kernel>>;
+    // fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn Kernel>>;
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Result<Arc<dyn Texture>>;
     fn buffer_uninit(&self, size: usize) -> Result<Arc<dyn Buffer>>;
     fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn Buffer>>;
     fn first_register(&self) -> usize;
     fn create_accel(&self, desc: AccelDesc) -> Result<Arc<dyn Accel>>;
-    // fn set_compile_options(&self, compile_options: &CompileOptions);
-    // fn set_miss_from_str(&self, entry_point: &str, source: &str) -> Result<()>;
-    // fn push_hit_from_str(&self, entry_point: &str, source: &str) -> Result<()>;
     fn ident(&self) -> &'static str;
 }
 impl_downcast!(sync Backend);

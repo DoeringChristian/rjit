@@ -88,9 +88,9 @@ impl backend::Backend for Backend {
         "CUDA"
     }
 
-    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn backend::Kernel>> {
-        Ok(Arc::new(Kernel::assemble(&self.device, asm, entry_point)?))
-    }
+    // fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn backend::Kernel>> {
+    //     Ok(Arc::new(Kernel::assemble(&self.device, asm, entry_point)?))
+    // }
 
     // fn compress(&self, mask: &dyn backend::Buffer) -> Result<Arc<dyn backend::Buffer>> {
     //     Ok(super::compress::compress(mask, &self.kernels)?)

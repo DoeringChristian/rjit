@@ -149,13 +149,13 @@ impl backend::Backend for Backend {
         "OptiX"
     }
 
-    fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn backend::Kernel>> {
-        Ok(Arc::new(crate::backend::cuda::Kernel::assemble(
-            self.device.cuda_device(),
-            asm,
-            entry_point,
-        )?))
-    }
+    // fn assemble_kernel(&self, asm: &str, entry_point: &str) -> Result<Arc<dyn backend::Kernel>> {
+    //     Ok(Arc::new(crate::backend::cuda::Kernel::assemble(
+    //         self.device.cuda_device(),
+    //         asm,
+    //         entry_point,
+    //     )?))
+    // }
 }
 
 pub struct Kernel {

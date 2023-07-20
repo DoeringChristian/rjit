@@ -156,26 +156,6 @@ impl Trace {
     pub fn kernel_history(&self) -> String {
         self.jit.lock().kernel_history()
     }
-    pub fn register_kernel(
-        &self,
-        asm: &str,
-        entry_point: &str,
-    ) -> Result<Arc<dyn crate::backend::Kernel>> {
-        Ok(self
-            .jit
-            .lock()
-            .kernels
-            .entry(crate::KernelKey::Name(String::from(entry_point)))
-            .or_insert(
-                self.internal
-                    .lock()
-                    .backend
-                    .as_ref()
-                    .ok_or(anyhow!("Backend not initialized!"))?
-                    .assemble_kernel(asm, entry_point)?,
-            )
-            .clone())
-    }
 }
 impl Trace {
     pub fn array<T: AsVarType>(&self, slice: &[T]) -> Result<VarRef> {
