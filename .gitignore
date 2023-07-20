@@ -1,1 +1,4 @@
 /target
+*.cubin
+flamegraph.svg
+perf.data*

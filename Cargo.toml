@@ -40,6 +40,7 @@ anyhow = { version = "1.0.71", features = ["backtrace"]}
 [dev-dependencies]
 insta = { version = "1.28.0" }
 rusty-hook = "0.11.2"
+criterion = { version = "0.4", features = ["html_reports"] }
 
 [profile.dev.packages.insta]
 opt-level = 3
@@ -50,3 +51,7 @@ opt-level = 3
 
 [hooks]
 # pre-commit = "cargo test -- --test-threads=1"
+
+[[bench]]
+name = "optix"
+harness = false

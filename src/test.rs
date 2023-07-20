@@ -138,3 +138,22 @@ fn compress_large_optix() -> Result<()> {
     assert_eq!(i.to_host::<u32>().unwrap(), (0..N).collect::<Vec<_>>());
     Ok(())
 }
+#[test]
+fn kernel_reuse() -> Result<()> {
+    let ir = Trace::default();
+    ir.set_backend(["optix"])?;
+
+    for _ in 0..100 {
+        let mut x = ir.array(&[0, 1, 2, 3, 4])?;
+        for j in 0..100 {
+            x = x.add(&ir.literal(j)?)?;
+        }
+
+        x.schedule();
+        ir.eval()?;
+    }
+
+    println!("{}", ir.kernel_history());
+
+    Ok(())
+}
