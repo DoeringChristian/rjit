@@ -156,6 +156,9 @@ impl Trace {
     pub fn kernel_history(&self) -> String {
         self.jit.lock().kernel_history()
     }
+    pub fn kernel_cache_size(&self) -> usize {
+        self.jit.lock().kernels.len()
+    }
 }
 impl Trace {
     pub fn array<T: AsVarType>(&self, slice: &[T]) -> Result<VarRef> {

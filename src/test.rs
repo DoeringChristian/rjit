@@ -154,6 +154,7 @@ fn kernel_reuse() -> Result<()> {
     }
 
     println!("{}", ir.kernel_history());
+    assert_eq!(ir.kernel_cache_size(), 1);
 
     Ok(())
 }
