@@ -3,7 +3,8 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rjit::*;
 
 fn trace_ray(ir: &Trace) -> Result<()> {
-    let miss_and_closesthit_ptx = r##"
+    {
+        let miss_and_closesthit_ptx = r##"
 .version 8.0
 .target sm_86
 .address_size 64
@@ -45,76 +46,79 @@ fn trace_ray(ir: &Trace) -> Result<()> {
 	ret;
 }
 "##;
-    let indices = ir.array(&[0u32, 1, 2])?;
-    let vertices = ir.array(&[1.0f32, 0., 1., 0., 1., 1., 1., 1., 1.])?;
+        let indices = ir.array(&[0u32, 1, 2])?;
+        let vertices = ir.array(&[1.0f32, 0., 1., 0., 1., 1., 1., 1., 1.])?;
 
-    let desc = AccelDesc {
-        sbt: crate::SBTDesc {
-            hit_groups: &[HitGroupDesc {
-                closest_hit: crate::ModuleDesc {
-                    asm: miss_and_closesthit_ptx,
-                    entry_point: "__closesthit__ch",
-                },
-                ..Default::default()
+        let desc = AccelDesc {
+            sbt: crate::SBTDesc {
+                hit_groups: &[HitGroupDesc {
+                    closest_hit: crate::ModuleDesc {
+                        asm: miss_and_closesthit_ptx,
+                        entry_point: "__closesthit__ch",
+                    },
+                    ..Default::default()
+                }],
+                miss_groups: &[MissGroupDesc {
+                    miss: crate::ModuleDesc {
+                        asm: miss_and_closesthit_ptx,
+                        entry_point: "__miss__ms",
+                    },
+                }],
+            },
+            geometries: &[GeometryDesc::Triangles {
+                vertices: &vertices,
+                indices: &indices,
             }],
-            miss_groups: &[MissGroupDesc {
-                miss: crate::ModuleDesc {
-                    asm: miss_and_closesthit_ptx,
-                    entry_point: "__miss__ms",
-                },
+            instances: &[InstanceDesc {
+                hit_group: 0,
+                geometry: 0,
+                transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
             }],
-        },
-        geometries: &[GeometryDesc::Triangles {
-            vertices: &vertices,
-            indices: &indices,
-        }],
-        instances: &[InstanceDesc {
-            hit_group: 0,
-            geometry: 0,
-            transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
-        }],
-    };
-    let accel = ir.accel(desc)?;
+        };
+        let accel = ir.accel(desc)?;
 
-    let payload = accel.trace_ray(
-        &[
-            &ir.literal(0u32)?,
-            &ir.literal(0u32)?,
-            &ir.literal(0u32)?,
-            &ir.literal(0u32)?,
-            &ir.literal(0u32)?,
-        ],
-        [
-            &ir.array(&[0.6f32, 0.6])?,
-            &ir.literal(0.6f32)?,
+        let payload = accel.trace_ray(
+            &[
+                &ir.literal(0u32)?,
+                &ir.literal(0u32)?,
+                &ir.literal(0u32)?,
+                &ir.literal(0u32)?,
+                &ir.literal(0u32)?,
+            ],
+            [
+                &ir.array(&[0.6f32, 0.6])?,
+                &ir.literal(0.6f32)?,
+                &ir.literal(0.0f32)?,
+            ],
+            [
+                &ir.literal(0.0f32)?,
+                &ir.literal(0.0f32)?,
+                &ir.array(&[1.0f32, -1.])?,
+            ],
+            &ir.literal(0.001f32)?,
+            &ir.literal(1000.0f32)?,
             &ir.literal(0.0f32)?,
-        ],
-        [
-            &ir.literal(0.0f32)?,
-            &ir.literal(0.0f32)?,
-            &ir.array(&[1.0f32, -1.])?,
-        ],
-        &ir.literal(0.001f32)?,
-        &ir.literal(1000.0f32)?,
-        &ir.literal(0.0f32)?,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?;
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )?;
 
-    let valid = payload[0].cast(&VarType::Bool)?;
+        let valid = payload[0].cast(&VarType::Bool)?;
 
-    let u = payload[3].bitcast(&VarType::F32)?;
-    let v = payload[4].bitcast(&VarType::F32)?;
+        let u = payload[3].bitcast(&VarType::F32)?;
+        let v = payload[4].bitcast(&VarType::F32)?;
 
-    valid.schedule();
-    v.schedule();
-    u.schedule();
+        valid.schedule();
+        v.schedule();
+        u.schedule();
 
-    ir.eval()?;
+        ir.eval()?;
+    }
+
+    assert_eq!(ir.n_variables(), 0); // Assert that trace is clean for next benchmark
 
     Ok(())
 }
