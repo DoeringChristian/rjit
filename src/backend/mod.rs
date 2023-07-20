@@ -48,7 +48,6 @@ pub trait Backend: Debug + Sync + Send + DowncastSync {
     fn create_texture(&self, shape: &[usize], n_channels: usize) -> Result<Arc<dyn Texture>>;
     fn buffer_uninit(&self, size: usize) -> Result<Arc<dyn Buffer>>;
     fn buffer_from_slice(&self, slice: &[u8]) -> Result<Arc<dyn Buffer>>;
-    fn first_register(&self) -> usize;
     fn create_accel(&self, desc: AccelDesc) -> Result<Arc<dyn Accel>>;
     fn ident(&self) -> &'static str;
 }

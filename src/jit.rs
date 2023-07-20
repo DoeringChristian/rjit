@@ -110,12 +110,10 @@ impl Jit {
             range: current..schedule.len(),
         });
 
-        let first_register = ir.backend.as_ref().unwrap().first_register();
-
         let futures = schedule_groups
             .into_iter()
             .map(|sg| {
-                let mut s = ScheduleIr::new(first_register);
+                let mut s = ScheduleIr::new();
                 let mut env = Env::default();
                 s.collect_vars(&mut env, ir, &schedule[sg.range]);
                 let hash = s.internal_hash();

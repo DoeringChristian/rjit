@@ -125,10 +125,6 @@ impl backend::Backend for Backend {
         Ok(Arc::new(Buffer::from_slice(&self.cuda_backend, slice)?))
     }
 
-    fn first_register(&self) -> usize {
-        Kernel::FIRST_REGISTER
-    }
-
     fn create_accel(&self, desc: backend::AccelDesc) -> Result<Arc<dyn backend::Accel>> {
         Ok(Arc::new(Accel::create(&self.device, desc)?))
     }
@@ -162,9 +158,6 @@ pub struct Kernel {
     device: Device,
     pub asm: String,
     pipeline: optix_core::Pipeline,
-}
-impl Kernel {
-    const FIRST_REGISTER: usize = 4;
 }
 impl Debug for Kernel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

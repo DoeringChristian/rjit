@@ -161,7 +161,7 @@ pub struct ScheduleIr {
 }
 
 impl ScheduleIr {
-    pub fn new(first_register: usize) -> Self {
+    pub fn new() -> Self {
         Self {
             ..Default::default()
         }

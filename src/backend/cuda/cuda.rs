@@ -63,10 +63,6 @@ impl backend::Backend for Backend {
         Ok(Arc::new(Buffer::from_slice(&self, slice)?))
     }
 
-    fn first_register(&self) -> usize {
-        Kernel::FIRST_REGISTER
-    }
-
     // fn synchronize(&self) -> Result<()> {
     //     self.stream.synchronize()?;
     //     Ok(())
@@ -358,7 +354,6 @@ pub struct Kernel {
 
 impl Kernel {
     pub const ENTRY_POINT: &str = "cujit";
-    pub const FIRST_REGISTER: usize = 4;
 }
 
 impl Kernel {
