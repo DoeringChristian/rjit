@@ -46,7 +46,7 @@ test_uop!(log2(                          [0.1, 0.5, 1., std::f32::consts::PI]; f
 #[test]
 fn opaque() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.literal(10u32)?;
     let x = x.opaque();
@@ -56,7 +56,7 @@ fn opaque() -> Result<()> {
     let y = y.add(&x)?;
 
     y.schedule();
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -66,7 +66,7 @@ fn opaque() -> Result<()> {
 #[test]
 fn make_opaque() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.literal(10u32)?;
     x.make_opaque();
@@ -76,7 +76,7 @@ fn make_opaque() -> Result<()> {
     let y = y.add(&x)?;
 
     y.schedule();
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -87,7 +87,7 @@ fn make_opaque() -> Result<()> {
 #[test]
 fn compress_small() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     // let x = ir.array(&[true, false, true]);
     let x = ir.array(&[true, false, true, false, true, false, true, false])?;
@@ -100,7 +100,7 @@ fn compress_small() -> Result<()> {
 #[test]
 fn compress_large() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     const N: u32 = 4100;
 
@@ -114,7 +114,7 @@ fn compress_large() -> Result<()> {
 #[test]
 fn compress_small_optix() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     // let x = ir.array(&[true, false, true]);
     let x = ir.array(&[true, false, true, false, true, false, true, false])?;
@@ -127,7 +127,7 @@ fn compress_small_optix() -> Result<()> {
 #[test]
 fn compress_large_optix() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     const N: u32 = 4100;
 

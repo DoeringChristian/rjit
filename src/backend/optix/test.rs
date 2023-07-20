@@ -7,7 +7,7 @@ use anyhow::Result;
 #[test]
 fn refcounting() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[1f32; 10])?;
     assert_eq!(x.var().rc, 1, "rc of x should be 1 (in x)");
@@ -30,7 +30,7 @@ fn refcounting() -> Result<()> {
         "rc of y should be 2 (1 in y and 1 in schedule)"
     );
 
-    ir.eval();
+    ir.eval()?;
 
     assert_eq!(
         x.var().rc,
@@ -51,14 +51,14 @@ fn refcounting() -> Result<()> {
 #[test]
 fn load_add_f32() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[1f32; 10])?;
     // let y = ir::add(&x, &x);
     let y = x.add(&x)?;
 
     ir.schedule(&[&y]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -68,14 +68,14 @@ fn load_add_f32() -> Result<()> {
 #[test]
 fn load_gather_f32() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[1f32, 2., 3., 4., 5.])?;
     let i = ir.array(&[0u32, 1, 4])?;
     let y = x.gather(&i, None)?;
 
     ir.schedule(&[&y]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -85,7 +85,7 @@ fn load_gather_f32() -> Result<()> {
 #[test]
 fn reindex() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.index(10);
 
@@ -96,7 +96,7 @@ fn reindex() -> Result<()> {
     let y = x.gather(&i, None)?;
 
     ir.schedule(&[&y]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -106,12 +106,12 @@ fn reindex() -> Result<()> {
 #[test]
 fn index() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let i = ir.index(10);
 
     ir.schedule(&[&i]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -124,7 +124,7 @@ fn index() -> Result<()> {
 #[test]
 fn gather_eval() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let r = {
         let x = ir.index(3);
@@ -140,7 +140,7 @@ fn gather_eval() -> Result<()> {
     // schedule
 
     ir.schedule(&[&r]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -150,14 +150,14 @@ fn gather_eval() -> Result<()> {
 #[test]
 fn paralell() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.index(10);
 
     let y = ir.index(3);
 
     ir.schedule(&[&x, &y]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -171,12 +171,12 @@ fn paralell() -> Result<()> {
 #[test]
 fn load_gather() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[1.0f32, 2., 3.])?;
 
     ir.schedule(&[&x]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -186,7 +186,7 @@ fn load_gather() -> Result<()> {
 #[test]
 fn eval_scatter() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[0u32, 0, 0, 0])?;
     let c = ir.literal(1u32)?;
@@ -199,7 +199,7 @@ fn eval_scatter() -> Result<()> {
     let y = ir.literal(2u32)?;
 
     y.scatter(&x, &i, None)?; // x: [1, 2, 2, 2]
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -209,7 +209,7 @@ fn eval_scatter() -> Result<()> {
 #[test]
 fn scatter_twice() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[0u32, 0, 0, 0])?;
 
@@ -225,8 +225,8 @@ fn scatter_twice() -> Result<()> {
 
     let y = ir.literal(3u32)?;
 
-    y.scatter(&x, &i, None);
-    ir.eval();
+    y.scatter(&x, &i, None)?;
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -236,7 +236,7 @@ fn scatter_twice() -> Result<()> {
 #[test]
 fn scatter_twice_add() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[0u32, 0, 0, 0])?;
 
@@ -258,7 +258,7 @@ fn scatter_twice_add() -> Result<()> {
     let x = x.add(&c)?;
 
     ir.schedule(&[&x]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -268,7 +268,7 @@ fn scatter_twice_add() -> Result<()> {
 #[test]
 fn scatter_reduce() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[0u32, 0, 0, 0])?;
 
@@ -278,7 +278,7 @@ fn scatter_reduce() -> Result<()> {
 
     y.scatter_reduce(&x, &i, None, ReduceOp::Add)?;
 
-    ir.eval();
+    ir.eval()?;
 
     // dbg!(&ir);
 
@@ -290,7 +290,7 @@ fn scatter_reduce() -> Result<()> {
 #[test]
 fn tex_lookup() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.array(&[0.5f32])?;
     let y = ir.array(&[0.5f32])?;
@@ -305,7 +305,7 @@ fn tex_lookup() -> Result<()> {
 
     r.schedule();
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -577,7 +577,7 @@ fn trace_ray_scatter() -> Result<()> {
 #[test]
 fn sized_literal() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["optix"]);
+    ir.set_backend(["optix"])?;
 
     let x = ir.sized_literal(0f32, 10)?;
     let x = x.add(&ir.literal(0f32)?)?;

@@ -5,7 +5,7 @@ use anyhow::Result;
 #[test]
 fn refcounting() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[1f32; 10])?;
     assert_eq!(x.var().rc, 1, "rc of x should be 1 (in x)");
@@ -28,7 +28,7 @@ fn refcounting() -> Result<()> {
         "rc of y should be 2 (1 in y and 1 in schedule)"
     );
 
-    ir.eval();
+    ir.eval()?;
 
     assert_eq!(
         x.var().rc,
@@ -49,14 +49,14 @@ fn refcounting() -> Result<()> {
 #[test]
 fn load_add_f32() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[1f32; 10])?;
     // let y = ir::add(&x, &x);
     let y = x.add(&x)?;
 
     ir.schedule(&[&y]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -66,14 +66,14 @@ fn load_add_f32() -> Result<()> {
 #[test]
 fn load_gather_f32() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[1f32, 2., 3., 4., 5.])?;
     let i = ir.array(&[0u32, 1, 4])?;
     let y = x.gather(&i, None)?;
 
     ir.schedule(&[&y]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -83,7 +83,7 @@ fn load_gather_f32() -> Result<()> {
 #[test]
 fn reindex() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.index(10);
 
@@ -94,7 +94,7 @@ fn reindex() -> Result<()> {
     let y = x.gather(&i, None)?;
 
     ir.schedule(&[&y]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -104,12 +104,12 @@ fn reindex() -> Result<()> {
 #[test]
 fn index() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(&["cuda"]);
+    ir.set_backend(&["cuda"])?;
 
     let i = ir.index(10);
 
     ir.schedule(&[&i]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -122,7 +122,7 @@ fn index() -> Result<()> {
 #[test]
 fn gather_eval() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let r = {
         let x = ir.index(3);
@@ -137,7 +137,7 @@ fn gather_eval() -> Result<()> {
     // schedule
 
     ir.schedule(&[&r]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -147,14 +147,14 @@ fn gather_eval() -> Result<()> {
 #[test]
 fn paralell() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.index(10);
 
     let y = ir.index(3);
 
     ir.schedule(&[&x, &y]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -168,12 +168,12 @@ fn paralell() -> Result<()> {
 #[test]
 fn _load_gather() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[1f32, 2., 3.])?;
 
     ir.schedule(&[&x]);
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -183,7 +183,7 @@ fn _load_gather() -> Result<()> {
 #[test]
 fn eval_scatter() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[0u32, 0, 0, 0])?;
     let c = ir.literal(1u32)?;
@@ -195,9 +195,9 @@ fn eval_scatter() -> Result<()> {
 
     let y = ir.literal(2u32)?;
 
-    y.scatter(&x, &i, None); // x: [1, 2, 2, 2]
+    y.scatter(&x, &i, None)?; // x: [1, 2, 2, 2]
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -207,7 +207,7 @@ fn eval_scatter() -> Result<()> {
 #[test]
 fn scatter_twice() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[0u32, 0, 0, 0])?;
 
@@ -223,9 +223,9 @@ fn scatter_twice() -> Result<()> {
 
     let y = ir.literal(3u32)?;
 
-    y.scatter(&x, &i, None);
+    y.scatter(&x, &i, None)?;
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -235,7 +235,7 @@ fn scatter_twice() -> Result<()> {
 #[test]
 fn scatter_twice_add() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[0u32, 0, 0, 0])?;
 
@@ -245,20 +245,20 @@ fn scatter_twice_add() -> Result<()> {
 
     let y = ir.literal(2u32)?;
 
-    y.scatter(&x, &i, None);
+    y.scatter(&x, &i, None)?;
 
     let i = ir.index(2);
 
     let y = ir.literal(3u32)?;
 
-    y.scatter(&x, &i, None);
+    y.scatter(&x, &i, None)?;
 
     let c = ir.literal(1u32)?;
     let x = x.add(&c)?;
 
     ir.schedule(&[&x]);
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -268,7 +268,7 @@ fn scatter_twice_add() -> Result<()> {
 #[test]
 fn scatter_reduce() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[0u32, 0, 0, 0])?;
 
@@ -276,11 +276,11 @@ fn scatter_reduce() -> Result<()> {
 
     let y = ir.literal(1u32)?;
 
-    y.scatter_reduce(&x, &i, None, ReduceOp::Add);
+    y.scatter_reduce(&x, &i, None, ReduceOp::Add)?;
 
     ir.schedule(&[&x]);
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -290,7 +290,7 @@ fn scatter_reduce() -> Result<()> {
 #[test]
 fn tex_lookup() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[0.5f32])?;
     let y = ir.array(&[0.5f32])?;
@@ -305,7 +305,7 @@ fn tex_lookup() -> Result<()> {
 
     r.schedule();
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -315,14 +315,14 @@ fn tex_lookup() -> Result<()> {
 #[test]
 fn cast() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[1u32, 2, 3])?;
     let x = x.cast(&crate::VarType::U64)?;
 
     x.schedule();
 
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -332,14 +332,14 @@ fn cast() -> Result<()> {
 #[test]
 fn bitcast() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.array(&[0x3f800000u32, 0x40000000, 0x40400000])?;
 
     let x = x.bitcast(&crate::VarType::F32)?;
 
     x.schedule();
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
@@ -349,7 +349,7 @@ fn bitcast() -> Result<()> {
 #[test]
 fn scatter_const_mask() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let x = ir.literal(1f32)?;
     let mask = ir.array(&[true, false, true])?;
@@ -358,7 +358,7 @@ fn scatter_const_mask() -> Result<()> {
 
     x.scatter(&dst, &ir.index(3), Some(&mask))?;
 
-    ir.eval();
+    ir.eval()?;
     insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(dst.to_host::<f32>().unwrap(), vec![1., 0., 1.]);
@@ -367,7 +367,7 @@ fn scatter_const_mask() -> Result<()> {
 #[test]
 fn scatter_gather() -> Result<()> {
     let ir = Trace::default();
-    ir.set_backend(["cuda"]);
+    ir.set_backend(["cuda"])?;
 
     let dst = ir.array(&[0u32, 0, 0])?;
     let idx = ir.index(3);
@@ -379,7 +379,7 @@ fn scatter_gather() -> Result<()> {
     let y = dst.gather(&idx, None)?;
 
     y.schedule();
-    ir.eval();
+    ir.eval()?;
 
     insta::assert_snapshot!(ir.kernel_history());
 
