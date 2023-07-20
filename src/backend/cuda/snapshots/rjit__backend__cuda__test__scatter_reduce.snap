@@ -3,9 +3,9 @@ source: src/backend/cuda/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 3850305404457523084 with 3 elements
+Launched CUDA Kernel 15479452334777616104 with 3 elements
 ===============================================
-Kernel 3850305404457523084:
+Kernel 15479452334777616104:
 
 .version 8.0
 .target sm_86
@@ -14,9 +14,9 @@ Kernel 3850305404457523084:
 .entry cujit(
 	.param .align 8 .b8 params[40]) {
 
-	.reg.b8   %b <12>; .reg.b16 %w<12>; .reg.b32 %r<12>;
-	.reg.b64  %rd<12>; .reg.f32 %f<12>; .reg.f64 %d<12>;
-	.reg.pred %p <12>;
+	.reg.b8   %b <11>; .reg.b16 %w<11>; .reg.b32 %r<11>;
+	.reg.b64  %rd<11>; .reg.f32 %f<11>; .reg.f64 %d<11>;
+	.reg.pred %p <11>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -54,11 +54,7 @@ body: // sm_86
 	mad.wide.u32 %rd3, %r7, 4, %rd0;
 	ld.global.nc.u32 %r9, [%rd3];
 
-	// [6]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 10, data: Literal(1), sbt_hash: 0 } =>
-	mov.pred %p10, 0x1;
-
-
-	// [7]: ScheduleVar { op: Scatter { op: Add }, deps: [SVarId(0), SVarId(1), SVarId(5), SVarId(6)], ty: Void, reg: 11, data: None, sbt_hash: 0 } =>
+	// [6]: ScheduleVar { op: Scatter { op: Add }, deps: [SVarId(0), SVarId(1), SVarId(5), SVarId(4)], ty: Void, reg: 10, data: None, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r9, 4, %rd0;
 	red.global.add.u32 [%rd3], %r4;

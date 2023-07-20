@@ -3,9 +3,9 @@ source: src/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 4635821908217630034 with 4 elements
+Launched CUDA Kernel 5845170875854598620 with 4 elements
 ===============================================
-Kernel 4635821908217630034:
+Kernel 5845170875854598620:
 
 .version 8.0
 .target sm_86
@@ -14,9 +14,9 @@ Kernel 4635821908217630034:
 .entry cujit(
 	.param .align 8 .b8 params[40]) {
 
-	.reg.b8   %b <12>; .reg.b16 %w<12>; .reg.b32 %r<12>;
-	.reg.b64  %rd<12>; .reg.f32 %f<12>; .reg.f64 %d<12>;
-	.reg.pred %p <12>;
+	.reg.b8   %b <10>; .reg.b16 %w<10>; .reg.b32 %r<10>;
+	.reg.b64  %rd<10>; .reg.f32 %f<10>; .reg.f64 %d<10>;
+	.reg.pred %p <10>;
 
 	mov.u32 %r0, %ctaid.x;
 	mov.u32 %r1, %ntid.x;
@@ -51,17 +51,9 @@ body: // sm_86
 	// [4]: ScheduleVar { op: Exp2, deps: [SVarId(3)], ty: F32, reg: 8, data: Buffer(2), sbt_hash: 0 } =>
 	ex2.approx.ftz.f32 %f8, %f7;
 
-	// [5]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 9, data: None, sbt_hash: 0 } =>
-	mov.u32 %r9, %r0;
-
-
-	// [6]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 10, data: Literal(1), sbt_hash: 0 } =>
-	mov.pred %p10, 0x1;
-
-
-	// [7]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(4), SVarId(4), SVarId(5), SVarId(6)], ty: F32, reg: 11, data: None, sbt_hash: 0 } =>
+	// [5]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(4), SVarId(4), SVarId(1), SVarId(2)], ty: F32, reg: 9, data: None, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+24];
-	mad.wide.u32 %rd3, %r9, 4, %rd0;
+	mad.wide.u32 %rd3, %r5, 4, %rd0;
 	st.global.f32 [%rd3], %f8;
 
 	//End of Kernel:

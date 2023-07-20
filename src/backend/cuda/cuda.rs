@@ -507,7 +507,8 @@ impl backend::Kernel for Kernel {
             .into_iter()
             .chain(env.opaques().iter().map(|o| Ok(*o)))
             .chain(env.buffers().iter().map(|b| {
-                b.downcast_ref::<Buffer>()
+                b.buffer
+                    .downcast_ref::<Buffer>()
                     .ok_or(anyhow!("Could not downcast Buffer!"))
                     .map(|b| b.ptr())
             }))

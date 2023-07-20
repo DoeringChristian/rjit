@@ -18,7 +18,7 @@ impl std::fmt::Display for SVarId {
     }
 }
 
-#[derive(Debug, Default, Hash, Clone, Copy)]
+#[derive(Debug, Default, Hash, Clone, Copy, PartialEq, Eq)]
 pub enum DataIdx {
     #[default]
     None,
@@ -73,7 +73,7 @@ impl DataIdx {
 ///
 /// Variables are densly stored in the ScheduleIr, simplifying the compilation.
 ///
-#[derive(Debug, Default, Hash, Clone)]
+#[derive(Debug, Default, Hash, Clone, PartialEq, Eq)]
 pub struct ScheduleVar {
     pub op: Op,
     pub deps: SmallVec<[SVarId; 4]>,
@@ -92,10 +92,16 @@ impl ScheduleVar {
     }
 }
 
+#[derive(Debug)]
+pub struct BufferAccess {
+    pub buffer: Arc<dyn Buffer>,
+    pub write: bool,
+}
+
 #[derive(Debug, Default)]
 pub struct Env {
     opaques: Vec<u64>,
-    buffers: Vec<Arc<dyn Buffer>>,
+    buffers: Vec<BufferAccess>,
     textures: Vec<Arc<dyn Texture>>,
     accels: Vec<Arc<dyn Accel>>,
 }
@@ -106,9 +112,12 @@ impl Env {
         self.opaques.push(literal);
         DataIdx::Opaque(idx as _)
     }
-    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>) -> DataIdx {
+    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>, write: bool) -> DataIdx {
         let idx = self.buffers.len();
-        self.buffers.push(buf.clone());
+        self.buffers.push(BufferAccess {
+            buffer: buf.clone(),
+            write,
+        });
         DataIdx::Buffer(idx as _)
     }
     fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> DataIdx {
@@ -121,7 +130,7 @@ impl Env {
         self.accels.push(accel.clone());
         DataIdx::Accel(idx as _)
     }
-    pub fn buffers(&self) -> &[Arc<dyn Buffer>] {
+    pub fn buffers(&self) -> &[BufferAccess] {
         &self.buffers
     }
     pub fn textures(&self) -> &[Arc<dyn Texture>] {
@@ -135,10 +144,13 @@ impl Env {
     }
 }
 
+/// Intermediary representation for scheduled variables
 ///
-/// Intermediate representation for scheduled variables
-/// TODO: split into ir and env
-///
+/// * `vars`: Variables to be used in code generation
+/// * `n_regs`: Total number of registers required
+/// * `n_payloads`: Number of ray tracing payloads
+/// * `visited`: HashMap used for construction
+/// * `independent`: HashMap of variables without dependencies used to dedup literals
 #[derive(Debug, Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
@@ -147,6 +159,7 @@ pub struct ScheduleIr {
     n_payloads: usize,
 
     visited: HashMap<VarId, SVarId>,
+    independent: HashMap<ScheduleVar, SVarId>,
 }
 
 impl ScheduleIr {
@@ -180,10 +193,25 @@ impl ScheduleIr {
         reg
     }
     fn push_var(&mut self, mut var: ScheduleVar) -> SVarId {
-        let id = SVarId(self.vars.len());
-        var.reg = self.next_reg();
-        self.vars.push(var);
-        id
+        // We can reuse variables if they have no dependencies
+        let has_deps = var.deps.len() > 0;
+        if !has_deps {
+            if self.independent.contains_key(&var) {
+                *self.independent.get(&var).unwrap()
+            } else {
+                let id = SVarId(self.vars.len());
+                self.independent.insert(var.clone(), id);
+
+                var.reg = self.next_reg();
+                self.vars.push(var);
+                id
+            }
+        } else {
+            let id = SVarId(self.vars.len());
+            var.reg = self.next_reg();
+            self.vars.push(var);
+            id
+        }
     }
     pub fn collect_vars(&mut self, env: &mut Env, ir: &Internal, schedule: &[VarId]) {
         for id in schedule {
@@ -195,7 +223,7 @@ impl ScheduleIr {
             }
 
             // Fake scatter
-            let dst = self.collect_data(env, ir, *id);
+            let dst = self.collect_data(env, ir, *id, true);
             let idx = self.push_var(ScheduleVar {
                 op: Op::Idx,
                 ty: VarType::U32,
@@ -243,7 +271,7 @@ impl ScheduleIr {
 
         match var.op {
             Op::Data => {
-                let bv = self.collect_data(env, ir, id);
+                let bv = self.collect_data(env, ir, id, false);
                 // Fake gather
                 sv.op = Op::Gather;
                 let idx = if var.size > 1 {
@@ -270,7 +298,7 @@ impl ScheduleIr {
                     bv, idx,  // index
                     mask, // mask
                 ];
-                sv.data = env.push_buffer(var.data.buffer().unwrap());
+                sv.data = env.push_buffer(var.data.buffer().unwrap(), false);
             }
             Op::Literal => {
                 // TODO: cannot evaluate a literal (maybe neccesarry for tensors)
@@ -283,7 +311,7 @@ impl ScheduleIr {
             }
             Op::Gather => {
                 sv.deps = smallvec![
-                    self.collect_data(env, ir, var.deps[0]),
+                    self.collect_data(env, ir, var.deps[0], false),
                     self.collect(env, ir, var.deps[1]), // index
                     self.collect(env, ir, var.deps[2])  // mask
                 ];
@@ -291,13 +319,13 @@ impl ScheduleIr {
             Op::Scatter { .. } => {
                 sv.deps = smallvec![
                     self.collect(env, ir, var.deps[0]), // src
-                    self.collect_data(env, ir, var.deps[1]),
+                    self.collect_data(env, ir, var.deps[1], true),
                     self.collect(env, ir, var.deps[2]), // index
                     self.collect(env, ir, var.deps[3])  // mask
                 ];
             }
             Op::TexLookup { dim } => {
-                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0]),];
+                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0], false),];
                 sv.deps.extend(
                     var.deps[1..(dim as usize + 1)]
                         .iter()
@@ -306,7 +334,7 @@ impl ScheduleIr {
             }
             Op::TraceRay { payload_count } => {
                 self.n_payloads = self.n_payloads.max(payload_count);
-                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0])];
+                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0], false)];
                 sv.deps.extend(
                     var.deps[1..(16 + payload_count)]
                         .iter()
@@ -337,7 +365,7 @@ impl ScheduleIr {
     ///
     /// This only inserts this variable but not its dependencies.
     ///
-    pub fn collect_data(&mut self, env: &mut Env, ir: &Internal, id: VarId) -> SVarId {
+    pub fn collect_data(&mut self, env: &mut Env, ir: &Internal, id: VarId, write: bool) -> SVarId {
         let var = ir.var(id);
         if let Some(id) = self.visited.get(&id).cloned() {
             // In case this variable has already been traversed, just ensure that the buffer is
@@ -347,7 +375,7 @@ impl ScheduleIr {
                 self.var_mut(id).data = match &var.data {
                     var::Data::None => DataIdx::None,
                     var::Data::Literal(_) => DataIdx::None,
-                    var::Data::Buffer(buf) => env.push_buffer(&buf),
+                    var::Data::Buffer(buf) => env.push_buffer(&buf, write),
                     var::Data::Texture(tex) => env.push_texture(&tex),
                     var::Data::Accel(accel) => env.push_accel(&accel),
                 };
@@ -357,7 +385,7 @@ impl ScheduleIr {
             let data = match &var.data {
                 var::Data::None => DataIdx::None,
                 var::Data::Literal(_) => DataIdx::None,
-                var::Data::Buffer(buf) => env.push_buffer(&buf),
+                var::Data::Buffer(buf) => env.push_buffer(&buf, write),
                 var::Data::Texture(tex) => env.push_texture(&tex),
                 var::Data::Accel(accel) => env.push_accel(&accel),
             };

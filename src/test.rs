@@ -14,7 +14,7 @@ macro_rules! test_uop {
                     let initial: &[$ty] = &$init;
 
                     let ir = Trace::default();
-                    ir.set_backend(["cuda"]);
+                    ir.set_backend(["cuda"])?;
 
                     let x = ir.array(initial)?;
 
@@ -22,7 +22,7 @@ macro_rules! test_uop {
 
                     ir.schedule(&[&y]);
 
-                    ir.eval();
+                    ir.eval()?;
 
                     insta::assert_snapshot!(ir.kernel_history());
 
