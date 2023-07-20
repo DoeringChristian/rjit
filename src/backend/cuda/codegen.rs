@@ -238,7 +238,7 @@ pub fn assemble_var(
                     "\tneg.s{} {}, {};",
                     var.ty.size() * 8,
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             } else {
                 writeln!(
@@ -246,7 +246,7 @@ pub fn assemble_var(
                     "\tneg.{} {}, {};\n",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             }
         }
@@ -256,7 +256,7 @@ pub fn assemble_var(
                 "\tnot.{} {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0)
+                reg(dep(vid, 0))
             )?;
         }
         Op::Sqrt => {
@@ -266,7 +266,7 @@ pub fn assemble_var(
                     "\tsqrt.approx.ftz.{} {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             } else {
                 writeln!(
@@ -274,7 +274,7 @@ pub fn assemble_var(
                     "\tsqrt.rn.{} {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             }
         }
@@ -284,7 +284,7 @@ pub fn assemble_var(
                 "\tabs.{} {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0)
+                reg(dep(vid, 0))
             )?;
         }
         Op::Add => {
@@ -293,8 +293,8 @@ pub fn assemble_var(
                 "\tadd.{} {}, {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0),
-                depreg(vid, 1)
+                reg(dep(vid, 0)),
+                reg(dep(vid, 1))
             )?;
         }
         Op::Sub => {
@@ -303,8 +303,8 @@ pub fn assemble_var(
                 "\tsub.{} {}, {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0),
-                depreg(vid, 1),
+                reg(dep(vid, 0)),
+                reg(dep(vid, 1)),
             )?;
         }
         Op::Mul => {
@@ -314,8 +314,8 @@ pub fn assemble_var(
                     "\tmul.ftz.{} {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             } else if var.ty.is_double() {
                 writeln!(
@@ -323,8 +323,8 @@ pub fn assemble_var(
                     "\tmul.{} {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             } else {
                 writeln!(
@@ -332,8 +332,8 @@ pub fn assemble_var(
                     "\tmul.lo.{} {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             }
         }
@@ -344,8 +344,8 @@ pub fn assemble_var(
                     "\tdiv.approx.ftz.{} {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             } else if var.ty.is_double() {
                 writeln!(
@@ -353,8 +353,8 @@ pub fn assemble_var(
                     "\tdiv.rn.{} {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             } else {
                 writeln!(
@@ -362,8 +362,8 @@ pub fn assemble_var(
                     "\tdiv.{} {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             }
         }
@@ -373,8 +373,8 @@ pub fn assemble_var(
                 "\trem.{} {}, {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0),
-                depreg(vid, 1)
+                reg(dep(vid, 0)),
+                reg(dep(vid, 1))
             )?;
         }
         Op::Mulhi => {
@@ -383,8 +383,8 @@ pub fn assemble_var(
                 "\tmul.hi.{} {}, {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0),
-                depreg(vid, 1)
+                reg(dep(vid, 0)),
+                reg(dep(vid, 1))
             )?;
         }
         Op::Fma => {
@@ -394,9 +394,9 @@ pub fn assemble_var(
                     "\tfma.rn.ftz.{} {}, {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
-                    depreg(vid, 2)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
+                    reg(dep(vid, 2))
                 )?;
             } else if var.ty.is_double() {
                 writeln!(
@@ -404,9 +404,9 @@ pub fn assemble_var(
                     "\tfma.rn.{} {}, {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
-                    depreg(vid, 2),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
+                    reg(dep(vid, 2)),
                 )?;
             } else {
                 writeln!(
@@ -414,9 +414,9 @@ pub fn assemble_var(
                     "\tmad.lo.{} {}, {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
-                    depreg(vid, 2),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
+                    reg(dep(vid, 2)),
                 )?;
             }
         }
@@ -427,8 +427,8 @@ pub fn assemble_var(
                     "\tmin.ftz.{} {}, {}, {};\n",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             } else {
                 writeln!(
@@ -436,8 +436,8 @@ pub fn assemble_var(
                     "\tmin.{} {}, {}, {};\n",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             }
         }
@@ -448,8 +448,8 @@ pub fn assemble_var(
                     "\tmax.ftz.{} {}, {}, {};\n",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             } else {
                 writeln!(
@@ -457,8 +457,8 @@ pub fn assemble_var(
                     "\tmax.{} {}, {}, {};\n",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             }
         }
@@ -515,8 +515,8 @@ pub fn assemble_var(
                     "\tsetp.eq.{}, {}, {}, {};\n",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             }
         }
@@ -527,8 +527,8 @@ pub fn assemble_var(
                     "\txor.{} {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             } else {
                 writeln!(
@@ -536,8 +536,8 @@ pub fn assemble_var(
                     "\tsetp.ne.{} {}, {}, {};\n",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             }
         }
@@ -548,8 +548,8 @@ pub fn assemble_var(
                     "\tsetp.lo.{} {}, {}, {};",
                     tyname(&ir.var(dep(vid, 0)).ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             } else {
                 writeln!(
@@ -557,8 +557,8 @@ pub fn assemble_var(
                     "\tsetp.lt.{} {}, {}, {};",
                     tyname(&ir.var(dep(vid, 0)).ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             }
         }
@@ -569,8 +569,8 @@ pub fn assemble_var(
                     "\tsetp.ls.{} {}, {}, {};",
                     tyname(&ir.var(dep(vid, 0)).ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             } else {
                 writeln!(
@@ -578,8 +578,8 @@ pub fn assemble_var(
                     "\tsetp.le.{} {}, {}, {};",
                     tyname(&ir.var(dep(vid, 0)).ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             }
         }
@@ -590,8 +590,8 @@ pub fn assemble_var(
                     "\tsetp.hi.{} {}, {}, {};",
                     tyname(&ir.var(dep(vid, 0)).ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             } else {
                 writeln!(
@@ -599,8 +599,8 @@ pub fn assemble_var(
                     "\tsetp.gt.{} {}, {}, {};",
                     tyname(&ir.var(dep(vid, 0)).ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             }
         }
@@ -611,8 +611,8 @@ pub fn assemble_var(
                     "\tsetp.hs.{} {}, {}, {};",
                     tyname(&ir.var(dep(vid, 0)).ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             } else {
                 writeln!(
@@ -620,8 +620,8 @@ pub fn assemble_var(
                     "\tsetp.ge.{} {}, {}, {};",
                     tyname(&ir.var(dep(vid, 0)).ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             }
         }
@@ -632,9 +632,9 @@ pub fn assemble_var(
                     "\tselp.{} {}, {}, {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 1),
-                    depreg(vid, 2),
-                    depreg(vid, 0)
+                    reg(dep(vid, 1)),
+                    reg(dep(vid, 2)),
+                    reg(dep(vid, 0))
                 )?;
             } else {
                 write!(
@@ -642,10 +642,10 @@ pub fn assemble_var(
                     "\tand.pred %p3, {}, {};\n\
                         \tand.pred %p2, !{}, {};\n\
                         \tor.pred {}, %p2, %p3;\n",
-                    depreg(vid, 0),
-                    depreg(vid, 1),
-                    depreg(vid, 0),
-                    depreg(vid, 2),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 2)),
                     reg(vid),
                 )?;
             }
@@ -657,7 +657,7 @@ pub fn assemble_var(
                     "\tpopc.{} {}, {};",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             } else {
                 write!(
@@ -665,7 +665,7 @@ pub fn assemble_var(
                     "\tpopc.{} %r3, {};\n\
                         \tcvt.{}.u32 {}, %r3;\n",
                     tyname_bin(&var.ty),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                     tyname(&var.ty),
                     reg(vid),
                 )?;
@@ -678,7 +678,7 @@ pub fn assemble_var(
                     "\tclz.{} {}, {};",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             } else {
                 write!(
@@ -686,7 +686,7 @@ pub fn assemble_var(
                     "\tclz.{} %r3, {};\n\
                         \tcvt.{}.u32 {}, %r3;\n",
                     tyname_bin(&var.ty),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                     tyname(&var.ty),
                     reg(vid),
                 )?;
@@ -700,7 +700,7 @@ pub fn assemble_var(
                         \tclz.{} {}, {};\n",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                     tyname_bin(&var.ty),
                     reg(vid),
                     reg(vid),
@@ -713,7 +713,7 @@ pub fn assemble_var(
                         \tcvt.{}.u32 {}, %r3;\n",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                     tyname_bin(&var.ty),
                     tyname(&var.ty),
                     reg(vid),
@@ -731,8 +731,8 @@ pub fn assemble_var(
                     "\tand.{} {}, {}, {};",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             } else {
                 writeln!(
@@ -740,8 +740,8 @@ pub fn assemble_var(
                     "\tselp.{} {}, {}, 0, {};",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             }
         }
@@ -755,8 +755,8 @@ pub fn assemble_var(
                     "\tor.{} {}, {}, {};",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             } else {
                 writeln!(
@@ -764,8 +764,8 @@ pub fn assemble_var(
                     "\tselp.{} {}, -1, {}, {};",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             }
         }
@@ -775,8 +775,8 @@ pub fn assemble_var(
                 "\txor.{} {}, {}, {};",
                 tyname_bin(&var.ty),
                 reg(vid),
-                depreg(vid, 0),
-                depreg(vid, 1)
+                reg(dep(vid, 0)),
+                reg(dep(vid, 1))
             )?;
         }
         Op::Shl => {
@@ -786,8 +786,8 @@ pub fn assemble_var(
                     "\tshl.{} {}, {}, {};",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             } else {
                 write!(
@@ -795,10 +795,10 @@ pub fn assemble_var(
                     "\tcvt.u32.{} %r3, {};\n\
                         \tshl.{} {}, {}, %r3;\n",
                     tyname(&ir.var(dep(vid, 1)).ty),
-                    depreg(vid, 1),
+                    reg(dep(vid, 1)),
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             }
         }
@@ -809,8 +809,8 @@ pub fn assemble_var(
                     "\tshr.{} {}, {}, {};",
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
-                    depreg(vid, 1)
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1))
                 )?;
             } else {
                 write!(
@@ -818,10 +818,10 @@ pub fn assemble_var(
                     "\tcvt.u32.{} %r3, {};\n\
                         \tshr.{} {}, {}, %r3;\n",
                     tyname(&ir.var(dep(vid, 1)).ty),
-                    depreg(vid, 1),
+                    reg(dep(vid, 1)),
                     tyname_bin(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             }
         }
@@ -832,7 +832,7 @@ pub fn assemble_var(
                     "\trcp.approx.ftz.{} {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             } else {
                 writeln!(
@@ -840,7 +840,7 @@ pub fn assemble_var(
                     "\trcp.rn.{} {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             }
         }
@@ -851,7 +851,7 @@ pub fn assemble_var(
                     "\trsqrt.approx.ftz.{} {}, {};",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0)
+                    reg(dep(vid, 0))
                 )?;
             } else {
                 write!(
@@ -860,7 +860,7 @@ pub fn assemble_var(
                     \tsqrt.rn.{} {}, {};\n",
                     tyname(&var.ty),
                     reg(vid),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                     tyname(&var.ty),
                     reg(vid),
                     reg(vid),
@@ -873,7 +873,7 @@ pub fn assemble_var(
                 "\tsin.approx.ftz.{} {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0)
+                reg(dep(vid, 0))
             )?;
         }
         Op::Cos => {
@@ -882,7 +882,7 @@ pub fn assemble_var(
                 "\tcos.approx.ftz.{} {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0)
+                reg(dep(vid, 0))
             )?;
         }
         Op::Exp2 => {
@@ -891,7 +891,7 @@ pub fn assemble_var(
                 "\tex2.approx.ftz.{} {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0)
+                reg(dep(vid, 0))
             )?;
         }
         Op::Log2 => {
@@ -900,7 +900,7 @@ pub fn assemble_var(
                 "\tlg2.approx.ftz.{} {}, {};",
                 tyname(&var.ty),
                 reg(vid),
-                depreg(vid, 0)
+                reg(dep(vid, 0))
             )?;
         }
         Op::Cast => {
@@ -912,7 +912,7 @@ pub fn assemble_var(
                         "\tsetp.ne.{} {}, {}, 0.0;",
                         tyname(&d0.ty),
                         reg(vid),
-                        depreg(vid, 0),
+                        reg(dep(vid, 0)),
                     )?;
                 } else {
                     writeln!(
@@ -920,7 +920,7 @@ pub fn assemble_var(
                         "\tsetp.ne.{} {}, {}, 0;",
                         tyname(&d0.ty),
                         reg(vid),
-                        depreg(vid, 0),
+                        reg(dep(vid, 0)),
                     )?;
                 }
             } else if d0.ty.is_bool() {
@@ -930,7 +930,7 @@ pub fn assemble_var(
                         "\tselp.{} {}, 1.0, 0.0, {};",
                         tyname(&var.ty),
                         reg(vid),
-                        depreg(vid, 0),
+                        reg(dep(vid, 0)),
                     )?;
                 } else {
                     writeln!(
@@ -938,7 +938,7 @@ pub fn assemble_var(
                         "\tselp.{} {}, 1, 0, {};",
                         tyname(&var.ty),
                         reg(vid),
-                        depreg(vid, 0),
+                        reg(dep(vid, 0)),
                     )?;
                 }
             } else if var.ty.is_float() && !d0.ty.is_float() {
@@ -948,7 +948,7 @@ pub fn assemble_var(
                     tyname(&var.ty),
                     tyname(&d0.ty),
                     reg(vid),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                 )?;
             } else if !var.ty.is_float() && d0.ty.is_float() {
                 writeln!(
@@ -957,7 +957,7 @@ pub fn assemble_var(
                     tyname(&var.ty),
                     tyname(&d0.ty),
                     reg(vid),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                 )?;
             } else if var.ty.is_float() && d0.ty.is_float() && var.ty.size() < d0.ty.size() {
                 writeln!(
@@ -966,7 +966,7 @@ pub fn assemble_var(
                     tyname(&var.ty),
                     tyname(&d0.ty),
                     reg(vid),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                 )?;
             } else {
                 writeln!(
@@ -975,7 +975,7 @@ pub fn assemble_var(
                     tyname(&var.ty),
                     tyname(&d0.ty),
                     reg(vid),
-                    depreg(vid, 0),
+                    reg(dep(vid, 0)),
                 )?;
             }
         }
@@ -985,7 +985,7 @@ pub fn assemble_var(
                 "\tmov.{} {}, {};",
                 tyname_bin(&var.ty),
                 reg(vid),
-                depreg(vid, 0)
+                reg(dep(vid, 0))
             )?;
         }
         Op::Gather => {
@@ -1148,9 +1148,9 @@ pub fn assemble_var(
                              {v}_out_3}}, [%rd0, {{{d1}, {d2}, {d3}, {d3}}}];",
                     v = reg(vid),
                     // d0 = dep(vid, 0),
-                    d1 = depreg(vid, 1),
-                    d2 = depreg(vid, 2),
-                    d3 = depreg(vid, 3)
+                    d1 = reg(dep(vid, 1)),
+                    d2 = reg(dep(vid, 2)),
+                    d3 = reg(dep(vid, 3))
                 )?;
             } else if dim == 2 {
                 writeln!(
@@ -1159,8 +1159,8 @@ pub fn assemble_var(
                              {v}_out_3}}, [%rd0, {{{d1}, {d2}}}];",
                     v = reg(vid),
                     // d0 = dep(vid, 0),
-                    d1 = depreg(vid, 1),
-                    d2 = depreg(vid, 2),
+                    d1 = reg(dep(vid, 1)),
+                    d2 = reg(dep(vid, 2)),
                 )?;
             } else if dim == 1 {
                 writeln!(
@@ -1169,7 +1169,7 @@ pub fn assemble_var(
                              {v}_out_3}}, [%rd0, {{{d1}}}];",
                     v = reg(vid),
                     // d0 = dep(vid, 0),
-                    d1 = depreg(vid, 1),
+                    d1 = reg(dep(vid, 1)),
                 )?;
             } else {
                 unimplemented!();
@@ -1181,7 +1181,7 @@ pub fn assemble_var(
                 "\tmov.{} {}, {}_out_{};",
                 tyname_bin(&var.ty),
                 reg(vid),
-                depreg(vid, 0),
+                reg(dep(vid, 0)),
                 offset
             )?;
         }
