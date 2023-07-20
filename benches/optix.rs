@@ -110,9 +110,6 @@ fn trace_ray(ir: &Trace) -> Result<()> {
     let u = payload[3].bitcast(&VarType::F32)?;
     let v = payload[4].bitcast(&VarType::F32)?;
 
-    let dst = ir.array(&[0f32, 1f32])?;
-    u.scatter(&dst, &ir.index(2), None)?;
-
     valid.schedule();
     v.schedule();
     u.schedule();
