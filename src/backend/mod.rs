@@ -83,12 +83,12 @@ pub struct AccelDesc<'a> {
 
 #[derive(Default)]
 pub struct HitGroupDesc<'a> {
-    closest_hit: ModuleDesc<'a>,
-    any_hit: Option<ModuleDesc<'a>>,
-    intersection: Option<ModuleDesc<'a>>,
+    pub closest_hit: ModuleDesc<'a>,
+    pub any_hit: Option<ModuleDesc<'a>>,
+    pub intersection: Option<ModuleDesc<'a>>,
 }
 pub struct MissGroupDesc<'a> {
-    miss: ModuleDesc<'a>,
+    pub miss: ModuleDesc<'a>,
 }
 
 #[derive(Default)]
