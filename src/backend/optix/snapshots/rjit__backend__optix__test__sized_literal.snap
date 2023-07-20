@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 6060931752256557033 with 10 elements
+Launched CUDA Kernel 13123616357812715981 with 10 elements
 ===============================================
-Kernel 6060931752256557033:
+Kernel 13123616357812715981:
 
 .version 8.0
 .target sm_86
@@ -33,22 +33,22 @@ Kernel 6060931752256557033:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 4, data: Literal(0), sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: F32, data: Literal(0), sbt_hash: 0 } =>
 	mov.b32 %f4, 0x0;
 
 
-	// [1]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(0)], ty: F32, reg: 5, data: Buffer(0), sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Add, deps: [SVarId(0), SVarId(0)], ty: F32, data: Buffer(0), sbt_hash: 0 } =>
 	add.f32 %f5, %f4, %f4;
 
-	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 6, data: None, sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, data: None, sbt_hash: 0 } =>
 	mov.u32 %r6, %r0;
 
 
-	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 7, data: Literal(1), sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, data: Literal(1), sbt_hash: 0 } =>
 	mov.pred %p7, 0x1;
 
 
-	// [4]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(1), SVarId(1), SVarId(2), SVarId(3)], ty: F32, reg: 8, data: None, sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(1), SVarId(1), SVarId(2), SVarId(3)], ty: F32, data: None, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r6, 4, %rd0;
 	st.global.f32 [%rd3], %f5;

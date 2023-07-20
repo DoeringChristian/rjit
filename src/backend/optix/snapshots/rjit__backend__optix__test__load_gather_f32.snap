@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 2840421333109809373 with 3 elements
+Launched CUDA Kernel 6096409060401348873 with 3 elements
 ===============================================
-Kernel 2840421333109809373:
+Kernel 6096409060401348873:
 
 .version 8.0
 .target sm_86
@@ -33,29 +33,29 @@ Kernel 2840421333109809373:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 4, data: Buffer(0), sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: F32, data: Buffer(0), sbt_hash: 0 } =>
 
-	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 5, data: Buffer(1), sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, data: Buffer(1), sbt_hash: 0 } =>
 
-	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 6, data: None, sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Idx, deps: [], ty: U32, data: None, sbt_hash: 0 } =>
 	mov.u32 %r6, %r0;
 
 
-	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 7, data: Literal(1), sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Literal, deps: [], ty: Bool, data: Literal(1), sbt_hash: 0 } =>
 	mov.pred %p7, 0x1;
 
 
-	// [4]: ScheduleVar { op: Gather, deps: [SVarId(1), SVarId(2), SVarId(3)], ty: U32, reg: 8, data: Buffer(2), sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Gather, deps: [SVarId(1), SVarId(2), SVarId(3)], ty: U32, data: Buffer(2), sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+16];
 	mad.wide.u32 %rd3, %r6, 4, %rd0;
 	ld.global.nc.u32 %r8, [%rd3];
 
-	// [5]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(4), SVarId(3)], ty: F32, reg: 9, data: Buffer(3), sbt_hash: 0 } =>
+	// [5]: ScheduleVar { op: Gather, deps: [SVarId(0), SVarId(4), SVarId(3)], ty: F32, data: Buffer(3), sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r8, 4, %rd0;
 	ld.global.nc.f32 %f9, [%rd3];
 
-	// [6]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(5), SVarId(5), SVarId(2), SVarId(3)], ty: F32, reg: 10, data: None, sbt_hash: 0 } =>
+	// [6]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(5), SVarId(5), SVarId(2), SVarId(3)], ty: F32, data: None, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+32];
 	mad.wide.u32 %rd3, %r6, 4, %rd0;
 	st.global.f32 [%rd3], %f9;

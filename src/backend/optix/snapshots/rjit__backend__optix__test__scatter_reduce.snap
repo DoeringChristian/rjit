@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 15479452334777616104 with 3 elements
+Launched CUDA Kernel 2211178858261682479 with 3 elements
 ===============================================
-Kernel 15479452334777616104:
+Kernel 2211178858261682479:
 
 .version 8.0
 .target sm_86
@@ -33,28 +33,28 @@ Kernel 15479452334777616104:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 4, data: Literal(1), sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Literal, deps: [], ty: U32, data: Literal(1), sbt_hash: 0 } =>
 	mov.b32 %r4, 0x1;
 
 
-	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 5, data: Buffer(0), sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Data, deps: [], ty: U32, data: Buffer(0), sbt_hash: 0 } =>
 
-	// [2]: ScheduleVar { op: Data, deps: [], ty: U32, reg: 6, data: Buffer(1), sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Data, deps: [], ty: U32, data: Buffer(1), sbt_hash: 0 } =>
 
-	// [3]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 7, data: None, sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Idx, deps: [], ty: U32, data: None, sbt_hash: 0 } =>
 	mov.u32 %r7, %r0;
 
 
-	// [4]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 8, data: Literal(1), sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Literal, deps: [], ty: Bool, data: Literal(1), sbt_hash: 0 } =>
 	mov.pred %p8, 0x1;
 
 
-	// [5]: ScheduleVar { op: Gather, deps: [SVarId(2), SVarId(3), SVarId(4)], ty: U32, reg: 9, data: Buffer(2), sbt_hash: 0 } =>
+	// [5]: ScheduleVar { op: Gather, deps: [SVarId(2), SVarId(3), SVarId(4)], ty: U32, data: Buffer(2), sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+16];
 	mad.wide.u32 %rd3, %r7, 4, %rd0;
 	ld.global.nc.u32 %r9, [%rd3];
 
-	// [6]: ScheduleVar { op: Scatter { op: Add }, deps: [SVarId(0), SVarId(1), SVarId(5), SVarId(4)], ty: Void, reg: 10, data: None, sbt_hash: 0 } =>
+	// [6]: ScheduleVar { op: Scatter { op: Add }, deps: [SVarId(0), SVarId(1), SVarId(5), SVarId(4)], ty: Void, data: None, sbt_hash: 0 } =>
 	ld.param.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r9, 4, %rd0;
 	red.global.add.u32 [%rd3], %r4;

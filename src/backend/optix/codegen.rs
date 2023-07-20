@@ -1,4 +1,5 @@
-use crate::backend::cuda::codegen::{tyname, tyname_bin, Reg};
+use crate::backend::cuda;
+use crate::backend::cuda::codegen::{register_id, tyname, tyname_bin, Reg};
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::{Op, VarType};
 
@@ -13,7 +14,6 @@ pub fn assemble_var_rt(
     params_type: &'static str,
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
-    let ridx = |id| ir.var(id).reg;
 
     let var = ir.var(vid);
     match var.op {
@@ -38,7 +38,7 @@ pub fn assemble_var_rt(
                 || ir.var(mask).data.literal().is_some()
                 || ir.var(mask).data.literal().unwrap() == 0;
             if masked {
-                writeln!(asm, "\t@!{} bra l_masked_{};", reg(mask), ridx(vid))?;
+                writeln!(asm, "\t@!{} bra l_masked_{};", reg(mask), register_id(vid))?;
             }
 
             write!(
@@ -108,7 +108,7 @@ pub fn assemble_var_rt(
             writeln!(asm, ");")?;
 
             if masked {
-                writeln!(asm, "\nl_masked_{}:", ridx(vid))?;
+                writeln!(asm, "\nl_masked_{}:", register_id(vid))?;
             }
         }
         _ => {
@@ -133,10 +133,9 @@ pub fn assemble_entry(
     entry_point: &str,
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
-    let ridx = |id| ir.var(id).reg;
 
     let n_params = 1 + env.buffers().len() + env.textures().len() + env.accels().len(); // Add 1 for size
-    let n_regs = ir.n_regs();
+    let n_regs = ir.n_vars() + cuda::codegen::FIRST_REGISTER;
 
     /* Special registers:
          %r0   :  Index

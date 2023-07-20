@@ -78,7 +78,6 @@ pub struct ScheduleVar {
     pub op: Op,
     pub deps: SmallVec<[SVarId; 4]>,
     pub ty: VarType,
-    pub reg: usize,
 
     pub data: DataIdx,
 
@@ -155,7 +154,6 @@ impl Env {
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
 
-    n_regs: usize,
     n_payloads: usize,
 
     visited: HashMap<VarId, SVarId>,
@@ -165,7 +163,6 @@ pub struct ScheduleIr {
 impl ScheduleIr {
     pub fn new(first_register: usize) -> Self {
         Self {
-            n_regs: first_register,
             ..Default::default()
         }
     }
@@ -178,21 +175,13 @@ impl ScheduleIr {
     pub fn var_mut(&mut self, id: SVarId) -> &mut ScheduleVar {
         &mut self.vars[id.0]
     }
-    // pub fn reg(&self, id: SVarId) -> Reg {
-    //     self.var(id).reg()
-    // }
-    pub fn n_regs(&self) -> usize {
-        self.n_regs
-    }
     pub fn n_payloads(&self) -> usize {
         self.n_payloads
     }
-    fn next_reg(&mut self) -> usize {
-        let reg = self.n_regs;
-        self.n_regs += 1;
-        reg
+    pub fn n_vars(&self) -> usize {
+        self.vars.len()
     }
-    fn push_var(&mut self, mut var: ScheduleVar) -> SVarId {
+    fn push_var(&mut self, var: ScheduleVar) -> SVarId {
         // We can reuse variables if they have no dependencies
         let has_deps = var.deps.len() > 0;
         if !has_deps {
@@ -202,13 +191,11 @@ impl ScheduleIr {
                 let id = SVarId(self.vars.len());
                 self.independent.insert(var.clone(), id);
 
-                var.reg = self.next_reg();
                 self.vars.push(var);
                 id
             }
         } else {
             let id = SVarId(self.vars.len());
-            var.reg = self.next_reg();
             self.vars.push(var);
             id
         }

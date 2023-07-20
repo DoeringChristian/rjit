@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched OptiX Kernel 14436662609839206335 with 2 elements
+Launched OptiX Kernel 5363879414767267579 with 2 elements
 ===============================================
-Kernel 14436662609839206335:
+Kernel 5363879414767267579:
 
 .version 8.0
 .target sm_86
@@ -24,55 +24,55 @@ Kernel 14436662609839206335:
 
 body:
 
-	// [0]: ScheduleVar { op: Data, deps: [], ty: Void, reg: 4, data: Accel(0), sbt_hash: 6797626042257772553 } =>
+	// [0]: ScheduleVar { op: Data, deps: [], ty: Void, data: Accel(0), sbt_hash: 6797626042257772553 } =>
 
-	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, reg: 5, data: Literal(1), sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Literal, deps: [], ty: Bool, data: Literal(1), sbt_hash: 0 } =>
 	mov.pred %p5, 0x1;
 
 
-	// [2]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 6, data: Buffer(0), sbt_hash: 0 } =>
+	// [2]: ScheduleVar { op: Data, deps: [], ty: F32, data: Buffer(0), sbt_hash: 0 } =>
 
-	// [3]: ScheduleVar { op: Idx, deps: [], ty: U32, reg: 7, data: None, sbt_hash: 0 } =>
+	// [3]: ScheduleVar { op: Idx, deps: [], ty: U32, data: None, sbt_hash: 0 } =>
 	mov.u32 %r7, %r0;
 
 
-	// [4]: ScheduleVar { op: Gather, deps: [SVarId(2), SVarId(3), SVarId(1)], ty: F32, reg: 8, data: Buffer(1), sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Gather, deps: [SVarId(2), SVarId(3), SVarId(1)], ty: F32, data: Buffer(1), sbt_hash: 0 } =>
 	ld.const.u64 %rd0, [params+8];
 	mad.wide.u32 %rd3, %r7, 4, %rd0;
 	ld.global.nc.f32 %f8, [%rd3];
 
-	// [5]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 9, data: Literal(1058642330), sbt_hash: 0 } =>
+	// [5]: ScheduleVar { op: Literal, deps: [], ty: F32, data: Literal(1058642330), sbt_hash: 0 } =>
 	mov.b32 %f9, 0x3f19999a;
 
 
-	// [6]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 10, data: Literal(0), sbt_hash: 0 } =>
+	// [6]: ScheduleVar { op: Literal, deps: [], ty: F32, data: Literal(0), sbt_hash: 0 } =>
 	mov.b32 %f10, 0x0;
 
 
-	// [7]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 11, data: Buffer(2), sbt_hash: 0 } =>
+	// [7]: ScheduleVar { op: Data, deps: [], ty: F32, data: Buffer(2), sbt_hash: 0 } =>
 
-	// [8]: ScheduleVar { op: Gather, deps: [SVarId(7), SVarId(3), SVarId(1)], ty: F32, reg: 12, data: Buffer(3), sbt_hash: 0 } =>
+	// [8]: ScheduleVar { op: Gather, deps: [SVarId(7), SVarId(3), SVarId(1)], ty: F32, data: Buffer(3), sbt_hash: 0 } =>
 	ld.const.u64 %rd0, [params+24];
 	mad.wide.u32 %rd3, %r7, 4, %rd0;
 	ld.global.nc.f32 %f12, [%rd3];
 
-	// [9]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 13, data: Literal(981668463), sbt_hash: 0 } =>
+	// [9]: ScheduleVar { op: Literal, deps: [], ty: F32, data: Literal(981668463), sbt_hash: 0 } =>
 	mov.b32 %f13, 0x3a83126f;
 
 
-	// [10]: ScheduleVar { op: Literal, deps: [], ty: F32, reg: 14, data: Literal(1148846080), sbt_hash: 0 } =>
+	// [10]: ScheduleVar { op: Literal, deps: [], ty: F32, data: Literal(1148846080), sbt_hash: 0 } =>
 	mov.b32 %f14, 0x447a0000;
 
 
-	// [11]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 15, data: Literal(255), sbt_hash: 0 } =>
+	// [11]: ScheduleVar { op: Literal, deps: [], ty: U32, data: Literal(255), sbt_hash: 0 } =>
 	mov.b32 %r15, 0xff;
 
 
-	// [12]: ScheduleVar { op: Literal, deps: [], ty: U32, reg: 16, data: Literal(0), sbt_hash: 0 } =>
+	// [12]: ScheduleVar { op: Literal, deps: [], ty: U32, data: Literal(0), sbt_hash: 0 } =>
 	mov.b32 %r16, 0x0;
 
 
-	// [13]: ScheduleVar { op: TraceRay { payload_count: 5 }, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5), SVarId(6), SVarId(6), SVarId(6), SVarId(8), SVarId(9), SVarId(10), SVarId(6), SVarId(11), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12)], ty: Void, reg: 17, data: None, sbt_hash: 0 } =>
+	// [13]: ScheduleVar { op: TraceRay { payload_count: 5 }, deps: [SVarId(0), SVarId(1), SVarId(4), SVarId(5), SVarId(6), SVarId(6), SVarId(6), SVarId(8), SVarId(9), SVarId(10), SVarId(6), SVarId(11), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12), SVarId(12)], ty: Void, data: None, sbt_hash: 0 } =>
 	ld.const.u64 %rd0, [params+48];
 	.reg.u32 %u17_out_<32>;
 	@!%p5 bra l_masked_17;
@@ -166,21 +166,21 @@ call (
 
 l_masked_17:
 
-	// [14]: ScheduleVar { op: Extract { offset: 3 }, deps: [SVarId(13)], ty: U32, reg: 18, data: None, sbt_hash: 0 } =>
+	// [14]: ScheduleVar { op: Extract { offset: 3 }, deps: [SVarId(13)], ty: U32, data: None, sbt_hash: 0 } =>
 	mov.b32 %r18, %u17_out_3;
 
-	// [15]: ScheduleVar { op: Bitcast, deps: [SVarId(14)], ty: F32, reg: 19, data: None, sbt_hash: 0 } =>
+	// [15]: ScheduleVar { op: Bitcast, deps: [SVarId(14)], ty: F32, data: None, sbt_hash: 0 } =>
 	mov.b32 %f19, %r18;
 
-	// [16]: ScheduleVar { op: Data, deps: [], ty: F32, reg: 20, data: Buffer(4), sbt_hash: 0 } =>
+	// [16]: ScheduleVar { op: Data, deps: [], ty: F32, data: Buffer(4), sbt_hash: 0 } =>
 
-	// [17]: ScheduleVar { op: Extract { offset: 0 }, deps: [SVarId(13)], ty: U32, reg: 21, data: None, sbt_hash: 0 } =>
+	// [17]: ScheduleVar { op: Extract { offset: 0 }, deps: [SVarId(13)], ty: U32, data: None, sbt_hash: 0 } =>
 	mov.b32 %r21, %u17_out_0;
 
-	// [18]: ScheduleVar { op: Cast, deps: [SVarId(17)], ty: Bool, reg: 22, data: None, sbt_hash: 0 } =>
+	// [18]: ScheduleVar { op: Cast, deps: [SVarId(17)], ty: Bool, data: None, sbt_hash: 0 } =>
 	setp.ne.u32 %p22, %r21, 0;
 
-	// [19]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(15), SVarId(16), SVarId(3), SVarId(18)], ty: Void, reg: 23, data: None, sbt_hash: 0 } =>
+	// [19]: ScheduleVar { op: Scatter { op: None }, deps: [SVarId(15), SVarId(16), SVarId(3), SVarId(18)], ty: Void, data: None, sbt_hash: 0 } =>
 	@!%p22 bra l_23_done;
 
 	ld.const.u64 %rd0, [params+40];

@@ -2,6 +2,14 @@ use crate::schedule::{Env, SVarId, ScheduleIr, ScheduleVar};
 use crate::trace::VarType;
 use crate::var::{Op, ReduceOp};
 
+use super::cuda;
+
+pub const FIRST_REGISTER: usize = 4;
+
+pub fn register_id(id: SVarId) -> usize {
+    id.0 + FIRST_REGISTER
+}
+
 // Returns the register prefix for this variable
 pub fn prefix(ty: &VarType) -> &'static str {
     match ty {
@@ -71,7 +79,7 @@ fn reduce_op_name(op: ReduceOp) -> &'static str {
 pub struct Reg<'a>(pub SVarId, pub &'a ScheduleVar);
 impl<'a> std::fmt::Display for Reg<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", prefix(&self.1.ty), self.1.reg)
+        write!(f, "{}{}", prefix(&self.1.ty), register_id(self.0))
     }
 }
 
@@ -84,7 +92,7 @@ pub fn assemble_entry(
     let reg = |id| Reg(id, ir.var(id));
 
     let n_params = 1 + env.buffers().len() + env.textures().len(); // Add 1 for size
-    let n_regs = ir.n_regs();
+    let n_regs = ir.n_vars() + FIRST_REGISTER;
 
     /* Special registers:
          %r0   :  Index
@@ -196,7 +204,6 @@ pub fn assemble_var(
     params_type: &'static str,
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
-    let ridx = |id| ir.var(id).reg;
 
     let var = ir.var(vid);
     writeln!(asm, "")?;
@@ -992,7 +999,7 @@ pub fn assemble_var(
 
             // TODO: better buffer loading ( dont use as_ptr and get ptr from src in here).
             if !unmasked {
-                writeln!(asm, "\t@!{} bra l_{}_masked;", reg(mask), ridx(vid))?;
+                writeln!(asm, "\t@!{} bra l_{}_masked;", reg(mask), register_id(vid))?;
             }
 
             // Load buffer ptr:
@@ -1047,7 +1054,7 @@ pub fn assemble_var(
                         l_{0}_masked:\n\
                             mov.{1} {2}, 0;\n\n\
                         l_{0}_done:\n",
-                    ridx(vid),
+                    register_id(vid),
                     tyname_bin(&var.ty),
                     reg(vid),
                 )?;
@@ -1066,7 +1073,7 @@ pub fn assemble_var(
             let is_bool = ir.var(src).ty.is_bool();
 
             if !unmasked {
-                writeln!(asm, "\t@!{} bra l_{}_done;\n", reg(mask), ridx(vid))?;
+                writeln!(asm, "\t@!{} bra l_{}_done;\n", reg(mask), register_id(vid))?;
             }
 
             let param_offset = (dst.data.buffer().unwrap() + buf_offset) * 8;
@@ -1115,7 +1122,7 @@ pub fn assemble_var(
             }
 
             if !unmasked {
-                writeln!(asm, "\tl_{}_done:", ridx(vid))?;
+                writeln!(asm, "\tl_{}_done:", register_id(vid))?;
             }
         }
         Op::Idx => {
