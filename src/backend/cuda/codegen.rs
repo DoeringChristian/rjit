@@ -203,7 +203,6 @@ pub fn assemble_var(
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
     let dep = |id, dep_idx: usize| ir.var(id).deps[dep_idx];
-    let depreg = |id, dep_idx: usize| reg(dep(id, dep_idx));
 
     let var = ir.var(vid);
     writeln!(asm, "")?;
