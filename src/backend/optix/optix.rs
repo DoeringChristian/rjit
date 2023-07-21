@@ -278,8 +278,6 @@ impl Kernel {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        dbg!(&hit_groups);
-
         let pipeline = optix_core::Pipeline::create(
             &device,
             &pco,

@@ -774,7 +774,7 @@ impl VarRef {
         tmax: &Self,
         t: &Self,
         vis_mask: Option<&Self>,
-        flags: Option<&Self>,
+        ray_flags: Option<&Self>,
         sbt_offset: Option<&Self>,
         sbt_stride: Option<&Self>,
         miss_sbt: Option<&Self>,
@@ -783,7 +783,7 @@ impl VarRef {
         let null = self.ir.literal(0u32)?;
         let mask: Self = mask.cloned().unwrap_or(self.ir.literal(true)?);
         let vis_mask = vis_mask.cloned().unwrap_or(self.ir.literal(255u32)?);
-        let flags = flags.cloned().unwrap_or(null.clone());
+        let ray_flags = ray_flags.cloned().unwrap_or(null.clone());
         let sbt_offset = sbt_offset.cloned().unwrap_or(null.clone());
         let sbt_stride = sbt_stride.cloned().unwrap_or(null.clone());
         let miss_sbt = miss_sbt.cloned().unwrap_or(null.clone());
@@ -822,7 +822,7 @@ impl VarRef {
                 tmax.id(),
                 t.id(),
                 vis_mask.id(),
-                flags.id(),
+                ray_flags.id(),
                 sbt_offset.id(),
                 sbt_stride.id(),
                 miss_sbt.id(),
