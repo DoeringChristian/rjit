@@ -64,39 +64,44 @@ pub struct CompileOptions {
     pub num_payload_values: i32,
 }
 
+#[derive(Debug)]
 pub enum GeometryDesc {
     Triangles {
         vertices: Arc<dyn Buffer>,
         indices: Arc<dyn Buffer>,
     },
 }
+#[derive(Debug)]
 pub struct InstanceDesc {
     pub geometry: usize,
     pub hit_goup: u32,
     pub transform: [f32; 12],
 }
+#[derive(Debug)]
 pub struct AccelDesc<'a> {
     pub sbt: SBTDesc<'a>,
     pub geometries: &'a [GeometryDesc],
     pub instances: &'a [InstanceDesc],
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct HitGroupDesc<'a> {
     pub closest_hit: ModuleDesc<'a>,
     pub any_hit: Option<ModuleDesc<'a>>,
     pub intersection: Option<ModuleDesc<'a>>,
 }
+#[derive(Debug)]
 pub struct MissGroupDesc<'a> {
     pub miss: ModuleDesc<'a>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ModuleDesc<'a> {
     pub asm: &'a str,
     pub entry_point: &'a str,
 }
 
+#[derive(Debug)]
 pub struct SBTDesc<'a> {
     pub hit_groups: &'a [HitGroupDesc<'a>],
     pub miss_groups: &'a [MissGroupDesc<'a>],

@@ -706,6 +706,145 @@ fn trace_ray_multi() -> Result<()> {
     Ok(())
 }
 #[test]
+fn trace_ray_hit_group() -> Result<()> {
+    let ir = Trace::default();
+    ir.set_backend(["optix"])?;
+    // pretty_env_logger::init();
+
+    let miss_and_closesthit_ptx = r##"
+.version 8.0
+.target sm_86
+.address_size 64
+
+.entry __miss__ms() {
+	.reg .b32 %r<6>;
+	mov.b32 %r0, 0;
+	mov.b32 %r1, 0;
+        
+	call _optix_set_payload, (%r0, %r1);
+	ret;
+}
+
+.entry __closesthit__ch1() {
+	.reg .b32 %i<5>;
+	.reg .b32 %v<5>;
+	mov.b32 %i0, 0;
+	mov.b32 %i1, 1;
+	mov.b32 %i2, 2;
+	mov.b32 %i3, 3;
+	mov.b32 %i4, 4;
+
+        mov.b32 %v0, 1;
+	call _optix_set_payload, (%i0, %v0);
+        
+	ret;
+}
+
+.entry __closesthit__ch2() {
+	.reg .b32 %i<5>;
+	.reg .b32 %v<5>;
+	mov.b32 %i0, 0;
+	mov.b32 %i1, 1;
+	mov.b32 %i2, 2;
+	mov.b32 %i3, 3;
+	mov.b32 %i4, 4;
+
+        mov.b32 %v0, 2;
+	call _optix_set_payload, (%i0, %v0);
+        
+	ret;
+}
+"##;
+    let indices0 = ir.array(&[0u32, 1, 2])?;
+    let vertices0 = ir.array(&[1.0f32, 0., 1., 0., 1., 1., 0., 0., 1.])?;
+    let indices1 = ir.array(&[0u32, 1, 2])?;
+    let vertices1 = ir.array(&[1.0f32, 0., 1., 0., 1., 1., 1., 1., 1.])?;
+
+    let desc = AccelDesc {
+        sbt: crate::SBTDesc {
+            hit_groups: &[
+                HitGroupDesc {
+                    closest_hit: crate::ModuleDesc {
+                        asm: miss_and_closesthit_ptx,
+                        entry_point: "__closesthit__ch1",
+                    },
+                    ..Default::default()
+                },
+                HitGroupDesc {
+                    closest_hit: crate::ModuleDesc {
+                        asm: miss_and_closesthit_ptx,
+                        entry_point: "__closesthit__ch2",
+                    },
+                    ..Default::default()
+                },
+            ],
+            miss_groups: &[MissGroupDesc {
+                miss: crate::ModuleDesc {
+                    asm: miss_and_closesthit_ptx,
+                    entry_point: "__miss__ms",
+                },
+            }],
+        },
+        geometries: &[
+            GeometryDesc::Triangles {
+                vertices: &vertices0,
+                indices: &indices0,
+            },
+            GeometryDesc::Triangles {
+                vertices: &vertices1,
+                indices: &indices1,
+            },
+        ],
+        instances: &[
+            InstanceDesc {
+                hit_group: 0,
+                geometry: 0,
+                transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
+            },
+            InstanceDesc {
+                hit_group: 1,
+                geometry: 1,
+                transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
+            },
+        ],
+    };
+    let accel = ir.accel(desc)?;
+
+    let payload = accel.trace_ray(
+        &[&ir.literal(0u32)?],
+        [
+            // &ir.array(&[0.5f32, 0.5])?,
+            &ir.literal(0.5f32)?,
+            &ir.literal(0.5f32)?,
+            &ir.literal(0.0f32)?,
+        ],
+        [
+            &ir.array(&[-0.2f32, 0.2])?,
+            &ir.array(&[-0.2f32, 0.2])?,
+            &ir.literal(1f32)?,
+            // &ir.array(&[1.0f32, 1.])?,
+        ],
+        &ir.literal(0.001f32)?,
+        &ir.literal(1000.0f32)?,
+        &ir.literal(0.0f32)?,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )?;
+
+    let hit_id = payload[0].cast(&VarType::U32)?;
+    hit_id.schedule();
+
+    ir.eval()?;
+
+    dbg!(hit_id.to_host::<u32>()?);
+
+    Ok(())
+}
+#[test]
 fn sized_literal() -> Result<()> {
     let ir = Trace::default();
     ir.set_backend(["optix"])?;

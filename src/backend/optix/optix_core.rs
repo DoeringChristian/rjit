@@ -67,13 +67,19 @@ pub struct InternalDevice {
     instance: Arc<Instance>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Device(Arc<InternalDevice>);
 impl Deref for Device {
     type Target = Arc<InternalDevice>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Debug for Device {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OptiXDevice({})", self.cuda_device().info().name)
     }
 }
 
@@ -473,7 +479,7 @@ impl Pipeline {
                 device
                     .cuda_device
                     .ctx()
-                    .cuMemAlloc_v2(&mut record, OPTIX_SBT_RECORD_HEADER_SIZE)
+                    .cuMemAlloc_v2(&mut record, header.len())
                     .check()?;
 
                 for (i, group) in groups.iter().enumerate() {
@@ -489,11 +495,7 @@ impl Pipeline {
                 device
                     .cuda_device
                     .ctx()
-                    .cuMemcpyHtoD_v2(
-                        record,
-                        header.as_ptr() as *const _,
-                        OPTIX_SBT_RECORD_HEADER_SIZE,
-                    )
+                    .cuMemcpyHtoD_v2(record, header.as_ptr() as *const _, header.len())
                     .check()?;
                 drop(header);
                 Ok(record)

@@ -68,6 +68,11 @@ pub struct DeviceInfo {
     pub name: String,
 }
 
+impl Debug for InternalDevice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CUDADevice({})", self.info.name)
+    }
+}
 pub struct InternalDevice {
     id: i32,
     ctx: CUcontext,
@@ -75,26 +80,26 @@ pub struct InternalDevice {
     info: DeviceInfo,
 }
 
-impl Debug for InternalDevice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Device")
-            .field("id", &self.id)
-            // .field("ctx", &self.ctx)
-            .field("instance", &self.instance)
-            .field("pci_bus_id", &self.info.pci_bus_id)
-            .field("pci_dom_id", &self.info.pci_dom_id)
-            .field("pci_dev_id", &self.info.pci_dev_id)
-            .field("num_sm", &self.info.num_sm)
-            .field("unified_addr", &self.info.unified_addr)
-            .field("shared_memory_bytes", &self.info.shared_memory_bytes)
-            .field("cc_minor", &self.info.cc_minor)
-            .field("cc_major", &self.info.cc_major)
-            .field("memory_pool", &self.info.memory_pool)
-            .field("mem_total", &self.info.mem_total)
-            .field("name", &self.info.name)
-            .finish()
-    }
-}
+// impl Debug for InternalDevice {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("Device")
+//             .field("id", &self.id)
+//             // .field("ctx", &self.ctx)
+//             .field("instance", &self.instance)
+//             .field("pci_bus_id", &self.info.pci_bus_id)
+//             .field("pci_dom_id", &self.info.pci_dom_id)
+//             .field("pci_dev_id", &self.info.pci_dev_id)
+//             .field("num_sm", &self.info.num_sm)
+//             .field("unified_addr", &self.info.unified_addr)
+//             .field("shared_memory_bytes", &self.info.shared_memory_bytes)
+//             .field("cc_minor", &self.info.cc_minor)
+//             .field("cc_major", &self.info.cc_major)
+//             .field("memory_pool", &self.info.memory_pool)
+//             .field("mem_total", &self.info.mem_total)
+//             .field("name", &self.info.name)
+//             .finish()
+//     }
+// }
 
 impl InternalDevice {
     pub fn new(instance: &Arc<Instance>, id: i32) -> Result<Self, Error> {
@@ -241,13 +246,18 @@ pub struct Device {
     internal: Arc<InternalDevice>,
     buffer_pool: Arc<Mutex<HashPool<Buffer>>>,
 }
-unsafe impl Sync for Device {}
-unsafe impl Send for Device {}
 impl Debug for Device {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.internal)
+        write!(f, "CUDADevice({})", self.info().name)
     }
 }
+unsafe impl Sync for Device {}
+unsafe impl Send for Device {}
+// impl Debug for Device {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{:?}", self.internal)
+//     }
+// }
 
 impl Device {
     pub fn create(instance: &Arc<Instance>, id: i32) -> Result<Self, Error> {

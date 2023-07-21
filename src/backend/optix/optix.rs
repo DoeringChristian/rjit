@@ -178,8 +178,6 @@ impl Kernel {
         ir: &ScheduleIr,
         env: &Env,
     ) -> Result<Self> {
-        env.accels().iter();
-
         let entry_point = "__raygen__cujit";
         // Assemble
         let mut asm = String::new();
@@ -279,6 +277,8 @@ impl Kernel {
                 )?)
             })
             .collect::<Result<Vec<_>>>()?;
+
+        dbg!(&hit_groups);
 
         let pipeline = optix_core::Pipeline::create(
             &device,
@@ -495,15 +495,13 @@ impl Accel {
             .map(|(i, inst)| OptixInstance {
                 transform: inst.transform,
                 instanceId: i as _,
-                sbtOffset: 0,
+                sbtOffset: inst.hit_goup,
                 visibilityMask: 255,
                 flags: OptixInstanceFlags::OPTIX_INSTANCE_FLAG_DISABLE_TRIANGLE_FACE_CULLING as _,
                 traversableHandle: blaccels[inst.geometry].0,
                 ..Default::default()
             })
             .collect::<Vec<_>>();
-
-        // dbg!(&instances);
 
         let instance_buf = unsafe {
             device
