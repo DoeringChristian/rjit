@@ -76,8 +76,9 @@ impl DataIdx {
 #[derive(Debug, Default, Hash, Clone, PartialEq, Eq)]
 pub struct ScheduleVar {
     pub op: Op,
-    pub deps: SmallVec<[SVarId; 4]>,
     pub ty: VarType,
+
+    pub deps: (usize, usize),
 
     pub data: DataIdx,
 
@@ -153,6 +154,7 @@ impl Env {
 #[derive(Debug, Default)]
 pub struct ScheduleIr {
     vars: Vec<ScheduleVar>,
+    deps: Vec<SVarId>,
 
     n_payloads: usize,
 
@@ -181,10 +183,23 @@ impl ScheduleIr {
     pub fn n_vars(&self) -> usize {
         self.vars.len()
     }
-    fn push_var(&mut self, var: ScheduleVar) -> SVarId {
-        // We can reuse variables if they have no dependencies
-        let has_deps = var.deps.len() > 0;
-        if !has_deps {
+    pub fn deps(&self, id: SVarId) -> &[SVarId] {
+        let (deps_start, deps_end) = self.var(id).deps;
+        &self.deps[deps_start..deps_end]
+    }
+    pub fn dep(&self, id: SVarId, idx: usize) -> SVarId {
+        let (deps_start, deps_end) = self.var(id).deps;
+        self.deps[deps_start..deps_end][idx]
+    }
+    fn push_var(&mut self, mut var: ScheduleVar, deps: impl IntoIterator<Item = SVarId>) -> SVarId {
+        let deps = deps.into_iter();
+        let dep_start = self.deps.len();
+        self.deps.extend(deps);
+        let dep_end = self.deps.len();
+        var.deps = (dep_start, dep_end);
+
+        if dep_end - dep_start == 0 {
+            // We can reuse variables if they have no dependencies
             if self.independent.contains_key(&var) {
                 *self.independent.get(&var).unwrap()
             } else {
@@ -211,27 +226,32 @@ impl ScheduleIr {
 
             // Fake scatter
             let dst = self.collect_data(env, ir, *id, true);
-            let idx = self.push_var(ScheduleVar {
-                op: Op::Idx,
-                ty: VarType::U32,
-                ..Default::default()
-            });
-            let mask = self.push_var(ScheduleVar {
-                op: Op::Literal,
-                ty: VarType::Bool,
-                data: DataIdx::Literal(1),
-                ..Default::default()
-            });
+            let idx = self.push_var(
+                ScheduleVar {
+                    op: Op::Idx,
+                    ty: VarType::U32,
+                    ..Default::default()
+                },
+                [],
+            );
+            let mask = self.push_var(
+                ScheduleVar {
+                    op: Op::Literal,
+                    ty: VarType::Bool,
+                    data: DataIdx::Literal(1),
+                    ..Default::default()
+                },
+                [],
+            );
 
-            self.push_var(ScheduleVar {
-                op: Op::Scatter { op: ReduceOp::None },
-                deps: smallvec![
-                    sv_id, // src
-                    dst, idx, mask,
-                ],
-                ty: var.ty.clone(),
-                ..Default::default()
-            });
+            self.push_var(
+                ScheduleVar {
+                    op: Op::Scatter { op: ReduceOp::None },
+                    ty: var.ty.clone(),
+                    ..Default::default()
+                },
+                [sv_id, dst, idx, mask],
+            );
         }
     }
     ///
@@ -247,100 +267,165 @@ impl ScheduleIr {
 
         let var = ir.var(id);
 
-        let mut sv = ScheduleVar {
-            op: var.op,
-            ty: var.ty.clone(),
-            deps: smallvec![],
-            ..Default::default()
-        };
+        // let mut sv = ScheduleVar {
+        //     op: var.op,
+        //     ty: var.ty.clone(),
+        //     ..Default::default()
+        // };
 
         // Collect dependencies
 
-        match var.op {
+        let svid = match var.op {
             Op::Data => {
                 let bv = self.collect_data(env, ir, id, false);
                 // Fake gather
-                sv.op = Op::Gather;
                 let idx = if var.size > 1 {
-                    self.push_var(ScheduleVar {
-                        op: Op::Idx,
-                        ty: VarType::U32,
-                        ..Default::default()
-                    })
+                    self.push_var(
+                        ScheduleVar {
+                            op: Op::Idx,
+                            ty: VarType::U32,
+                            ..Default::default()
+                        },
+                        [],
+                    )
                 } else {
-                    self.push_var(ScheduleVar {
-                        op: Op::Literal,
-                        ty: VarType::U32,
-                        data: DataIdx::Literal(0),
-                        ..Default::default()
-                    })
+                    self.push_var(
+                        ScheduleVar {
+                            op: Op::Literal,
+                            ty: VarType::U32,
+                            data: DataIdx::Literal(0),
+                            ..Default::default()
+                        },
+                        [],
+                    )
                 };
-                let mask = self.push_var(ScheduleVar {
-                    op: Op::Literal,
-                    ty: VarType::Bool,
-                    data: DataIdx::Literal(1),
-                    ..Default::default()
-                });
-                sv.deps = smallvec![
-                    bv, idx,  // index
-                    mask, // mask
-                ];
-                sv.data = env.push_buffer(var.data.buffer().unwrap(), false);
+                let mask = self.push_var(
+                    ScheduleVar {
+                        op: Op::Literal,
+                        ty: VarType::Bool,
+                        data: DataIdx::Literal(1),
+                        ..Default::default()
+                    },
+                    [],
+                );
+                self.push_var(
+                    ScheduleVar {
+                        op: Op::Gather,
+                        ty: var.ty.clone(),
+                        ..Default::default()
+                    },
+                    [bv, idx, mask],
+                )
             }
             Op::Literal => {
                 // TODO: cannot evaluate a literal (maybe neccesarry for tensors)
                 // sv.param_offset = self.push_param(var.literal);
                 if var.opaque {
-                    sv.data = env.push_opaque(var.data.literal().unwrap());
+                    self.push_var(
+                        ScheduleVar {
+                            op: Op::Literal,
+                            ty: var.ty.clone(),
+                            data: env.push_opaque(var.data.literal().unwrap()),
+                            ..Default::default()
+                        },
+                        [],
+                    )
                 } else {
-                    sv.data = DataIdx::Literal(var.data.literal().unwrap());
+                    self.push_var(
+                        ScheduleVar {
+                            op: Op::Literal,
+                            ty: var.ty.clone(),
+                            data: DataIdx::Literal(var.data.literal().unwrap()),
+                            ..Default::default()
+                        },
+                        [],
+                    )
                 }
             }
             Op::Gather => {
-                sv.deps = smallvec![
-                    self.collect_data(env, ir, var.deps[0], false),
-                    self.collect(env, ir, var.deps[1]), // index
-                    self.collect(env, ir, var.deps[2])  // mask
-                ];
+                let src = self.collect_data(env, ir, var.deps[0], false);
+                let index = self.collect(env, ir, var.deps[1]);
+                let mask = self.collect(env, ir, var.deps[2]);
+                self.push_var(
+                    ScheduleVar {
+                        op: Op::Gather,
+                        ty: var.ty.clone(),
+                        ..Default::default()
+                    },
+                    [src, index, mask],
+                )
             }
             Op::Scatter { .. } => {
-                sv.deps = smallvec![
-                    self.collect(env, ir, var.deps[0]), // src
-                    self.collect_data(env, ir, var.deps[1], true),
-                    self.collect(env, ir, var.deps[2]), // index
-                    self.collect(env, ir, var.deps[3])  // mask
-                ];
+                let src = self.collect(env, ir, var.deps[0]);
+                let dst = self.collect_data(env, ir, var.deps[1], true);
+                let index = self.collect(env, ir, var.deps[2]);
+                let mask = self.collect(env, ir, var.deps[3]);
+                self.push_var(
+                    ScheduleVar {
+                        op: var.op,
+                        ty: var.ty.clone(),
+                        ..Default::default()
+                    },
+                    [src, dst, index, mask],
+                )
             }
             Op::TexLookup { dim } => {
-                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0], false),];
-                sv.deps.extend(
-                    var.deps[1..(dim as usize + 1)]
-                        .iter()
-                        .map(|dep| self.collect(env, ir, *dep)),
-                );
+                let deps = [self.collect_data(env, ir, var.deps[0], false)]
+                    .into_iter()
+                    .chain(
+                        var.deps[1..(dim as usize + 1)]
+                            .iter()
+                            .map(|dep| self.collect(env, ir, *dep)),
+                    )
+                    .collect::<Vec<_>>();
+                self.push_var(
+                    ScheduleVar {
+                        op: var.op,
+                        ty: var.ty.clone(),
+                        ..Default::default()
+                    },
+                    deps,
+                )
             }
             Op::TraceRay { payload_count } => {
                 self.n_payloads = self.n_payloads.max(payload_count);
-                sv.deps = smallvec![self.collect_data(env, ir, var.deps[0], false)];
-                sv.deps.extend(
-                    var.deps[1..(16 + payload_count)]
-                        .iter()
-                        .map(|dep| self.collect(env, ir, *dep)),
-                );
+                let deps = [self.collect_data(env, ir, var.deps[0], false)]
+                    .into_iter()
+                    .chain(
+                        var.deps[1..(16 + payload_count)]
+                            .iter()
+                            .map(|dep| self.collect(env, ir, *dep)),
+                    )
+                    .collect::<Vec<_>>();
+
+                self.push_var(
+                    ScheduleVar {
+                        op: var.op,
+                        ty: var.ty.clone(),
+                        ..Default::default()
+                    },
+                    deps,
+                )
             }
             Op::Loop {} => {
                 todo!()
             }
             _ => {
-                sv.deps = var
+                let deps = var
                     .deps
                     .iter()
                     .map(|id| self.collect(env, ir, *id))
                     .collect::<SmallVec<[_; 4]>>();
+                self.push_var(
+                    ScheduleVar {
+                        op: var.op,
+                        ty: var.ty.clone(),
+                        ..Default::default()
+                    },
+                    deps,
+                )
             }
-        }
-
-        let svid = self.push_var(sv);
+        };
 
         self.visited.insert(id, svid);
 
@@ -378,13 +463,16 @@ impl ScheduleIr {
             };
 
             let sbt_hash = var.data.accel().map(|accel| accel.sbt_hash()).unwrap_or(0);
-            let svid = self.push_var(ScheduleVar {
-                op: Op::Data,
-                ty: var.ty.clone(),
-                data,
-                sbt_hash,
-                ..Default::default()
-            });
+            let svid = self.push_var(
+                ScheduleVar {
+                    op: Op::Data,
+                    ty: var.ty.clone(),
+                    data,
+                    sbt_hash,
+                    ..Default::default()
+                },
+                [],
+            );
             self.visited.insert(id, svid);
             svid
         }
@@ -392,6 +480,7 @@ impl ScheduleIr {
     pub fn internal_hash(&self) -> u128 {
         let mut hasher = fasthash::murmur3::Hasher128_x64::default();
         self.vars.hash(&mut hasher);
+        self.deps.hash(&mut hasher);
 
         hasher.finish() as _
     }

@@ -14,13 +14,14 @@ pub fn assemble_var_rt(
     params_type: &'static str,
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
+    let dep = |id, dep_idx: usize| ir.dep(id, dep_idx);
 
     let var = ir.var(vid);
     match var.op {
         Op::TraceRay { payload_count } => {
             writeln!(asm, "")?;
             writeln!(asm, "\t// [{}]: {:?} =>", vid, var)?;
-            let handle_offset = (ir.var(var.deps[0]).data.accel().unwrap() + accel_offset) * 8;
+            let handle_offset = (ir.var(dep(vid, 0)).data.accel().unwrap() + accel_offset) * 8;
 
             writeln!(
                 asm,
@@ -28,7 +29,7 @@ pub fn assemble_var_rt(
                 handle_offset
             )?;
 
-            let mask = var.deps[1];
+            let mask = dep(vid, 1);
             // let pipeline = ir.var(var.deps[1]);
             // let sbt = ir.var(var.deps[2]);
 
@@ -66,23 +67,23 @@ pub fn assemble_var_rt(
 
             writeln!(asm, "{}_payload_type, ", reg(vid))?;
             writeln!(asm, "%rd0, ")?;
-            writeln!(asm, "{}, ", reg(var.deps[2]))?;
-            writeln!(asm, "{}, ", reg(var.deps[3]))?;
-            writeln!(asm, "{}, ", reg(var.deps[4]))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 2)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 3)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 4)))?;
 
-            writeln!(asm, "{}, ", reg(var.deps[5]))?;
-            writeln!(asm, "{}, ", reg(var.deps[6]))?;
-            writeln!(asm, "{}, ", reg(var.deps[7]))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 5)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 6)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 7)))?;
 
-            writeln!(asm, "{}, ", reg(var.deps[8]))?;
-            writeln!(asm, "{}, ", reg(var.deps[9]))?;
-            writeln!(asm, "{}, ", reg(var.deps[10]))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 8)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 9)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 10)))?;
 
-            writeln!(asm, "{}, ", reg(var.deps[11]))?;
-            writeln!(asm, "{}, ", reg(var.deps[12]))?;
-            writeln!(asm, "{}, ", reg(var.deps[13]))?;
-            writeln!(asm, "{}, ", reg(var.deps[14]))?;
-            writeln!(asm, "{}, ", reg(var.deps[15]))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 11)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 12)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 13)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 14)))?;
+            writeln!(asm, "{}, ", reg(dep(vid, 15)))?;
 
             writeln!(asm, "{}_payload_count, ", reg(vid))?;
 
@@ -90,7 +91,7 @@ pub fn assemble_var_rt(
                 writeln!(
                     asm,
                     "{}{}",
-                    reg(var.deps[16 + i]),
+                    reg(dep(vid, 16 + i)),
                     if i + 1 < 32 { "," } else { "" }
                 )?;
             }
