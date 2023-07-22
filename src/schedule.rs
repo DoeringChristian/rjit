@@ -10,7 +10,8 @@ use crate::trace::Internal;
 use crate::var::{self, Op, VarId, VarType};
 use crate::ReduceOp;
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(C)]
 pub struct SVarId(pub usize);
 impl std::fmt::Display for SVarId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -19,49 +20,49 @@ impl std::fmt::Display for SVarId {
 }
 
 #[derive(Debug, Default, Hash, Clone, Copy, PartialEq, Eq)]
-pub enum DataIdx {
+pub enum Data {
     #[default]
     None,
-    Buffer(u64),
-    Texture(u64),
-    Accel(u64),
+    BufferIdx(u64),
+    TextureIdx(u64),
+    AccelIdx(u64),
     Literal(u64),
-    Opaque(u64),
+    OpaqueIdx(u64),
 }
-impl DataIdx {
+impl Data {
     pub fn is_none(&self) -> bool {
         return match self {
-            DataIdx::None => true,
+            Data::None => true,
             _ => false,
         };
     }
     pub fn buffer(&self) -> Option<u64> {
         match self {
-            DataIdx::Buffer(id) => Some(*id),
+            Data::BufferIdx(id) => Some(*id),
             _ => None,
         }
     }
     pub fn accel(&self) -> Option<u64> {
         match self {
-            DataIdx::Accel(id) => Some(*id),
+            Data::AccelIdx(id) => Some(*id),
             _ => None,
         }
     }
     pub fn texture(&self) -> Option<u64> {
         match self {
-            DataIdx::Texture(id) => Some(*id),
+            Data::TextureIdx(id) => Some(*id),
             _ => None,
         }
     }
     pub fn literal(&self) -> Option<u64> {
         match self {
-            DataIdx::Literal(lit) => Some(*lit),
+            Data::Literal(lit) => Some(*lit),
             _ => None,
         }
     }
     pub fn opaque(&self) -> Option<u64> {
         match self {
-            DataIdx::Opaque(id) => Some(*id),
+            Data::OpaqueIdx(id) => Some(*id),
             _ => None,
         }
     }
@@ -73,14 +74,17 @@ impl DataIdx {
 ///
 /// Variables are densly stored in the ScheduleIr, simplifying the compilation.
 ///
-#[derive(Debug, Default, Hash, Clone, PartialEq, Eq)]
+// TODO: byte hash
+//#[derive(bytemuck::NoUninit, bytemuck::ByteHash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
 pub struct ScheduleVar {
     pub op: Op,
     pub ty: VarType,
 
     pub deps: (usize, usize),
 
-    pub data: DataIdx,
+    pub data: Data,
 
     // We have to build a new kernel when we get new hit/miss shaders.
     pub sbt_hash: u64,
@@ -107,28 +111,28 @@ pub struct Env {
 }
 
 impl Env {
-    fn push_opaque(&mut self, literal: u64) -> DataIdx {
+    fn push_opaque(&mut self, literal: u64) -> Data {
         let idx = self.opaques.len();
         self.opaques.push(literal);
-        DataIdx::Opaque(idx as _)
+        Data::OpaqueIdx(idx as _)
     }
-    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>, write: bool) -> DataIdx {
+    pub fn push_buffer(&mut self, buf: &Arc<dyn Buffer>, write: bool) -> Data {
         let idx = self.buffers.len();
         self.buffers.push(BufferAccess {
             buffer: buf.clone(),
             write,
         });
-        DataIdx::Buffer(idx as _)
+        Data::BufferIdx(idx as _)
     }
-    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> DataIdx {
+    fn push_texture(&mut self, tex: &Arc<dyn Texture>) -> Data {
         let idx = self.textures.len();
         self.textures.push(tex.clone());
-        DataIdx::Texture(idx as _)
+        Data::TextureIdx(idx as _)
     }
-    fn push_accel(&mut self, accel: &Arc<dyn Accel>) -> DataIdx {
+    fn push_accel(&mut self, accel: &Arc<dyn Accel>) -> Data {
         let idx = self.accels.len();
         self.accels.push(accel.clone());
-        DataIdx::Accel(idx as _)
+        Data::AccelIdx(idx as _)
     }
     pub fn buffers(&self) -> &[BufferAccess] {
         &self.buffers
@@ -238,7 +242,7 @@ impl ScheduleIr {
                 ScheduleVar {
                     op: Op::Literal,
                     ty: VarType::Bool,
-                    data: DataIdx::Literal(1),
+                    data: Data::Literal(1),
                     ..Default::default()
                 },
                 [],
@@ -293,7 +297,7 @@ impl ScheduleIr {
                         ScheduleVar {
                             op: Op::Literal,
                             ty: VarType::U32,
-                            data: DataIdx::Literal(0),
+                            data: Data::Literal(0),
                             ..Default::default()
                         },
                         [],
@@ -303,7 +307,7 @@ impl ScheduleIr {
                     ScheduleVar {
                         op: Op::Literal,
                         ty: VarType::Bool,
-                        data: DataIdx::Literal(1),
+                        data: Data::Literal(1),
                         ..Default::default()
                     },
                     [],
@@ -335,7 +339,7 @@ impl ScheduleIr {
                         ScheduleVar {
                             op: Op::Literal,
                             ty: var.ty.clone(),
-                            data: DataIdx::Literal(var.data.literal().unwrap()),
+                            data: Data::Literal(var.data.literal().unwrap()),
                             ..Default::default()
                         },
                         [],
@@ -445,8 +449,8 @@ impl ScheduleIr {
             // let sv = self.var(id);
             if self.var(id).data.is_none() {
                 self.var_mut(id).data = match &var.data {
-                    var::Data::None => DataIdx::None,
-                    var::Data::Literal(_) => DataIdx::None,
+                    var::Data::None => Data::None,
+                    var::Data::Literal(_) => Data::None,
                     var::Data::Buffer(buf) => env.push_buffer(&buf, write),
                     var::Data::Texture(tex) => env.push_texture(&tex),
                     var::Data::Accel(accel) => env.push_accel(&accel),
@@ -455,8 +459,8 @@ impl ScheduleIr {
             id
         } else {
             let data = match &var.data {
-                var::Data::None => DataIdx::None,
-                var::Data::Literal(_) => DataIdx::None,
+                var::Data::None => Data::None,
+                var::Data::Literal(_) => Data::None,
                 var::Data::Buffer(buf) => env.push_buffer(&buf, write),
                 var::Data::Texture(tex) => env.push_texture(&tex),
                 var::Data::Accel(accel) => env.push_accel(&accel),

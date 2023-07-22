@@ -33,7 +33,7 @@ Kernel 18362556372383648893:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Data, ty: F32, deps: (0, 0), data: Buffer(0), sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Data, ty: F32, deps: (0, 0), data: BufferIdx(0), sbt_hash: 0 } =>
 
 	// [1]: ScheduleVar { op: Idx, ty: U32, deps: (0, 0), data: None, sbt_hash: 0 } =>
 	mov.u32 %r5, %r0;
@@ -48,7 +48,7 @@ body: // sm_86
 	mad.wide.u32 %rd3, %r5, 4, %rd0;
 	ld.global.nc.f32 %f7, [%rd3];
 
-	// [4]: ScheduleVar { op: Sin, ty: F32, deps: (3, 4), data: Buffer(1), sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: Sin, ty: F32, deps: (3, 4), data: BufferIdx(1), sbt_hash: 0 } =>
 	sin.approx.ftz.f32 %f8, %f7;
 
 	// [5]: ScheduleVar { op: Idx, ty: U32, deps: (4, 4), data: None, sbt_hash: 0 } =>

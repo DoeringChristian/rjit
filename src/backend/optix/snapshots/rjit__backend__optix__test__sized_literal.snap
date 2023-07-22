@@ -37,7 +37,7 @@ body: // sm_86
 	mov.b32 %f4, 0x0;
 
 
-	// [1]: ScheduleVar { op: Add, ty: F32, deps: (0, 2), data: Buffer(0), sbt_hash: 0 } =>
+	// [1]: ScheduleVar { op: Add, ty: F32, deps: (0, 2), data: BufferIdx(0), sbt_hash: 0 } =>
 	add.f32 %f5, %f4, %f4;
 
 	// [2]: ScheduleVar { op: Idx, ty: U32, deps: (2, 2), data: None, sbt_hash: 0 } =>

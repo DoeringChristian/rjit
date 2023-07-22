@@ -34,7 +34,7 @@ Kernel 14718505277690556811:
 	
 body: // sm_86
 
-	// [0]: ScheduleVar { op: Idx, ty: U32, deps: (0, 0), data: Buffer(0), sbt_hash: 0 } =>
+	// [0]: ScheduleVar { op: Idx, ty: U32, deps: (0, 0), data: BufferIdx(0), sbt_hash: 0 } =>
 	mov.u32 %r4, %r0;
 
 

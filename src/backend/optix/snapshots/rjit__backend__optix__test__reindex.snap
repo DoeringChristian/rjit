@@ -48,7 +48,7 @@ body: // sm_86
 	mov.pred %p7, 0x1;
 
 
-	// [4]: ScheduleVar { op: And, ty: U32, deps: (2, 4), data: Buffer(0), sbt_hash: 0 } =>
+	// [4]: ScheduleVar { op: And, ty: U32, deps: (2, 4), data: BufferIdx(0), sbt_hash: 0 } =>
 	selp.b32 %r8, %r6, 0, %p7;
 
 	// [5]: ScheduleVar { op: Idx, ty: U32, deps: (4, 4), data: None, sbt_hash: 0 } =>
