@@ -1,7 +1,7 @@
 use crate::backend::cuda;
-use crate::backend::cuda::codegen::{register_id, tyname, tyname_bin, Reg};
+use crate::backend::cuda::codegen::{register_id, Reg};
 use crate::schedule::{Env, SVarId, ScheduleIr};
-use crate::trace::{Op, VarType};
+use crate::trace::Op;
 
 pub fn assemble_var_rt(
     asm: &mut impl std::fmt::Write,

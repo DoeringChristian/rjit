@@ -122,7 +122,7 @@ impl Trace {
                     self.lock().backend = Some(backend);
                     break;
                 }
-                Err(err) => bail!("Could not initialize {name} backend with error: {err}"),
+                Err(err) => log::trace!("Could not initialize {name} backend with error: {err}"),
             }
         }
 
@@ -454,16 +454,16 @@ impl VarRef {
         );
 
         let mut dst = Vec::with_capacity(var.size);
-        unsafe { dst.set_len(var.size) };
         unsafe {
             var.data
                 .buffer()
                 .ok_or(anyhow!("Variable is not a buffer!"))?
                 .copy_to_host(std::slice::from_raw_parts_mut(
                     dst.as_mut_ptr() as *mut _,
-                    dst.len() * ty.size(),
+                    var.size * ty.size(),
                 ));
         }
+        unsafe { dst.set_len(var.size) };
         Ok(dst)
     }
 

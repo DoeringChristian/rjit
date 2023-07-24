@@ -1,16 +1,13 @@
 use anyhow::{anyhow, bail, Result};
-use resource_pool::hashpool::{HashPool, Lease};
-use resource_pool::prelude::*;
-use std::ffi::c_void;
-use std::fmt::{Debug, Write};
-use std::mem::size_of;
+use resource_pool::hashpool::Lease;
+use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
 
 use super::cuda_core::{self, Device, Event, Function, Instance, Module, Stream};
 use crate::backend::{self};
-use crate::schedule::{Env, SVarId, ScheduleIr};
+use crate::schedule::{Env, ScheduleIr};
 
 #[derive(Debug, Error)]
 pub enum Error {

@@ -1,13 +1,10 @@
-use std::borrow::BorrowMut;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::ops::Range;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
-use once_cell::sync::Lazy;
-use parking_lot::Mutex;
 
 use crate::backend::Kernel;
 use crate::schedule::{Env, ScheduleIr};
