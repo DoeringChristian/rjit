@@ -6,6 +6,8 @@ mod schedule;
 mod trace;
 mod var;
 
+pub use anyhow;
+pub use anyhow::Result;
 pub use jit::*;
 pub use trace::*;
 pub use var::*;
