@@ -76,7 +76,7 @@ impl Data {
 ///
 // TODO: byte hash
 //#[derive(bytemuck::NoUninit, bytemuck::ByteHash)]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct ScheduleVar {
     pub op: Op,

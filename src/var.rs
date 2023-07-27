@@ -85,7 +85,7 @@ pub enum Op {
 }
 
 // TODO: Vector types
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub enum VarType {
     #[default]
     Void,
