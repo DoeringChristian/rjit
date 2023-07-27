@@ -625,7 +625,7 @@ pub fn assemble_var(
             }
         }
         Op::Select => {
-            if !ir.var(dep(vid, 0)).ty.is_bool() {
+            if !ir.var(dep(vid, 1)).ty.is_bool() {
                 writeln!(
                     asm,
                     "\tselp.{} {}, {}, {}, {};",

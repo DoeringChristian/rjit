@@ -158,3 +158,23 @@ fn kernel_reuse() -> Result<()> {
 
     Ok(())
 }
+#[test]
+fn select() -> Result<()> {
+    pretty_env_logger::try_init().ok();
+    let ir = Trace::default();
+    ir.set_backend(["optix"])?;
+
+    let mask = ir.array(&[true, true, false, false])?;
+
+    let x = ir.literal::<f32>(2.)?;
+    let y = ir.literal::<f32>(3.)?;
+
+    let z = mask.select(&x, &y)?;
+    z.schedule();
+
+    ir.eval()?;
+
+    assert_eq!(z.to_host::<f32>()?, vec![3.0f32, 3., 2., 2.]);
+
+    Ok(())
+}

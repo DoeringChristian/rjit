@@ -846,9 +846,9 @@ fn trace_ray_hit_group() -> Result<()> {
 }
 #[test]
 fn trace_ray_shadowed() -> Result<()> {
+    pretty_env_logger::try_init().ok();
     let ir = Trace::default();
     ir.set_backend(["optix"])?;
-    pretty_env_logger::init();
 
     let miss_and_closesthit_ptx = r##"
 .version 8.0

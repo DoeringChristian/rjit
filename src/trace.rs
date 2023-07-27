@@ -520,7 +520,22 @@ impl VarRef {
     bop!(Shr);
 
     top!(Fma);
-    top!(Select);
+    // top!(Select);
+
+    pub fn select(&self, var_true: &VarRef, var_false: &VarRef) -> Result<VarRef> {
+        ensure!(
+            self.ty() == VarType::Bool,
+            "Mask has to be of type Bool but is of type {:?}!",
+            self.ty()
+        );
+        let info = self.ir.var_info(&[&var_false, &var_true, self])?;
+        self.ir.push_var_op(
+            Op::Select,
+            &[self, &var_false, &var_true],
+            info.ty,
+            info.size,
+        )
+    }
 
     pub fn modulo(&self, rhs: &VarRef) -> Result<VarRef> {
         let info = self.ir.var_info(&[self, &rhs])?;
