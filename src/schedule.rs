@@ -203,6 +203,8 @@ impl ScheduleIr {
         var.deps = (dep_start, dep_end);
 
         if dep_end - dep_start == 0 {
+            //for hashing set indices to 0
+            var.deps = (0, 0);
             // We can reuse variables if they have no dependencies
             if self.independent.contains_key(&var) {
                 *self.independent.get(&var).unwrap()
