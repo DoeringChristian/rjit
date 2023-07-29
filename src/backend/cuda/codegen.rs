@@ -467,7 +467,7 @@ pub fn assemble_var(
                 "\tcvt.rpi.{0}.{0} {1}, {2};\n",
                 tyname(&var.ty),
                 reg(vid),
-                dep(vid, 0),
+                reg(dep(vid, 0)),
             )?;
         }
         Op::Floor => {
@@ -476,7 +476,7 @@ pub fn assemble_var(
                 "\tcvt.rmi.{0}.{0} {1}, {2};\n",
                 tyname(&var.ty),
                 reg(vid),
-                dep(vid, 0),
+                reg(dep(vid, 0)),
             )?;
         }
         Op::Round => {
@@ -485,7 +485,7 @@ pub fn assemble_var(
                 "\tcvt.rni.{0}.{0} {1}, {2};\n",
                 tyname(&var.ty),
                 reg(vid),
-                dep(vid, 0),
+                reg(dep(vid, 0)),
             )?;
         }
         Op::Trunc => {
@@ -494,7 +494,7 @@ pub fn assemble_var(
                 "\tcvt.rzi.{0}.{0} {1}, {2};\n",
                 tyname(&var.ty),
                 reg(vid),
-                dep(vid, 0),
+                reg(dep(vid, 0)),
             )?;
         }
         Op::Eq => {
@@ -505,8 +505,8 @@ pub fn assemble_var(
                         \tnot.{0} {1}, {1};",
                     tyname(&var.ty),
                     reg(vid),
-                    dep(vid, 0),
-                    dep(vid, 1),
+                    reg(dep(vid, 0)),
+                    reg(dep(vid, 1)),
                 )?;
             } else {
                 writeln!(
