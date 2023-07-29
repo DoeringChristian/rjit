@@ -529,10 +529,10 @@ impl VarRef {
             "Mask has to be of type Bool but is of type {:?}!",
             self.ty()
         );
-        let info = self.ir.var_info(&[&var_false, &var_true, self])?;
+        let info = self.ir.var_info(&[&var_true, &var_false, self])?;
         self.ir.push_var_op(
             Op::Select,
-            &[self, &var_false, &var_true],
+            &[self, &var_true, &var_false],
             info.ty,
             info.size,
         )

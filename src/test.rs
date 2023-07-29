@@ -174,7 +174,7 @@ fn select() -> Result<()> {
 
     ir.eval()?;
 
-    assert_eq!(z.to_host::<f32>()?, vec![3.0f32, 3., 2., 2.]);
+    assert_eq!(z.to_host::<f32>()?, vec![2.0f32, 2., 3., 3.]);
 
     Ok(())
 }
