@@ -492,6 +492,7 @@ impl VarRef {
 
     uop!(Ceil);
     uop!(Floor);
+    uop!(Round);
     uop!(Trunc);
 
     uop!(Popc);
