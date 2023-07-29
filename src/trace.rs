@@ -567,7 +567,7 @@ impl VarRef {
         self.ir.eval()?;
 
         let size = shape.iter().cloned().reduce(|a, b| a * b).unwrap() * n_channels;
-        assert_eq!(self.size(), size,);
+        ensure!(self.size() == size);
 
         let texture = self
             .ir
