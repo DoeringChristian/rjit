@@ -194,7 +194,7 @@ impl Texture {
                 let mut array = std::ptr::null_mut();
                 ctx.cuArray3DCreate_v2(&mut array, &array_desc).check()?;
             } else {
-                panic!("Shape not supported!");
+                bail!("Shape not supported!");
             };
 
             let res_desc = cuda_rs::CUDA_RESOURCE_DESC {

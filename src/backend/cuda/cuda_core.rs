@@ -80,27 +80,6 @@ pub struct InternalDevice {
     info: DeviceInfo,
 }
 
-// impl Debug for InternalDevice {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_struct("Device")
-//             .field("id", &self.id)
-//             // .field("ctx", &self.ctx)
-//             .field("instance", &self.instance)
-//             .field("pci_bus_id", &self.info.pci_bus_id)
-//             .field("pci_dom_id", &self.info.pci_dom_id)
-//             .field("pci_dev_id", &self.info.pci_dev_id)
-//             .field("num_sm", &self.info.num_sm)
-//             .field("unified_addr", &self.info.unified_addr)
-//             .field("shared_memory_bytes", &self.info.shared_memory_bytes)
-//             .field("cc_minor", &self.info.cc_minor)
-//             .field("cc_major", &self.info.cc_major)
-//             .field("memory_pool", &self.info.memory_pool)
-//             .field("mem_total", &self.info.mem_total)
-//             .field("name", &self.info.name)
-//             .finish()
-//     }
-// }
-
 impl InternalDevice {
     pub fn new(instance: &Arc<Instance>, id: i32) -> Result<Self, Error> {
         unsafe {
@@ -290,6 +269,9 @@ impl Device {
         let size = round_pow2(size as _) as usize;
         self.buffer_pool.lock().try_lease(&size, self)
     }
+    pub fn create_texture(&self, desc: &TexutreDesc) -> Result<Texture, Error> {
+        Texture::create(self, desc)
+    }
 }
 
 pub struct Instance {
@@ -441,9 +423,9 @@ impl Module {
         unsafe {
             let ptx_cstring = CString::new(ptx).unwrap();
 
-            const log_size: usize = 16384;
-            let mut error_log = [0u8; log_size];
-            let mut info_log = [0u8; log_size];
+            const LOG_SIZE: usize = 16384;
+            let mut error_log = [0u8; LOG_SIZE];
+            let mut info_log = [0u8; LOG_SIZE];
 
             let mut options = [
                 cuda_rs::CUjit_option_enum::CU_JIT_OPTIMIZATION_LEVEL,
@@ -460,9 +442,9 @@ impl Module {
                 4 as *mut c_void,
                 1 as *mut c_void,
                 info_log.as_mut_ptr() as *mut c_void,
-                log_size as *mut c_void,
+                LOG_SIZE as *mut c_void,
                 error_log.as_mut_ptr() as *mut c_void,
-                log_size as *mut c_void,
+                LOG_SIZE as *mut c_void,
                 0 as *mut c_void,
                 0 as *mut c_void,
             ];
@@ -787,5 +769,141 @@ impl TryResource for Buffer {
 
     fn try_create(size: &Self::Info, device: &Self::Context) -> Result<Self, Self::Error> {
         Self::uninit(device, *size)
+    }
+}
+
+#[derive(Debug)]
+pub struct Texture {
+    device: Arc<InternalDevice>,
+    array: cuda_rs::CUarray,
+    tex: u64,
+    shape: [usize; 3],
+    dim: usize,
+    n_channels: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TexutreDesc {
+    shape: [usize; 3],
+    n_channels: u32,
+}
+
+impl Texture {
+    pub fn create(device: &Device, desc: &TexutreDesc) -> Result<Self, Error> {
+        let shape = desc.shape;
+        let n_channels = desc.n_channels;
+
+        let ctx = device.ctx();
+        unsafe {
+            let mut tex = 0;
+            let mut array = std::ptr::null_mut();
+            let dim = shape.iter().take_while(|s| **s > 0).count();
+
+            if dim == 1 || dim == 2 {
+                let array_desc = cuda_rs::CUDA_ARRAY_DESCRIPTOR {
+                    Width: shape[0],
+                    Height: if shape.len() == 1 { 1 } else { shape[1] },
+                    Format: cuda_rs::CUarray_format::CU_AD_FORMAT_FLOAT,
+                    NumChannels: n_channels as _,
+                };
+                ctx.cuArrayCreate_v2(&mut array, &array_desc).check()?;
+            } else if dim == 3 {
+                let array_desc = cuda_rs::CUDA_ARRAY3D_DESCRIPTOR {
+                    Width: shape[0],
+                    Height: shape[1],
+                    Depth: shape[2],
+                    Format: cuda_rs::CUarray_format::CU_AD_FORMAT_FLOAT,
+                    Flags: 0,
+                    NumChannels: n_channels as _,
+                };
+                let mut array = std::ptr::null_mut();
+                ctx.cuArray3DCreate_v2(&mut array, &array_desc).check()?;
+            } else {
+                unreachable!("Dim cannot be greater than 3");
+            };
+
+            let res_desc = cuda_rs::CUDA_RESOURCE_DESC {
+                resType: cuda_rs::CUresourcetype::CU_RESOURCE_TYPE_ARRAY,
+                res: cuda_rs::CUDA_RESOURCE_DESC_st__bindgen_ty_1 {
+                    array: cuda_rs::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
+                        hArray: array,
+                    },
+                },
+                flags: 0,
+            };
+            let tex_desc = cuda_rs::CUDA_TEXTURE_DESC {
+                addressMode: [cuda_rs::CUaddress_mode::CU_TR_ADDRESS_MODE_WRAP; 3],
+                filterMode: cuda_rs::CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
+                flags: 1,
+                maxAnisotropy: 1,
+                mipmapFilterMode: cuda_rs::CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
+                ..Default::default()
+            };
+            let view_desc = cuda_rs::CUDA_RESOURCE_VIEW_DESC {
+                format: if n_channels == 1 {
+                    cuda_rs::CUresourceViewFormat::CU_RES_VIEW_FORMAT_FLOAT_1X32
+                } else if n_channels == 2 {
+                    cuda_rs::CUresourceViewFormat::CU_RES_VIEW_FORMAT_FLOAT_2X32
+                } else if n_channels == 4 {
+                    cuda_rs::CUresourceViewFormat::CU_RES_VIEW_FORMAT_FLOAT_4X32
+                } else {
+                    panic!("{n_channels} number of channels is not supported!");
+                },
+                width: shape[0],
+                height: if dim >= 2 { shape[1] } else { 1 },
+                depth: if dim == 3 { shape[2] } else { 0 },
+                ..Default::default()
+            };
+            ctx.cuTexObjectCreate(&mut tex, &res_desc, &tex_desc, &view_desc)
+                .check()?;
+
+            Ok(Self {
+                device: device.internal.clone(),
+                array,
+                tex,
+                shape,
+                dim,
+                n_channels,
+            })
+        }
+    }
+    pub fn dim(&self) -> usize {
+        self.dim
+    }
+    pub fn shape(&self) -> [usize; 3] {
+        self.shape
+    }
+    pub fn n_channels(&self) -> u32 {
+        self.n_channels
+    }
+}
+
+impl Drop for Texture {
+    fn drop(&mut self) {
+        let ctx = self.device.ctx();
+        unsafe {
+            ctx.cuArrayDestroy(self.array).check().unwrap();
+            ctx.cuTexObjectDestroy(self.tex).check().unwrap();
+        }
+    }
+}
+
+impl Resource for Texture {
+    type Info = TexutreDesc;
+
+    type Context = Device;
+
+    fn create(info: &Self::Info, ctx: &Self::Context) -> Self {
+        Self::try_create(info, ctx).unwrap()
+    }
+
+    fn clear(&mut self) {}
+}
+
+impl TryResource for Texture {
+    type Error = Error;
+
+    fn try_create(info: &Self::Info, ctx: &Self::Context) -> Result<Self, Self::Error> {
+        Self::create(ctx, info)
     }
 }
