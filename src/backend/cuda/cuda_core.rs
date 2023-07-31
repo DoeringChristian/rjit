@@ -223,7 +223,7 @@ impl InternalDevice {
 #[derive(Clone)]
 pub struct Device {
     internal: Arc<InternalDevice>,
-    buffer_pool: Arc<Mutex<HashPool<Buffer>>>,
+    buffer_pool: Arc<Mutex<HashPool<BufferDesc>>>,
 }
 impl Debug for Device {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -265,9 +265,11 @@ impl Device {
         buf.copy_from_slice(slice)?;
         Ok(buf)
     }
-    pub fn lease_buffer(&self, size: usize) -> Result<Lease<Buffer>, Error> {
+    pub fn lease_buffer(&self, size: usize) -> Option<Lease<Buffer>> {
         let size = round_pow2(size as _) as usize;
-        self.buffer_pool.lock().try_lease(&size, self)
+        self.buffer_pool
+            .lock()
+            .try_lease(&BufferDesc { size }, self)
     }
     pub fn create_texture(&self, desc: &TexutreDesc) -> Result<Texture, Error> {
         Texture::create(self, desc)
@@ -753,23 +755,23 @@ fn round_pow2(mut x: u32) -> u32 {
     x
 }
 
-impl Resource for Buffer {
-    type Info = usize;
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BufferDesc {
+    size: usize,
+}
 
+impl Info for BufferDesc {
     type Context = Device;
 
-    fn create(size: &Self::Info, device: &Self::Context) -> Self {
-        Self::try_create(size, device).unwrap()
-    }
+    type Resource = Buffer;
 
-    fn clear(&mut self) {}
+    fn try_create(info: &Self, ctx: &Self::Context) -> Option<Self::Resource> {
+        Buffer::uninit(ctx, info.size).ok()
+    }
 }
-impl TryResource for Buffer {
-    type Error = Error;
 
-    fn try_create(size: &Self::Info, device: &Self::Context) -> Result<Self, Self::Error> {
-        Self::uninit(device, *size)
-    }
+impl Resource for Buffer {
+    fn clear(&mut self) {}
 }
 
 #[derive(Debug)]
@@ -783,8 +785,8 @@ pub struct Texture {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TexutreDesc {
-    pub shape: [usize; 3],
+pub struct TexutreDesc<'a> {
+    pub shape: &'a [usize],
     pub n_channels: u32,
 }
 
@@ -797,7 +799,7 @@ impl Texture {
         unsafe {
             let mut tex = 0;
             let mut array = std::ptr::null_mut();
-            let dim = shape.iter().take_while(|s| **s > 0).count();
+            let dim = shape.len();
 
             log::trace!("Creating texture of dimension {dim}.");
 
@@ -863,7 +865,11 @@ impl Texture {
                 device: device.internal.clone(),
                 array,
                 tex,
-                shape,
+                shape: [
+                    *shape.get(0).unwrap_or(&0),
+                    *shape.get(1).unwrap_or(&0),
+                    *shape.get(2).unwrap_or(&0),
+                ],
                 dim,
                 n_channels,
             })
@@ -963,22 +969,16 @@ impl Drop for Texture {
     }
 }
 
-impl Resource for Texture {
-    type Info = TexutreDesc;
-
+impl<'a> Info for TexutreDesc<'a> {
     type Context = Device;
 
-    fn create(info: &Self::Info, ctx: &Self::Context) -> Self {
-        Self::try_create(info, ctx).unwrap()
-    }
+    type Resource = Texture;
 
-    fn clear(&mut self) {}
+    fn try_create(info: &Self, ctx: &Self::Context) -> Option<Self::Resource> {
+        Texture::create(ctx, info).ok()
+    }
 }
 
-impl TryResource for Texture {
-    type Error = Error;
-
-    fn try_create(info: &Self::Info, ctx: &Self::Context) -> Result<Self, Self::Error> {
-        Self::create(ctx, info)
-    }
+impl Resource for Texture {
+    fn clear(&mut self) {}
 }

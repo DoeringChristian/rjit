@@ -109,13 +109,19 @@ impl Buffer {
     }
     pub fn uninit(backend: &Backend, size: usize) -> Result<Self> {
         Ok(Self {
-            buf: backend.device.lease_buffer(size)?,
+            buf: backend
+                .device
+                .lease_buffer(size)
+                .ok_or(anyhow!("Could not create buffer!"))?,
             size,
             backend: backend.clone(),
         })
     }
     pub fn from_slice(backend: &Backend, slice: &[u8]) -> Result<Self> {
-        let buf = backend.device.lease_buffer(slice.len())?;
+        let buf = backend
+            .device
+            .lease_buffer(slice.len())
+            .ok_or(anyhow!("Could not create buffer!"))?;
         buf.copy_from_slice(slice)?;
         Ok(Self {
             size: slice.len(),
@@ -166,12 +172,6 @@ impl Texture {
             n_channels <= 4,
             "Currently a maximum of 4 channels is supported per texture!"
         );
-
-        let shape = [
-            *shape.get(0).unwrap_or(&0),
-            *shape.get(1).unwrap_or(&0),
-            *shape.get(2).unwrap_or(&0),
-        ];
 
         let tex = device.create_texture(&cuda_core::TexutreDesc {
             shape,
