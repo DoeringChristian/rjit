@@ -289,6 +289,7 @@ fn scatter_reduce() -> Result<()> {
 }
 #[test]
 fn tex_lookup() -> Result<()> {
+    pretty_env_logger::try_init().ok();
     let ir = Trace::default();
     ir.set_backend(["cuda"])?;
 

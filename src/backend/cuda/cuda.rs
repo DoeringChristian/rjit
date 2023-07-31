@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use resource_pool::hashpool::Lease;
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -149,96 +149,39 @@ impl backend::Buffer for Buffer {
 
 #[derive(Debug)]
 pub struct Texture {
-    tex: u64,
-    array: cuda_rs::CUarray,
-    n_channels: usize,
-    shape: smallvec::SmallVec<[usize; 4]>,
+    tex: cuda_core::Texture,
     device: Device,
 }
 
-impl Drop for Texture {
-    fn drop(&mut self) {
-        let ctx = self.device.ctx();
-        unsafe {
-            ctx.cuArrayDestroy(self.array).check().unwrap();
-            ctx.cuTexObjectDestroy(self.tex).check().unwrap();
-        }
-    }
-}
 impl Texture {
     pub fn ptr(&self) -> u64 {
-        self.tex
+        self.tex.ptr()
     }
     pub fn create(device: &Device, shape: &[usize], n_channels: usize) -> Result<Self> {
-        let ctx = device.ctx();
-        unsafe {
-            let mut tex = 0;
-            let mut array = std::ptr::null_mut();
-            if shape.len() == 1 || shape.len() == 2 {
-                let array_desc = cuda_rs::CUDA_ARRAY_DESCRIPTOR {
-                    Width: shape[0],
-                    Height: if shape.len() == 1 { 1 } else { shape[1] },
-                    Format: cuda_rs::CUarray_format::CU_AD_FORMAT_FLOAT,
-                    NumChannels: n_channels as _,
-                };
-                ctx.cuArrayCreate_v2(&mut array, &array_desc).check()?;
-            } else if shape.len() == 3 {
-                let array_desc = cuda_rs::CUDA_ARRAY3D_DESCRIPTOR {
-                    Width: shape[0],
-                    Height: shape[1],
-                    Depth: shape[2],
-                    Format: cuda_rs::CUarray_format::CU_AD_FORMAT_FLOAT,
-                    Flags: 0,
-                    NumChannels: n_channels as _,
-                };
-                let mut array = std::ptr::null_mut();
-                ctx.cuArray3DCreate_v2(&mut array, &array_desc).check()?;
-            } else {
-                bail!("Shape not supported!");
-            };
+        ensure!(
+            shape.len() <= 3,
+            "Only textures of dimension less than 3 are supported!"
+        );
+        ensure!(
+            n_channels <= 4,
+            "Currently a maximum of 4 channels is supported per texture!"
+        );
 
-            let res_desc = cuda_rs::CUDA_RESOURCE_DESC {
-                resType: cuda_rs::CUresourcetype::CU_RESOURCE_TYPE_ARRAY,
-                res: cuda_rs::CUDA_RESOURCE_DESC_st__bindgen_ty_1 {
-                    array: cuda_rs::CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 {
-                        hArray: array,
-                    },
-                },
-                flags: 0,
-            };
-            let tex_desc = cuda_rs::CUDA_TEXTURE_DESC {
-                addressMode: [cuda_rs::CUaddress_mode::CU_TR_ADDRESS_MODE_WRAP; 3],
-                filterMode: cuda_rs::CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
-                flags: 1,
-                maxAnisotropy: 1,
-                mipmapFilterMode: cuda_rs::CUfilter_mode::CU_TR_FILTER_MODE_LINEAR,
-                ..Default::default()
-            };
-            let view_desc = cuda_rs::CUDA_RESOURCE_VIEW_DESC {
-                format: if n_channels == 1 {
-                    cuda_rs::CUresourceViewFormat::CU_RES_VIEW_FORMAT_FLOAT_1X32
-                } else if n_channels == 2 {
-                    cuda_rs::CUresourceViewFormat::CU_RES_VIEW_FORMAT_FLOAT_2X32
-                } else if n_channels == 4 {
-                    cuda_rs::CUresourceViewFormat::CU_RES_VIEW_FORMAT_FLOAT_4X32
-                } else {
-                    panic!("{n_channels} number of channels is not supported!");
-                },
-                width: shape[0],
-                height: if shape.len() >= 2 { shape[1] } else { 1 },
-                depth: if shape.len() == 3 { shape[2] } else { 0 },
-                ..Default::default()
-            };
-            ctx.cuTexObjectCreate(&mut tex, &res_desc, &tex_desc, &view_desc)
-                .check()?;
-            Ok(Self {
-                n_channels,
-                shape: smallvec::SmallVec::from(shape),
-                array,
-                tex,
-                device: device.clone(),
-            })
-        }
+        let shape = [
+            *shape.get(0).unwrap_or(&0),
+            *shape.get(1).unwrap_or(&0),
+            *shape.get(2).unwrap_or(&0),
+        ];
+
+        let tex = device.create_texture(&cuda_core::TexutreDesc {
+            shape,
+            n_channels: n_channels as _,
+        })?;
+
+        Ok(Self {
+            tex,
+            device: device.clone(),
+        })
     }
 }
 
@@ -246,97 +189,27 @@ unsafe impl Sync for Texture {}
 unsafe impl Send for Texture {}
 impl backend::Texture for Texture {
     fn channels(&self) -> usize {
-        self.n_channels
+        self.tex.n_channels() as _
     }
 
     fn dimensions(&self) -> usize {
-        self.shape.len()
+        self.tex.dim()
     }
 
     fn shape(&self) -> &[usize] {
-        &self.shape
+        &self.tex.shape()
     }
 
     fn copy_from_buffer(&self, buf: &dyn backend::Buffer) -> Result<()> {
         let buf = buf.as_any().downcast_ref::<Buffer>().unwrap();
-        let ctx = self.device.ctx();
-        unsafe {
-            if self.shape.len() == 1 || self.shape.len() == 2 {
-                let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
-                let op = cuda_rs::CUDA_MEMCPY2D {
-                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
-                    srcDevice: buf.ptr(),
-                    srcPitch: pitch,
-                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
-                    dstArray: self.array,
-                    WidthInBytes: pitch,
-                    Height: if self.shape.len() == 2 {
-                        self.shape[1]
-                    } else {
-                        1
-                    },
-                    ..Default::default()
-                };
-                ctx.cuMemcpy2D_v2(&op).check()?;
-                Ok(())
-            } else {
-                let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
-                let op = cuda_rs::CUDA_MEMCPY3D {
-                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
-                    srcDevice: buf.ptr(),
-                    srcHeight: self.shape[1],
-                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
-                    dstArray: self.array,
-                    WidthInBytes: pitch,
-                    Height: self.shape[1],
-                    Depth: self.shape[2],
-                    ..Default::default()
-                };
-                ctx.cuMemcpy3D_v2(&op).check()?;
-                Ok(())
-            }
-        }
+        self.tex.copy_form_buffer(&buf.buf)?;
+        Ok(())
     }
 
     fn copy_to_buffer(&self, buf: &dyn backend::Buffer) -> Result<()> {
         let buf = buf.as_any().downcast_ref::<Buffer>().unwrap();
-        let ctx = self.device.ctx();
-        unsafe {
-            if self.shape.len() == 1 || self.shape.len() == 2 {
-                let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
-                let op = cuda_rs::CUDA_MEMCPY2D {
-                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
-                    srcArray: self.array,
-                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
-                    dstDevice: buf.ptr(),
-                    dstPitch: pitch,
-                    WidthInBytes: pitch,
-                    Height: if self.shape.len() == 2 {
-                        self.shape[1]
-                    } else {
-                        1
-                    },
-                    ..Default::default()
-                };
-                ctx.cuMemcpy2D_v2(&op).check()?;
-                Ok(())
-            } else {
-                let pitch = self.shape[0] * self.n_channels * std::mem::size_of::<f32>();
-                let op = cuda_rs::CUDA_MEMCPY3D {
-                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
-                    srcHeight: self.shape[1],
-                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
-                    srcArray: self.array,
-                    dstDevice: buf.ptr(),
-                    WidthInBytes: pitch,
-                    Height: self.shape[1],
-                    Depth: self.shape[2],
-                    ..Default::default()
-                };
-                ctx.cuMemcpy3D_v2(&op).check()?;
-                Ok(())
-            }
-        }
+        self.tex.copy_to_buffer(&buf.buf)?;
+        Ok(())
     }
 }
 

@@ -784,8 +784,8 @@ pub struct Texture {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TexutreDesc {
-    shape: [usize; 3],
-    n_channels: u32,
+    pub shape: [usize; 3],
+    pub n_channels: u32,
 }
 
 impl Texture {
@@ -799,10 +799,12 @@ impl Texture {
             let mut array = std::ptr::null_mut();
             let dim = shape.iter().take_while(|s| **s > 0).count();
 
+            log::trace!("Creating texture of dimension {dim}.");
+
             if dim == 1 || dim == 2 {
                 let array_desc = cuda_rs::CUDA_ARRAY_DESCRIPTOR {
                     Width: shape[0],
-                    Height: if shape.len() == 1 { 1 } else { shape[1] },
+                    Height: if dim == 1 { 1 } else { shape[1] },
                     Format: cuda_rs::CUarray_format::CU_AD_FORMAT_FLOAT,
                     NumChannels: n_channels as _,
                 };
@@ -867,14 +869,87 @@ impl Texture {
             })
         }
     }
+    pub fn copy_form_buffer(&self, buf: &Buffer) -> Result<(), Error> {
+        let ctx = self.device.ctx();
+        unsafe {
+            if self.dim == 1 || self.dim == 2 {
+                let pitch = self.shape[0] * self.n_channels as usize * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY2D {
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    srcDevice: buf.ptr(),
+                    srcPitch: pitch,
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    dstArray: self.array,
+                    WidthInBytes: pitch,
+                    Height: if self.dim == 2 { self.shape[1] } else { 1 },
+                    ..Default::default()
+                };
+                ctx.cuMemcpy2D_v2(&op).check()?;
+                Ok(())
+            } else {
+                let pitch = self.shape[0] * self.n_channels as usize * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY3D {
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    srcDevice: buf.ptr(),
+                    srcHeight: self.shape[1],
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    dstArray: self.array,
+                    WidthInBytes: pitch,
+                    Height: self.shape[1],
+                    Depth: self.shape[2],
+                    ..Default::default()
+                };
+                ctx.cuMemcpy3D_v2(&op).check()?;
+                Ok(())
+            }
+        }
+    }
+    pub fn copy_to_buffer(&self, buf: &Buffer) -> Result<(), Error> {
+        let ctx = self.device.ctx();
+        unsafe {
+            if self.dim == 1 || self.dim == 2 {
+                let pitch = self.shape[0] * self.n_channels as usize * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY2D {
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    srcArray: self.array,
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    dstDevice: buf.ptr(),
+                    dstPitch: pitch,
+                    WidthInBytes: pitch,
+                    Height: if self.dim == 2 { self.shape[1] } else { 1 },
+                    ..Default::default()
+                };
+                ctx.cuMemcpy2D_v2(&op).check()?;
+                Ok(())
+            } else {
+                let pitch = self.shape[0] * self.n_channels as usize * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY3D {
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    srcHeight: self.shape[1],
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    srcArray: self.array,
+                    dstDevice: buf.ptr(),
+                    WidthInBytes: pitch,
+                    Height: self.shape[1],
+                    Depth: self.shape[2],
+                    ..Default::default()
+                };
+                ctx.cuMemcpy3D_v2(&op).check()?;
+                Ok(())
+            }
+        }
+    }
     pub fn dim(&self) -> usize {
         self.dim
     }
-    pub fn shape(&self) -> [usize; 3] {
-        self.shape
+    pub fn shape(&self) -> &[usize] {
+        &self.shape[0..self.dim]
     }
     pub fn n_channels(&self) -> u32 {
         self.n_channels
+    }
+    pub fn ptr(&self) -> u64 {
+        self.tex
     }
 }
 
