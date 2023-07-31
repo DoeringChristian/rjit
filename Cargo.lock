@@ -900,7 +900,7 @@ checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
 [[package]]
 name = "resource-pool"
 version = "0.1.0"
-source = "git+https://github.com/DoeringChristian/resource-pool.git#68aa07fa625faee5c1bafd52752d1069ee688bf2"
+source = "git+https://github.com/DoeringChristian/resource-pool.git#11e26084e37da3bc1058b33483ad2304691a4c0c"
 
 [[package]]
 name = "rjit"

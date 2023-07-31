@@ -329,11 +329,7 @@ impl backend::Kernel for Kernel {
         log::trace!("Optix Kernel Launch with {size} threads.");
 
         let params: &[u8] = bytemuck::cast_slice(&params);
-        let params_buf = self
-            .device
-            .cuda_device()
-            .lease_buffer(params.len())
-            .ok_or(anyhow!("Could not create buffer!"))?;
+        let params_buf = self.device.cuda_device().lease_buffer(params.len())?;
         params_buf.copy_from_slice(&params)?;
 
         unsafe {

@@ -265,7 +265,7 @@ impl Device {
         buf.copy_from_slice(slice)?;
         Ok(buf)
     }
-    pub fn lease_buffer(&self, size: usize) -> Option<Lease<Buffer>> {
+    pub fn lease_buffer(&self, size: usize) -> Result<Lease<Buffer>, Error> {
         let size = round_pow2(size as _) as usize;
         self.buffer_pool
             .lock()
@@ -765,8 +765,15 @@ impl Info for BufferDesc {
 
     type Resource = Buffer;
 
-    fn try_create(info: &Self, ctx: &Self::Context) -> Option<Self::Resource> {
-        Buffer::uninit(ctx, info.size).ok()
+    fn create(info: &Self, ctx: &Self::Context) -> Self::Resource {
+        Self::try_create(info, ctx).unwrap()
+    }
+}
+impl TryInfo for BufferDesc {
+    type Error = Error;
+
+    fn try_create(info: &Self, ctx: &Self::Context) -> Result<Self::Resource, Self::Error> {
+        Buffer::uninit(ctx, info.size)
     }
 }
 
@@ -974,8 +981,16 @@ impl<'a> Info for TexutreDesc<'a> {
 
     type Resource = Texture;
 
-    fn try_create(info: &Self, ctx: &Self::Context) -> Option<Self::Resource> {
-        Texture::create(ctx, info).ok()
+    fn create(info: &Self, ctx: &Self::Context) -> Self::Resource {
+        Self::try_create(info, ctx).unwrap()
+    }
+}
+
+impl<'a> TryInfo for TexutreDesc<'a> {
+    type Error = Error;
+
+    fn try_create(info: &Self, ctx: &Self::Context) -> Result<Self::Resource, Self::Error> {
+        Texture::create(ctx, info)
     }
 }
 

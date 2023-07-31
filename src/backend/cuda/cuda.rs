@@ -109,19 +109,13 @@ impl Buffer {
     }
     pub fn uninit(backend: &Backend, size: usize) -> Result<Self> {
         Ok(Self {
-            buf: backend
-                .device
-                .lease_buffer(size)
-                .ok_or(anyhow!("Could not create buffer!"))?,
+            buf: backend.device.lease_buffer(size)?,
             size,
             backend: backend.clone(),
         })
     }
     pub fn from_slice(backend: &Backend, slice: &[u8]) -> Result<Self> {
-        let buf = backend
-            .device
-            .lease_buffer(slice.len())
-            .ok_or(anyhow!("Could not create buffer!"))?;
+        let buf = backend.device.lease_buffer(slice.len())?;
         buf.copy_from_slice(slice)?;
         Ok(Self {
             size: slice.len(),

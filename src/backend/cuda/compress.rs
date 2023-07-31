@@ -50,9 +50,7 @@ pub fn compress(mask: &Buffer, kernels: &Module) -> Result<Arc<dyn backend::Buff
     // let device = mask.device();
 
     let size = mask.size();
-    let count_out = device
-        .lease_buffer(size_of::<u32>())
-        .ok_or(anyhow!("Could not create Buffer!"))?;
+    let count_out = device.lease_buffer(size_of::<u32>())?;
     // let count_out = Buffer::uninit(device, size_of::<u32>())?;
     let mut out = Buffer::uninit(backend, size as usize * size_of::<u32>())?;
 
@@ -101,9 +99,7 @@ pub fn compress(mask: &Buffer, kernels: &Module) -> Result<Arc<dyn backend::Buff
         let mut scratch_items = block_count + 32;
         let trailer = items_per_block * block_count - size;
 
-        let scratch = device
-            .lease_buffer(scratch_items as usize * size_of::<u64>())
-            .ok_or(anyhow!("Could not create buffer!"))?;
+        let scratch = device.lease_buffer(scratch_items as usize * size_of::<u64>())?;
 
         let (block_count_init, thread_count_init) = launch_config(&device, scratch_items);
 
