@@ -798,6 +798,15 @@ pub struct TexutreDesc<'a> {
 }
 
 impl Texture {
+    pub fn array(&self) -> cuda_rs::CUarray {
+        self.array
+    }
+    pub fn tex(&self) -> u64 {
+        self.tex
+    }
+    pub fn n_texels(&self) -> usize {
+        self.shape().iter().fold(1, |a, b| a * b) * self.n_channels as usize
+    }
     pub fn create(device: &Device, desc: &TexutreDesc) -> Result<Self, Error> {
         let shape = desc.shape;
         let n_channels = desc.n_channels;
@@ -882,7 +891,7 @@ impl Texture {
             })
         }
     }
-    pub fn copy_form_buffer(&self, buf: &Buffer) -> Result<(), Error> {
+    pub fn copy_form_buffer(&self, buf: &Buffer, stream: &Stream) -> Result<(), Error> {
         let ctx = self.device.ctx();
         unsafe {
             if self.dim == 1 || self.dim == 2 {
@@ -897,7 +906,7 @@ impl Texture {
                     Height: if self.dim == 2 { self.shape[1] } else { 1 },
                     ..Default::default()
                 };
-                ctx.cuMemcpy2D_v2(&op).check()?;
+                ctx.cuMemcpy2DAsync_v2(&op, stream.raw()).check()?;
                 Ok(())
             } else {
                 let pitch = self.shape[0] * self.n_channels as usize * std::mem::size_of::<f32>();
@@ -912,12 +921,12 @@ impl Texture {
                     Depth: self.shape[2],
                     ..Default::default()
                 };
-                ctx.cuMemcpy3D_v2(&op).check()?;
+                ctx.cuMemcpy3DAsync_v2(&op, stream.raw()).check()?;
                 Ok(())
             }
         }
     }
-    pub fn copy_to_buffer(&self, buf: &Buffer) -> Result<(), Error> {
+    pub fn copy_to_buffer(&self, buf: &Buffer, stream: &Stream) -> Result<(), Error> {
         let ctx = self.device.ctx();
         unsafe {
             if self.dim == 1 || self.dim == 2 {
@@ -932,7 +941,7 @@ impl Texture {
                     Height: if self.dim == 2 { self.shape[1] } else { 1 },
                     ..Default::default()
                 };
-                ctx.cuMemcpy2D_v2(&op).check()?;
+                ctx.cuMemcpy2DAsync_v2(&op, stream.raw()).check()?;
                 Ok(())
             } else {
                 let pitch = self.shape[0] * self.n_channels as usize * std::mem::size_of::<f32>();
@@ -947,7 +956,7 @@ impl Texture {
                     Depth: self.shape[2],
                     ..Default::default()
                 };
-                ctx.cuMemcpy3D_v2(&op).check()?;
+                ctx.cuMemcpy3DAsync_v2(&op, stream.raw()).check()?;
                 Ok(())
             }
         }
@@ -958,8 +967,8 @@ impl Texture {
     pub fn shape(&self) -> &[usize] {
         &self.shape[0..self.dim]
     }
-    pub fn n_channels(&self) -> u32 {
-        self.n_channels
+    pub fn n_channels(&self) -> usize {
+        self.n_channels as _
     }
     pub fn ptr(&self) -> u64 {
         self.tex

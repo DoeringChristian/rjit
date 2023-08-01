@@ -14,7 +14,7 @@ use crate::schedule::{Env, ScheduleIr};
 pub use self::info::*;
 
 pub trait Texture: Debug + Sync + Send + DowncastSync {
-    fn channels(&self) -> usize;
+    fn n_channels(&self) -> usize;
     fn dimensions(&self) -> usize;
     fn shape(&self) -> &[usize];
     fn copy_from_buffer(&self, buf: &dyn Buffer) -> Result<()>;

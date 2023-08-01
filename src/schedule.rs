@@ -375,7 +375,7 @@ impl ScheduleIr {
                     [src, dst, index, mask],
                 )
             }
-            Op::TexLookup { dim } => {
+            Op::TexLookup { dim, channels } => {
                 let deps = [self.collect_data(env, ir, var.deps[0], false)]
                     .into_iter()
                     .chain(

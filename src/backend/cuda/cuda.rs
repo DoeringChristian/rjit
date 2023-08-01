@@ -1,4 +1,5 @@
 use anyhow::{anyhow, bail, ensure, Result};
+use itertools::Itertools;
 use resource_pool::hashpool::Lease;
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -149,32 +150,48 @@ impl backend::Buffer for Buffer {
 
 #[derive(Debug)]
 pub struct Texture {
-    tex: cuda_core::Texture,
+    // tex: cuda_core::Texture,
+    textures: Vec<cuda_core::Texture>,
     device: Device,
+    n_channels: usize,
 }
 
 impl Texture {
-    pub fn ptr(&self) -> u64 {
-        self.tex.ptr()
+    pub fn ptrs<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
+        self.textures.iter().map(|t| t.ptr())
+    }
+    fn shape(&self) -> &[usize] {
+        self.textures[0].shape()
+    }
+    pub fn n_texels(&self) -> usize {
+        self.shape().iter().fold(1, |a, b| a * b) * self.n_channels
     }
     pub fn create(device: &Device, shape: &[usize], n_channels: usize) -> Result<Self> {
+        ensure!(
+            shape.len() >= 1,
+            "A zero dimensional texture is not supported!"
+        );
         ensure!(
             shape.len() <= 3,
             "Only textures of dimension less than 3 are supported!"
         );
-        ensure!(
-            n_channels <= 4,
-            "Currently a maximum of 4 channels is supported per texture!"
-        );
 
-        let tex = device.create_texture(&cuda_core::TexutreDesc {
-            shape,
-            n_channels: n_channels as _,
-        })?;
+        let textures = (0..n_channels)
+            .step_by(4)
+            .map(|i| {
+                let channels_per_texture = (n_channels - i).min(4);
+                let tex = device.create_texture(&cuda_core::TexutreDesc {
+                    shape,
+                    n_channels: channels_per_texture as _,
+                })?;
+                Ok(tex)
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
-            tex,
+            textures,
             device: device.clone(),
+            n_channels,
         })
     }
 }
@@ -182,27 +199,104 @@ impl Texture {
 unsafe impl Sync for Texture {}
 unsafe impl Send for Texture {}
 impl backend::Texture for Texture {
-    fn channels(&self) -> usize {
-        self.tex.n_channels() as _
+    fn n_channels(&self) -> usize {
+        self.n_channels
     }
 
     fn dimensions(&self) -> usize {
-        self.tex.dim()
+        self.textures[0].dim()
     }
 
     fn shape(&self) -> &[usize] {
-        &self.tex.shape()
+        self.shape()
     }
 
     fn copy_from_buffer(&self, buf: &dyn backend::Buffer) -> Result<()> {
         let buf = buf.as_any().downcast_ref::<Buffer>().unwrap();
-        self.tex.copy_form_buffer(&buf.buf)?;
+        let stream = self
+            .device
+            .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)?;
+        if self.textures.len() > 1 {
+            let staging = self
+                .device
+                .lease_buffer(self.textures[0].n_texels() * std::mem::size_of::<f32>())?;
+            let texel_size = self.n_channels * std::mem::size_of::<f32>();
+            for (i, tex) in self.textures.iter().enumerate() {
+                let texel_offset = i * 4 * std::mem::size_of::<f32>();
+                let op = cuda_rs::CUDA_MEMCPY2D {
+                    srcXInBytes: texel_offset as _,
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    srcDevice: buf.ptr(),
+                    srcPitch: texel_size,
+
+                    dstXInBytes: 0,
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    dstDevice: staging.ptr(),
+                    dstPitch: tex.n_channels() * std::mem::size_of::<f32>(),
+
+                    WidthInBytes: tex.n_channels() * std::mem::size_of::<f32>(),
+                    Height: tex.n_texels(),
+                    ..Default::default()
+                };
+
+                unsafe {
+                    self.device
+                        .ctx()
+                        .cuMemcpy2DAsync_v2(&op, stream.raw())
+                        .check()?;
+                }
+
+                tex.copy_form_buffer(&staging, &stream)?;
+            }
+        } else {
+            self.textures[0].copy_form_buffer(&buf.buf, &stream)?;
+        }
+        stream.synchronize()?;
         Ok(())
     }
 
     fn copy_to_buffer(&self, buf: &dyn backend::Buffer) -> Result<()> {
         let buf = buf.as_any().downcast_ref::<Buffer>().unwrap();
-        self.tex.copy_to_buffer(&buf.buf)?;
+        let stream = self
+            .device
+            .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)?;
+        if self.textures.len() > 1 {
+            let staging = self
+                .device
+                .lease_buffer(self.textures[0].n_texels() * std::mem::size_of::<f32>())?;
+            let texel_size = self.n_channels * std::mem::size_of::<f32>();
+            for (i, tex) in self.textures.iter().enumerate() {
+                tex.copy_to_buffer(&staging, &stream);
+
+                let texel_offset = i * 4 * std::mem::size_of::<f32>();
+
+                let op = cuda_rs::CUDA_MEMCPY2D {
+                    srcXInBytes: 0,
+                    srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    srcDevice: staging.ptr(),
+                    srcPitch: tex.n_channels() * std::mem::size_of::<f32>(),
+
+                    dstXInBytes: texel_offset as _,
+                    dstMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
+                    dstDevice: buf.ptr(),
+                    dstPitch: texel_size,
+
+                    WidthInBytes: tex.n_channels() * std::mem::size_of::<f32>(),
+                    Height: tex.n_texels(),
+                    ..Default::default()
+                };
+
+                unsafe {
+                    self.device
+                        .ctx()
+                        .cuMemcpy2DAsync_v2(&op, stream.raw())
+                        .check()?;
+                }
+            }
+        } else {
+            self.textures[0].copy_form_buffer(&buf.buf, &stream)?;
+        }
+        stream.synchronize()?;
         Ok(())
     }
 }

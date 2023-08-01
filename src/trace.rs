@@ -605,10 +605,12 @@ impl VarRef {
 
         let mut deps = smallvec![self.id()];
         deps.extend(pos.iter().map(|r| r.id()));
+        let channels = self.var().data.texture().unwrap().n_channels();
 
         let lookup = self.ir.push_var(Var {
             op: Op::TexLookup {
                 dim: pos.len() as _,
+                channels: channels as _,
             },
             deps,
             ty: VarType::F32,

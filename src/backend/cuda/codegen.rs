@@ -159,6 +159,14 @@ pub fn assemble_entry(
 
     write!(asm, "body: // sm_{}\n", 86)?; // TODO: compute capability from device
 
+    let texture_offset = env
+        .textures()
+        .iter()
+        .scan(0, |sum, tex| {
+            *sum += tex.n_channels();
+            Some(*sum)
+        })
+        .collect::<Vec<_>>();
     for id in ir.ids() {
         // let var = ir.var(id);
         assemble_var(
@@ -1127,7 +1135,7 @@ pub fn assemble_var(
         Op::Idx => {
             writeln!(asm, "\tmov.{} {}, %r0;\n", tyname(&var.ty), reg(vid))?;
         }
-        Op::TexLookup { dim } => {
+        Op::TexLookup { dim, channels } => {
             let src = ir.var(dep(vid, 0));
 
             // Load texture ptr:

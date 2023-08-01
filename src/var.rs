@@ -71,7 +71,8 @@ pub enum Op {
         op: ReduceOp,
     },
     TexLookup {
-        dim: u8,
+        dim: u32,
+        channels: u32,
     },
     Extract {
         offset: usize,
