@@ -315,6 +315,7 @@ fn tex_lookup() -> Result<()> {
 }
 #[test]
 fn cast() -> Result<()> {
+    pretty_env_logger::try_init().ok();
     let ir = Trace::default();
     ir.set_backend(["cuda"])?;
 

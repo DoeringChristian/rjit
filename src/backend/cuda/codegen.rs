@@ -1,6 +1,10 @@
+use std::ops::Range;
+
 use crate::schedule::{Env, SVarId, ScheduleIr, ScheduleVar};
 use crate::trace::VarType;
 use crate::var::{Op, ReduceOp};
+
+use super::params::ParamOffset;
 
 pub const FIRST_REGISTER: usize = 4;
 
@@ -159,25 +163,10 @@ pub fn assemble_entry(
 
     write!(asm, "body: // sm_{}\n", 86)?; // TODO: compute capability from device
 
-    let texture_offset = env
-        .textures()
-        .iter()
-        .scan(0, |sum, tex| {
-            *sum += tex.n_channels();
-            Some(*sum)
-        })
-        .collect::<Vec<_>>();
+    let offsets = ParamOffset::from_env(env);
     for id in ir.ids() {
         // let var = ir.var(id);
-        assemble_var(
-            asm,
-            ir,
-            id,
-            1,
-            1 + env.opaques().len() as u64,
-            1 + env.opaques().len() as u64 + env.buffers().len() as u64,
-            "param",
-        )?;
+        assemble_var(asm, ir, id, &offsets, "param")?;
     }
 
     // End of kernel:
@@ -204,9 +193,7 @@ pub fn assemble_var(
     asm: &mut impl std::fmt::Write,
     ir: &ScheduleIr,
     vid: SVarId,
-    opaque_offset: u64,
-    buf_offset: u64,
-    tex_offset: u64,
+    offsets: &ParamOffset,
     params_type: &'static str,
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
@@ -225,7 +212,7 @@ pub fn assemble_var(
                     tyname_bin(&var.ty),
                     reg(vid),
                     "params",
-                    (opaque_offset + opaque) * 8
+                    offsets.opaque(opaque as _) * 8,
                 )?;
                 // writeln!(asm, "\tmov.{} {}, %rd0;", var.ty.name_cuda_bin(), var.reg(),)?;
             } else {
@@ -1010,7 +997,7 @@ pub fn assemble_var(
             }
 
             // Load buffer ptr:
-            let param_offset = (src.data.buffer().unwrap() + buf_offset) * 8;
+            let param_offset = offsets.buffer(src.data.buffer().unwrap() as _) * 8;
 
             writeln!(
                 asm,
@@ -1083,7 +1070,7 @@ pub fn assemble_var(
                 writeln!(asm, "\t@!{} bra l_{}_done;\n", reg(mask), register_id(vid))?;
             }
 
-            let param_offset = (dst.data.buffer().unwrap() + buf_offset) * 8;
+            let param_offset = offsets.buffer(dst.data.buffer().unwrap() as _) * 8;
 
             writeln!(
                 asm,
@@ -1138,48 +1125,55 @@ pub fn assemble_var(
         Op::TexLookup { dim, channels } => {
             let src = ir.var(dep(vid, 0));
 
-            // Load texture ptr:
-            let param_offset = (src.data.texture().unwrap() + tex_offset) * 8;
+            let offset_range = offsets.texture_ranges(src.data.texture().unwrap() as usize);
+            writeln!(asm, "\t.reg.f32 {}_out_<{channels}>;", reg(vid))?;
+            let mut out_offset = 0;
 
-            writeln!(
-                asm,
-                "\tld.{params_type}.u64 %rd0, [params+{}];",
-                param_offset,
-            )?;
+            dbg!(&offset_range);
+            for param_offset in offset_range.step_by(4) {
+                // Load texture ptr
+                writeln!(
+                    asm,
+                    "\tld.{params_type}.u64 %rd0, [params+{}];",
+                    param_offset * 8,
+                )?;
 
-            writeln!(asm, "\t.reg.f32 {}_out_<4>;", reg(vid))?;
-            if dim == 3 {
-                writeln!(
-                    asm,
-                    "\ttex.3d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [%rd0, {{{d1}, {d2}, {d3}, {d3}}}];",
+                // writeln!(asm, "\t.reg.f32 {}_out_<4>;", reg(vid))?;
+                let out = format!(
+                    "{{{v}_out_{o0}, {v}_out_{o1}, {v}_out_{o2},
+                             {v}_out_{o3}}}",
                     v = reg(vid),
-                    // d0 = dep(vid, 0),
-                    d1 = reg(dep(vid, 1)),
-                    d2 = reg(dep(vid, 2)),
-                    d3 = reg(dep(vid, 3))
-                )?;
-            } else if dim == 2 {
-                writeln!(
-                    asm,
-                    "\ttex.2d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [%rd0, {{{d1}, {d2}}}];",
-                    v = reg(vid),
-                    // d0 = dep(vid, 0),
-                    d1 = reg(dep(vid, 1)),
-                    d2 = reg(dep(vid, 2)),
-                )?;
-            } else if dim == 1 {
-                writeln!(
-                    asm,
-                    "\ttex.1d.v4.f32.f32 {{{v}_out_0, {v}_out_1, {v}_out_2,
-                             {v}_out_3}}, [%rd0, {{{d1}}}];",
-                    v = reg(vid),
-                    // d0 = dep(vid, 0),
-                    d1 = reg(dep(vid, 1)),
-                )?;
-            } else {
-                unimplemented!();
+                    o0 = out_offset + 0,
+                    o1 = out_offset + 1,
+                    o2 = out_offset + 2,
+                    o3 = out_offset + 3,
+                );
+                if dim == 3 {
+                    writeln!(
+                        asm,
+                        "\ttex.3d.v4.f32.f32 {out}, [%rd0, {{{d1}, {d2}, {d3}, {d3}}}];",
+                        // d0 = dep(vid, 0),
+                        d1 = reg(dep(vid, 1)),
+                        d2 = reg(dep(vid, 2)),
+                        d3 = reg(dep(vid, 3)),
+                    )?;
+                } else if dim == 2 {
+                    writeln!(
+                        asm,
+                        "\ttex.2d.v4.f32.f32 {out}, [%rd0, {{{d1}, {d2}}}];",
+                        d1 = reg(dep(vid, 1)),
+                        d2 = reg(dep(vid, 2)),
+                    )?;
+                } else if dim == 1 {
+                    writeln!(
+                        asm,
+                        "\ttex.1d.v4.f32.f32 {out}, [%rd0, {{{d1}}}];",
+                        d1 = reg(dep(vid, 1)),
+                    )?;
+                } else {
+                    unimplemented!();
+                }
+                out_offset += 4;
             }
         }
         Op::Extract { offset } => {

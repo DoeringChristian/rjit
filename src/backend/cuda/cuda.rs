@@ -7,6 +7,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use super::cuda_core::{self, Device, Event, Function, Instance, Module, Stream};
+use super::params;
 use crate::backend::{self};
 use crate::schedule::{Env, ScheduleIr};
 
@@ -456,21 +457,7 @@ impl backend::Kernel for Kernel {
         env: &mut crate::schedule::Env,
         size: usize,
     ) -> anyhow::Result<Arc<dyn backend::DeviceFuture>> {
-        let mut params = [Ok(size as u64)]
-            .into_iter()
-            .chain(env.opaques().iter().map(|o| Ok(*o)))
-            .chain(env.buffers().iter().map(|b| {
-                b.buffer
-                    .downcast_ref::<Buffer>()
-                    .ok_or(anyhow!("Could not downcast Buffer!"))
-                    .map(|b| b.ptr())
-            }))
-            .chain(env.textures().iter().map(|t| {
-                t.downcast_ref::<Texture>()
-                    .ok_or(anyhow!("Could not downcast Texture!"))
-                    .map(|t| t.ptr())
-            }))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+        let mut params = params::params_cuda(size, &env)?;
 
         Ok(self.launch_with_size(&mut [params.as_mut_ptr() as *mut _], size)?)
     }

@@ -1,5 +1,6 @@
 use crate::backend::cuda;
 use crate::backend::cuda::codegen::{register_id, Reg};
+use crate::backend::cuda::params::ParamOffset;
 use crate::schedule::{Env, SVarId, ScheduleIr};
 use crate::trace::Op;
 
@@ -7,10 +8,7 @@ pub fn assemble_var_rt(
     asm: &mut impl std::fmt::Write,
     ir: &ScheduleIr,
     vid: SVarId,
-    opaque_offset: u64,
-    buf_offset: u64,
-    tex_offset: u64,
-    accel_offset: u64,
+    offsets: &ParamOffset,
     params_type: &'static str,
 ) -> std::fmt::Result {
     let reg = |id| Reg(id, ir.var(id));
@@ -21,7 +19,7 @@ pub fn assemble_var_rt(
         Op::TraceRay { payload_count } => {
             writeln!(asm, "")?;
             writeln!(asm, "\t// [{}]: {:?} =>", vid, var)?;
-            let handle_offset = (ir.var(dep(vid, 0)).data.accel().unwrap() + accel_offset) * 8;
+            let handle_offset = offsets.accel(ir.var(dep(vid, 0)).data.accel().unwrap() as _) * 8;
 
             writeln!(
                 asm,
@@ -113,15 +111,7 @@ pub fn assemble_var_rt(
             }
         }
         _ => {
-            crate::backend::cuda::codegen::assemble_var(
-                asm,
-                ir,
-                vid,
-                opaque_offset,
-                buf_offset,
-                tex_offset,
-                params_type,
-            )?;
+            crate::backend::cuda::codegen::assemble_var(asm, ir, vid, offsets, params_type)?;
         }
     }
     Ok(())
@@ -178,19 +168,9 @@ pub fn assemble_entry(
             body:\n"
     )?;
 
+    let offsets = ParamOffset::from_env(env);
     for id in ir.ids() {
-        assemble_var_rt(
-            asm,
-            ir,
-            id,
-            1,
-            1 + env.opaques().len() as u64,
-            1 + env.opaques().len() as u64 + env.buffers().len() as u64,
-            1 + env.opaques().len() as u64
-                + env.buffers().len() as u64
-                + env.textures().len() as u64,
-            "const",
-        )?;
+        assemble_var_rt(asm, ir, id, &offsets, "const")?;
     }
 
     write!(

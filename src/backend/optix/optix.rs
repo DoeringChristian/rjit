@@ -8,7 +8,7 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 use crate::backend::cuda::cuda_core::{Event, Stream};
-use crate::backend::cuda::{self, cuda_core, Buffer, Texture};
+use crate::backend::cuda::{self, cuda_core, params, Buffer, Texture};
 use crate::backend::{
     self, CompileOptions, HitGroupDesc, MissGroupDesc, ModuleDesc, SBTDesc, SBTInfo,
 };
@@ -305,26 +305,7 @@ impl backend::Kernel for Kernel {
         env: &mut crate::schedule::Env,
         size: usize,
     ) -> Result<Arc<dyn backend::DeviceFuture>> {
-        let params = [Ok(bytemuck::cast::<_, u64>([size as u32, 0u32]))]
-            .into_iter()
-            .chain(env.opaques().iter().map(|o| Ok(*o)))
-            .chain(env.buffers().iter().map(|b| {
-                b.buffer
-                    .downcast_ref::<Buffer>()
-                    .ok_or(anyhow!("Could not downcast Buffer!"))
-                    .map(|b| b.ptr())
-            }))
-            .chain(env.textures().iter().map(|t| {
-                t.downcast_ref::<Texture>()
-                    .ok_or(anyhow!("Could not downcast Texture!"))
-                    .map(|t| t.ptr())
-            }))
-            .chain(env.accels().iter().map(|a| {
-                a.downcast_ref::<Accel>()
-                    .ok_or(anyhow!("Could not downcast Acceleration Structure!"))
-                    .map(|a| a.ptr())
-            }))
-            .collect::<Result<Vec<_>>>()?;
+        let params = params::params_optix(size, &env)?;
 
         log::trace!("Optix Kernel Launch with {size} threads.");
 
