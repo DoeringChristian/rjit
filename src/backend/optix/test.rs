@@ -136,7 +136,6 @@ fn gather_eval() -> Result<()> {
         let z = x.add(&y)?;
 
         let r = z.gather(&ir.index(3), None)?;
-        dbg!();
         r
     };
     // schedule
@@ -438,8 +437,6 @@ fn trace_ray() -> Result<()> {
 
     ir.eval()?;
 
-    dbg!(&dst.to_host::<f32>());
-
     insta::assert_snapshot!(ir.kernel_history());
 
     assert_eq!(valid.to_host::<bool>().unwrap(), vec![true, false]);
@@ -700,8 +697,6 @@ fn trace_ray_multi() -> Result<()> {
 
         times.push(start.elapsed());
     }
-
-    dbg!(times);
 
     Ok(())
 }

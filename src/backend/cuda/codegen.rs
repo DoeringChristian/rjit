@@ -1129,7 +1129,6 @@ pub fn assemble_var(
             writeln!(asm, "\t.reg.f32 {}_out_<{channels}>;", reg(vid))?;
             let mut out_offset = 0;
 
-            dbg!(&offset_range);
             for param_offset in offset_range.step_by(4) {
                 // Load texture ptr
                 writeln!(

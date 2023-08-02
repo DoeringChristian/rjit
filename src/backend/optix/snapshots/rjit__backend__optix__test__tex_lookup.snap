@@ -3,9 +3,9 @@ source: src/backend/optix/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 4575189922339008176 with 1 elements
+Launched CUDA Kernel 14129116685033363370 with 1 elements
 ===============================================
-Kernel 4575189922339008176:
+Kernel 14129116685033363370:
 
 .version 8.0
 .target sm_86
@@ -57,9 +57,9 @@ body: // sm_86
 	mad.wide.u32 %rd3, %r6, 4, %rd0;
 	ld.global.nc.f32 %f10, [%rd3];
 
-	// [7]: ScheduleVar { op: TexLookup { dim: 2 }, ty: F32, deps: (6, 9), data: None, sbt_hash: 0 } =>
-	ld.param.u64 %rd0, [params+32];
+	// [7]: ScheduleVar { op: TexLookup { dim: 2, channels: 4 }, ty: F32, deps: (6, 9), data: None, sbt_hash: 0 } =>
 	.reg.f32 %f11_out_<4>;
+	ld.param.u64 %rd0, [params+32];
 	tex.2d.v4.f32.f32 {%f11_out_0, %f11_out_1, %f11_out_2,
                              %f11_out_3}, [%rd0, {%f8, %f10}];
 

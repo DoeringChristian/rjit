@@ -267,7 +267,7 @@ impl backend::Texture for Texture {
                 .lease_buffer(self.textures[0].n_texels() * std::mem::size_of::<f32>())?;
             let texel_size = self.n_channels * std::mem::size_of::<f32>();
             for (i, tex) in self.textures.iter().enumerate() {
-                tex.copy_to_buffer(&staging, &stream);
+                tex.copy_to_buffer(&staging, &stream)?;
 
                 let texel_offset = i * 4 * std::mem::size_of::<f32>();
 
