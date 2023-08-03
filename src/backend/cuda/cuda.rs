@@ -218,9 +218,11 @@ impl backend::Texture for Texture {
             .device
             .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)?;
         if self.textures.len() > 1 {
-            let staging = self
-                .device
-                .lease_buffer(self.textures[0].n_texels() * std::mem::size_of::<f32>())?;
+            let staging = self.device.lease_buffer(
+                self.textures[0].n_texels()
+                    * self.textures[0].n_channels()
+                    * std::mem::size_of::<f32>(),
+            )?;
             let texel_size = self.n_channels * std::mem::size_of::<f32>();
             for (i, tex) in self.textures.iter().enumerate() {
                 let texel_offset = i * 4 * std::mem::size_of::<f32>();
@@ -239,6 +241,7 @@ impl backend::Texture for Texture {
                     Height: tex.n_texels(),
                     ..Default::default()
                 };
+                dbg!(&op);
 
                 unsafe {
                     self.device

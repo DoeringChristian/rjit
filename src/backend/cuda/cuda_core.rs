@@ -805,7 +805,7 @@ impl Texture {
         self.tex
     }
     pub fn n_texels(&self) -> usize {
-        self.shape().iter().fold(1, |a, b| a * b) * self.n_channels as usize
+        self.shape().iter().fold(1, |a, b| a * b)
     }
     pub fn create(device: &Device, desc: &TexutreDesc) -> Result<Self, Error> {
         let shape = desc.shape;
