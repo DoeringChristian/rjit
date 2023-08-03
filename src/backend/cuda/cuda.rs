@@ -180,10 +180,10 @@ impl Texture {
         let textures = (0..n_channels)
             .step_by(4)
             .map(|i| {
-                let channels_per_texture = (n_channels - i).min(4);
+                // let channels_per_texture = (n_channels - i).min(4);
                 let tex = device.create_texture(&cuda_core::TexutreDesc {
                     shape,
-                    n_channels: channels_per_texture as _,
+                    n_channels: 4,
                 })?;
                 Ok(tex)
             })

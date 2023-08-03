@@ -314,6 +314,62 @@ fn tex_lookup() -> Result<()> {
     Ok(())
 }
 #[test]
+fn tex_lookup_2() -> Result<()> {
+    pretty_env_logger::try_init().ok();
+    let ir = Trace::default();
+    ir.set_backend(["cuda"])?;
+
+    let x = ir.array(&[0.5f32])?;
+    let y = ir.array(&[0.5f32])?;
+
+    let data = ir.array(&[1.0f32; 200])?;
+
+    let tex = data.to_texture(&[10, 10], 2)?;
+
+    let res = tex.tex_lookup(&[&x, &y])?;
+
+    for c in res.iter() {
+        c.schedule();
+    }
+
+    ir.eval()?;
+
+    insta::assert_snapshot!(ir.kernel_history());
+
+    for c in res.iter() {
+        assert_eq!(c.to_host::<f32>().unwrap(), vec![1.]);
+    }
+    Ok(())
+}
+#[test]
+fn tex_lookup_5() -> Result<()> {
+    pretty_env_logger::try_init().ok();
+    let ir = Trace::default();
+    ir.set_backend(["cuda"])?;
+
+    let x = ir.array(&[0.5f32])?;
+    let y = ir.array(&[0.5f32])?;
+
+    let data = ir.array(&[1.0f32; 500])?;
+
+    let tex = data.to_texture(&[10, 10], 5)?;
+
+    let res = tex.tex_lookup(&[&x, &y])?;
+
+    for c in res.iter() {
+        c.schedule();
+    }
+
+    ir.eval()?;
+
+    insta::assert_snapshot!(ir.kernel_history());
+
+    for c in res.iter() {
+        assert_eq!(c.to_host::<f32>().unwrap(), vec![1.]);
+    }
+    Ok(())
+}
+#[test]
 fn tex_lookup_8() -> Result<()> {
     pretty_env_logger::try_init().ok();
     let ir = Trace::default();
