@@ -4,6 +4,7 @@ mod loop_record;
 mod registry;
 mod schedule;
 mod trace;
+mod util;
 mod var;
 
 pub use anyhow;

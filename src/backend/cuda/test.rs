@@ -342,7 +342,7 @@ fn tex_lookup_2() -> Result<()> {
     Ok(())
 }
 #[test]
-fn tex_lookup_5() -> Result<()> {
+fn tex_lookup_6() -> Result<()> {
     pretty_env_logger::try_init().ok();
     let ir = Trace::default();
     ir.set_backend(["cuda"])?;
@@ -350,9 +350,9 @@ fn tex_lookup_5() -> Result<()> {
     let x = ir.array(&[0.5f32])?;
     let y = ir.array(&[0.5f32])?;
 
-    let data = ir.array(&[1.0f32; 500])?;
+    let data = ir.array(&[1.0f32; 600])?;
 
-    let tex = data.to_texture(&[10, 10], 5)?;
+    let tex = data.to_texture(&[10, 10], 6)?;
 
     let res = tex.tex_lookup(&[&x, &y])?;
 

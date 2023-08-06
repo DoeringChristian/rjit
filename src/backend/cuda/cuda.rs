@@ -169,12 +169,10 @@ impl Texture {
     }
     pub fn create(device: &Device, shape: &[usize], n_channels: usize) -> Result<Self> {
         ensure!(
-            shape.len() >= 1,
-            "A zero dimensional texture is not supported!"
-        );
-        ensure!(
-            shape.len() <= 3,
-            "Only textures of dimension less than 3 are supported!"
+            shape.len() >= 1 && shape.len() <= 3,
+            "{dim} dimensional textures are not supported.
+                Only 1, 2 and 3 dimensional textures are supported!",
+            dim = shape.len()
         );
 
         let textures = (0..n_channels)
@@ -194,6 +192,12 @@ impl Texture {
             device: device.clone(),
             n_channels,
         })
+    }
+    /// Returns the number of used channel given an internal texture index
+    ///
+    /// * `i`: internal texture index
+    fn channels_of_internal(&self, i: usize) -> usize {
+        ((i + 1) * 4).min(self.n_channels - i * 4)
     }
 }
 
@@ -217,15 +221,19 @@ impl backend::Texture for Texture {
         let stream = self
             .device
             .create_stream(cuda_rs::CUstream_flags::CU_STREAM_DEFAULT)?;
-        if self.textures.len() > 1 {
+
+        let internal_channels = 4;
+
+        dbg!(buf.size());
+        if self.n_channels() == 4 {
+            self.textures[0].copy_form_buffer(&buf.buf, &stream)?;
+        } else {
             let staging = self.device.lease_buffer(
-                self.textures[0].n_texels()
-                    * self.textures[0].n_channels()
-                    * std::mem::size_of::<f32>(),
+                self.textures[0].n_texels() * internal_channels * std::mem::size_of::<f32>(),
             )?;
-            let texel_size = self.n_channels * std::mem::size_of::<f32>();
             for (i, tex) in self.textures.iter().enumerate() {
-                let texel_offset = i * 4 * std::mem::size_of::<f32>();
+                let texel_size = self.n_channels() * std::mem::size_of::<f32>();
+                let texel_offset = i * internal_channels * std::mem::size_of::<f32>();
                 let op = cuda_rs::CUDA_MEMCPY2D {
                     srcXInBytes: texel_offset as _,
                     srcMemoryType: cuda_rs::CUmemorytype::CU_MEMORYTYPE_DEVICE,
@@ -237,7 +245,7 @@ impl backend::Texture for Texture {
                     dstDevice: staging.ptr(),
                     dstPitch: tex.n_channels() * std::mem::size_of::<f32>(),
 
-                    WidthInBytes: tex.n_channels() * std::mem::size_of::<f32>(),
+                    WidthInBytes: self.channels_of_internal(i) * std::mem::size_of::<f32>(),
                     Height: tex.n_texels(),
                     ..Default::default()
                 };
@@ -252,8 +260,6 @@ impl backend::Texture for Texture {
 
                 tex.copy_form_buffer(&staging, &stream)?;
             }
-        } else {
-            self.textures[0].copy_form_buffer(&buf.buf, &stream)?;
         }
         stream.synchronize()?;
         Ok(())

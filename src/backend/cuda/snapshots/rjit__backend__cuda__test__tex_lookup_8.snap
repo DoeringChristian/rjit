@@ -62,6 +62,9 @@ body: // sm_86
 	ld.param.u64 %rd0, [params+40];
 	tex.2d.v4.f32.f32 {%f11_out_0, %f11_out_1, %f11_out_2,
                              %f11_out_3}, [%rd0, {%f8, %f10}];
+	ld.param.u64 %rd0, [params+48];
+	tex.2d.v4.f32.f32 {%f11_out_4, %f11_out_5, %f11_out_6,
+                             %f11_out_7}, [%rd0, {%f8, %f10}];
 
 	// [8]: ScheduleVar { op: Extract { offset: 0 }, ty: F32, deps: (9, 10), data: BufferIdx(2), sbt_hash: 0 } =>
 	mov.b32 %f12, %f11_out_0;

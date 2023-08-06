@@ -3,9 +3,9 @@ source: src/backend/cuda/test.rs
 expression: ir.kernel_history()
 ---
 Kernel History:
-Launched CUDA Kernel 1198409440398161077 with 1 elements
+Launched CUDA Kernel 17983173201277632283 with 1 elements
 ===============================================
-Kernel 1198409440398161077:
+Kernel 17983173201277632283:
 
 .version 8.0
 .target sm_86
@@ -57,11 +57,14 @@ body: // sm_86
 	mad.wide.u32 %rd3, %r6, 4, %rd0;
 	ld.global.nc.f32 %f10, [%rd3];
 
-	// [7]: ScheduleVar { op: TexLookup { dim: 2, channels: 2 }, ty: F32, deps: (6, 9), data: None, sbt_hash: 0 } =>
-	.reg.f32 %f11_out_<4>;
+	// [7]: ScheduleVar { op: TexLookup { dim: 2, channels: 6 }, ty: F32, deps: (6, 9), data: None, sbt_hash: 0 } =>
+	.reg.f32 %f11_out_<8>;
 	ld.param.u64 %rd0, [params+40];
 	tex.2d.v4.f32.f32 {%f11_out_0, %f11_out_1, %f11_out_2,
                              %f11_out_3}, [%rd0, {%f8, %f10}];
+	ld.param.u64 %rd0, [params+48];
+	tex.2d.v4.f32.f32 {%f11_out_4, %f11_out_5, %f11_out_6,
+                             %f11_out_7}, [%rd0, {%f8, %f10}];
 
 	// [8]: ScheduleVar { op: Extract { offset: 0 }, ty: F32, deps: (9, 10), data: BufferIdx(2), sbt_hash: 0 } =>
 	mov.b32 %f12, %f11_out_0;

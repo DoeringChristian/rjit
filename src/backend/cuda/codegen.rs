@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use crate::schedule::{Env, SVarId, ScheduleIr, ScheduleVar};
 use crate::trace::VarType;
+use crate::util::roundup;
 use crate::var::{Op, ReduceOp};
 
 use super::params::ParamOffset;
@@ -1123,13 +1124,14 @@ pub fn assemble_var(
             writeln!(asm, "\tmov.{} {}, %r0;\n", tyname(&var.ty), reg(vid))?;
         }
         Op::TexLookup { dim, channels } => {
+            let channels_rounded = roundup(channels as _, 4);
             let src = ir.var(dep(vid, 0));
 
             let offset_range = offsets.texture_ranges(src.data.texture().unwrap() as usize);
-            writeln!(asm, "\t.reg.f32 {}_out_<{channels}>;", reg(vid))?;
+            writeln!(asm, "\t.reg.f32 {}_out_<{channels_rounded}>;", reg(vid))?;
             let mut out_offset = 0;
 
-            for param_offset in offset_range.step_by(4) {
+            for param_offset in offset_range {
                 // Load texture ptr
                 writeln!(
                     asm,
