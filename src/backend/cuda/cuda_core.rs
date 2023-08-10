@@ -836,7 +836,6 @@ impl Texture {
                     Flags: 0,
                     NumChannels: n_channels as _,
                 };
-                let mut array = std::ptr::null_mut();
                 ctx.cuArray3DCreate_v2(&mut array, &array_desc).check()?;
             } else {
                 unreachable!("Dim cannot be greater than 3");
@@ -875,7 +874,8 @@ impl Texture {
                 ..Default::default()
             };
             ctx.cuTexObjectCreate(&mut tex, &res_desc, &tex_desc, &view_desc)
-                .check()?;
+                .check()
+                .unwrap();
 
             Ok(Self {
                 device: device.internal.clone(),
