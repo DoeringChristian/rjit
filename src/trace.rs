@@ -389,6 +389,9 @@ impl VarRef {
         MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
         // MutexGuard::map(self.ir.lock(), |ir| &mut ir.vars[self.id().0])
     }
+    pub fn is_literal(&self) -> bool {
+        self.var().data.is_literal()
+    }
 }
 macro_rules! bop {
     ($Op:ident $(-> $ty:ident)?) => {
