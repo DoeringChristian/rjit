@@ -178,3 +178,20 @@ fn select() -> Result<()> {
 
     Ok(())
 }
+// FIX:
+// #[test]
+// fn sized_literal() -> Result<()> {
+//     pretty_env_logger::try_init().ok();
+//     let ir = Trace::default();
+//     ir.set_backend(["optix"])?;
+//
+//     let lit = ir.sized_literal(1.0f32, 100)?;
+//
+//     lit.schedule();
+//
+//     ir.eval()?;
+//
+//     assert_eq!(lit.to_host::<f32>()?, vec![1.0f32; 100]);
+//
+//     Ok(())
+// }
