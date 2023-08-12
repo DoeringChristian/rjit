@@ -651,11 +651,11 @@ impl VarRef {
 
         drop(v);
 
-        let mut deps = smallvec![];
+        let mut deps: SmallVec<[VarRef; 4]> = smallvec![];
         if !is_literal {
             for dep in v_deps {
                 let dep = VarRef::borrow_from(&self.ir, dep);
-                deps.push(dep.reindex(new_idx, size)?.id());
+                deps.push(dep.reindex(new_idx, size)?);
             }
         }
 
@@ -672,19 +672,21 @@ impl VarRef {
 
         drop(v);
 
-        if op == Op::Idx {
-            return Ok(new_idx.clone());
+        let dep_ids = deps.iter().map(|d| d.id()).collect::<SmallVec<[_; 4]>>();
+        let res = if op == Op::Idx {
+            Ok(new_idx.clone())
         } else {
-            return Ok(self.ir.push_var(Var {
+            Ok(self.ir.push_var(Var {
                 op,
-                deps,
+                deps: dep_ids,
                 ty,
                 size,
                 rc: 0,
                 data,
                 ..Default::default()
-            }));
-        }
+            }))
+        };
+        res
     }
     pub fn scatter_reduce(
         &self,
