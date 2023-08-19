@@ -1,22 +1,16 @@
 use anyhow::{anyhow, bail, ensure, Result};
-use half::f16;
 use itertools::Itertools;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
-use resource_pool::hashpool::HashPool;
-use std::cell::{RefCell, RefMut};
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::IntoIterator;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use bytemuck::cast_slice;
 use slotmap::{DefaultKey, SlotMap};
 use smallvec::{smallvec, SmallVec};
 
 use crate::backend::Backend;
 use crate::registry::BACKEND_REGISTRY;
-use crate::schedule::Env;
 pub use crate::var::{Data, Op, ReduceOp, Var, VarId, VarInfo, VarType};
 use crate::{AsVarType, Jit};
 
