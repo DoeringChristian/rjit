@@ -84,18 +84,18 @@ pub struct AccelDesc<'a> {
     pub instances: &'a [InstanceDesc],
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Hash, PartialEq, Eq)]
 pub struct HitGroupDesc<'a> {
     pub closest_hit: ModuleDesc<'a>,
     pub any_hit: Option<ModuleDesc<'a>>,
     pub intersection: Option<ModuleDesc<'a>>,
 }
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq)]
 pub struct MissGroupDesc<'a> {
     pub miss: ModuleDesc<'a>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Hash, PartialEq, Eq)]
 pub struct ModuleDesc<'a> {
     pub asm: &'a str,
     pub entry_point: &'a str,
